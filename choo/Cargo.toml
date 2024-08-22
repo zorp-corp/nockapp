@@ -1,0 +1,17 @@
+[package]
+name = "choo"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+  crown  = { path = "../crown" }
+  sword = { workspace = true }
+  sword_macros = { workspace = true }
+  clap = { workspace = true, features = ["derive", "cargo", "color", "env"]}
+  tokio = { workspace = true }
+  tracing = { workspace = true }
+  bytes = { workspace = true }
+
+[[bin]]
+name = "choo"
+path = "main.rs"

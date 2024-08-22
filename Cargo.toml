@@ -1,0 +1,39 @@
+[workspace]
+members = [
+    "crown",
+    "choo"
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+sword = { git = "https://github.com/zorp-corp/sword.git", rev="8bcbf4a9a8f9c870aa171577ef002c6dbfc77292" }
+sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="8bcbf4a9a8f9c870aa171577ef002c6dbfc77292" }
+assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="8bcbf4a9a8f9c870aa171577ef002c6dbfc77292" }
+anyhow = "1.0"
+async-trait = "0.1"
+bincode = "2.0.0-rc.3"
+byteorder = "1.5.0"
+bytes = "1.5.0"
+clap = "4.4.4"
+either = "1.9.0"
+getrandom = "0.2.11"
+rand = "0.8.5"
+samply = "0.11.0"
+serde = "1.0.195"
+tempfile = "3.3"
+thiserror = "1.0"
+tokio = { version = "1.32", features = ["rt", "rt-multi-thread", "net", "macros", "io-util", "fs"] }
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["ansi", "env-filter", "registry"] }
+yaque = "0.6.6"
+
+[profile.dev]
+opt-level = 3
+
+[profile.dev.package."*"]
+opt-level = 3
+

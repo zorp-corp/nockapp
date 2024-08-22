@@ -1,0 +1,4 @@
+array_width = 95
+# use_small_heuristics = "Max"
+short_array_element_width_threshold = 100
+imports_granularity = "Module"
