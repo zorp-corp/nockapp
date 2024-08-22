@@ -16,7 +16,7 @@ pub struct Cli {
     )]
     pub new: bool,
 
-    #[arg(long, help = "Make an Ares trace", default_value = "false")]
+    #[arg(long, help = "Make an Sword trace", default_value = "false")]
     pub trace: bool,
 
     #[arg(

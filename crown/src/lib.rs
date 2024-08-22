@@ -1,8 +1,8 @@
 //! # Crown
 //!
 //! The Crown library provides a set of modules and utilities for working with
-//! the Ares runtime. It includes functionality for handling jammed nouns, kernels (as jammed nouns),
-//! pilots (drivers of the Ares runtime), and various types and utilities that extend the various Ares
+//! the Sword runtime. It includes functionality for handling jammed nouns, kernels (as jammed nouns),
+//! pilots (drivers of the Sword runtime), and various types and utilities that extend the various Sword
 //! components.
 //!
 //! ## Modules
@@ -10,7 +10,7 @@
 //! - `kernel`: Traits that Crown apps implement to create their own kernels.
 //! - `newt`: Utilities for working with Newt responses from a socket.
 //! - `noun`: Extensions and utilities for working with Urbit nouns.
-//! - `pilot`: Driver of the Ares runtime.
+//! - `pilot`: Driver of the Sword runtime.
 //! - `types`: Types used throughout the library.
 //! - `utils`: Errors, misc functions and extensions.
 //!
@@ -83,10 +83,10 @@ pub fn default_pier_path(urbit_name: &str) -> PathBuf {
     PathBuf::from(format!("./.data.{}/pier", urbit_name))
 }
 
-/// Default snapshot interval for the Ares binary
+/// Default snapshot interval for the Sword binary
 pub const SNAPSHOT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(120);
 
-/// Default path for the Ares binary
+/// Default path for the Sword binary
 pub fn default_sword_path() -> PathBuf {
     PathBuf::from("./sword")
 }

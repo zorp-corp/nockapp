@@ -24,7 +24,7 @@ pub enum CrownError<T = ExternalError> {
     #[error("Crown NounError: {0}")]
     Noun(#[from] NounError),
     #[error("{0}")]
-    InterpreterError(#[from] AresError),
+    InterpreterError(#[from] SwordError),
     #[error("kernel error")]
     KernelError(Option<sword::noun::Noun>),
     #[error("{0}")]
@@ -32,7 +32,7 @@ pub enum CrownError<T = ExternalError> {
     #[error("{0}")]
     Utf8Error(#[from] std::str::Utf8Error),
     #[error("sword load error")]
-    AresLoadError,
+    SwordLoadError,
     #[error("newt error")]
     NewtError,
     #[error("newt")]
@@ -75,22 +75,22 @@ pub enum CrownError<T = ExternalError> {
 pub struct QueueErrorWrapper(pub yaque::TrySendError<Vec<u8>>);
 
 #[derive(Debug, Error)]
-pub struct AresError(pub sword::interpreter::Error);
+pub struct SwordError(pub sword::interpreter::Error);
 
-impl std::fmt::Display for AresError {
+impl std::fmt::Display for SwordError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Ares Error: {}", self)
+        write!(f, "Sword Error: {}", self)
     }
 }
 impl From<sword::interpreter::Error> for CrownError {
     fn from(e: sword::interpreter::Error) -> Self {
-        CrownError::InterpreterError(AresError(e))
+        CrownError::InterpreterError(SwordError(e))
     }
 }
 
 impl From<sword::jets::JetErr> for CrownError {
     fn from(e: sword::jets::JetErr) -> Self {
-        CrownError::InterpreterError(AresError(sword::interpreter::Error::from(e)))
+        CrownError::InterpreterError(SwordError(sword::interpreter::Error::from(e)))
     }
 }
 
