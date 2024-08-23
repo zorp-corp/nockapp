@@ -2,6 +2,7 @@ use crate::{CrownError, Result};
 use either::Either::*;
 use std::io::{stderr, Write};
 use sword::interpreter::Slogger;
+use assert_no_alloc::permit_alloc;
 use sword::jets::list::util::lent;
 use sword::mem::NockStack;
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
@@ -12,17 +13,21 @@ pub struct CrownSlogger {}
 impl Slogger for CrownSlogger {
     // XX todo: restore pretty colors?
     fn slog(&mut self, stack: &mut NockStack, _pri: u64, tank: Noun) {
-        let mut err_handle = stderr().lock();
-        slog_tank(stack, tank, &mut err_handle).unwrap();
-        err_handle.write(b"\n").unwrap();
+        permit_alloc(|| {
+            let mut err_handle = stderr().lock();
+            slog_tank(stack, tank, &mut err_handle).unwrap();
+            err_handle.write(b"\n").unwrap();
+        });
     }
 
     fn flog(&mut self, _stack: &mut NockStack, cord: Noun) {
         let cord_atom = cord.as_atom().unwrap();
-        let mut err_handle = stderr().lock();
-        err_handle.write(b"crown: ").unwrap();
-        slog_cord(cord_atom, &mut err_handle).unwrap();
-        err_handle.write(b"\n").unwrap();
+        permit_alloc(|| {
+            let mut err_handle = stderr().lock();
+            err_handle.write(b"crown: ").unwrap();
+            slog_cord(cord_atom, &mut err_handle).unwrap();
+            err_handle.write(b"\n").unwrap();
+        });
     }
 }
 
