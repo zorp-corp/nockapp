@@ -2,7 +2,7 @@
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::fs::File;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
 use sword::hamt::Hamt;
@@ -26,29 +26,51 @@ use crate::{AtomExt, CrownError, NounExt, Result, ToBytesExt};
 const PEEK_AXIS: u64 = 22;
 const POKE_AXIS: u64 = 23;
 
+/// Enum representing the Sword snapshot metadata fields.
 #[repr(usize)]
 enum BTMetaField {
     SnapshotVersion = 0,
     Snapshot = 1,
 }
 
+/// Represents a Sword kernel, containing a Serf and snapshot location.
 pub struct Kernel {
+    /// The Serf managing the interface to the Sword.
     pub serf: Serf,
+    /// Directory path for storing snapshots.
     snap_dir: PathBuf,
+    /// Atomic flag for terminating the kernel.
     terminator: Arc<AtomicBool>,
 }
 
+/// Represents a snapshot of the Sword state.
 struct Snapshot(pub(crate) *mut SnapshotMem);
 
+/// Memory layout for storing snapshot data.
 #[repr(C)]
 #[repr(packed)]
 struct SnapshotMem {
+    /// The current Arvo state.
     pub(crate) arvo: Noun,
+    /// The Cold jet state.
     pub(crate) cold: Cold,
+    /// The current event number.
     pub(crate) event_num: u64,
 }
 
 impl Kernel {
+    /// Loads a kernel with a custom hot state.
+    ///
+    /// # Arguments
+    ///
+    /// * `snap_dir` - Directory for storing snapshots.
+    /// * `kernel` - Byte slice containing the kernel as a jammed noun.
+    /// * `hot_state` - Custom hot state entries.
+    /// * `trace` - Whether to enable tracing.
+    ///
+    /// # Returns
+    ///
+    /// A new `Kernel` instance.
     pub fn load_with_hot_state(
         snap_dir: PathBuf,
         kernel: &[u8],
@@ -64,6 +86,17 @@ impl Kernel {
         }
     }
 
+    /// Loads a kernel with default hot state.
+    ///
+    /// # Arguments
+    ///
+    /// * `snap_dir` - Directory for storing snapshots.
+    /// * `kernel` - Byte slice containing the kernel code.
+    /// * `trace` - Whether to enable tracing.
+    ///
+    /// # Returns
+    ///
+    /// A new `Kernel` instance.
     pub fn load(snap_dir: PathBuf, kernel: &[u8], trace: bool) -> Self {
         let serf = Serf::load(snap_dir.clone(), kernel, &[], trace);
         let terminator = Arc::new(AtomicBool::new(false));
@@ -74,6 +107,17 @@ impl Kernel {
         }
     }
 
+    /// Loads a kernel from a form (compiled Nock formula).
+    ///
+    /// # Arguments
+    ///
+    /// * `snap_dir` - Directory for storing snapshots.
+    /// * `form` - Byte slice containing the compiled Nock formula.
+    /// * `trace` - Whether to enable tracing.
+    ///
+    /// # Returns
+    ///
+    /// A new `Kernel` instance.
     pub fn load_form(snap_dir: PathBuf, form: &[u8], trace: bool) -> Self {
         let serf = Serf::load_form(snap_dir.clone(), form, &[], trace);
         let terminator = Arc::new(AtomicBool::new(false));
@@ -84,31 +128,15 @@ impl Kernel {
         }
     }
 
-    fn handle_live(&mut self, writ: Noun) -> Result<Noun> {
-        let inner = writ.slot(6)?.as_direct()?;
-        match inner.data() {
-            tas!(b"exit") => {
-                self.terminator.store(true, Ordering::Relaxed);
-                Ok(D(0))
-            }
-            tas!(b"save") => {
-                unsafe { self.serf.save() };
-                Ok(D(0))
-            }
-            _ => Err(CrownError::KernelError(Some(D(0)))),
-        }
-    }
-
-    fn handle_peek(&mut self, writ: Noun) -> Result<Noun> {
-        let ovo = writ.slot(7)?;
-        self.peek(ovo)
-    }
-
-    fn handle_poke(&mut self, writ: Noun) -> Result<Noun> {
-        let job = writ.slot(7)?;
-        self.do_poke(job)
-    }
-
+    /// Performs a peek operation on the Arvo state.
+    ///
+    /// # Arguments
+    ///
+    /// * `ovo` - The peek request noun.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the peeked data or an error.
     pub fn peek(&mut self, ovo: Noun) -> Result<Noun> {
         if self.serf.context.trace_info.is_some() {
             let trace_name = "peek";
@@ -122,6 +150,16 @@ impl Kernel {
         }
     }
 
+    /// Generates a goof (error) noun.
+    ///
+    /// # Arguments
+    ///
+    /// * `mote` - The error mote.
+    /// * `traces` - Trace information.
+    ///
+    /// # Returns
+    ///
+    /// A noun representing the error.
     pub fn goof(&mut self, mote: Mote, traces: Noun) -> Noun {
         let trace = zing(&mut self.serf.context.stack, traces).expect("serf: goof: zing failed");
         let tone = Cell::new(&mut self.serf.context.stack, D(2), trace);
@@ -131,6 +169,15 @@ impl Kernel {
         T(&mut self.serf.context.stack, &[D(mote as u64), tang])
     }
 
+    /// Performs a poke operation on the Arvo state.
+    ///
+    /// # Arguments
+    ///
+    /// * `job` - The poke job noun.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the poke response or an error.
     pub fn do_poke(&mut self, job: Noun) -> Result<Noun> {
         match self.soft(job, Some("poke".to_string())) {
             Ok(res) => {
@@ -149,6 +196,16 @@ impl Kernel {
         }
     }
 
+    /// Slams (applies) a gate at a specific axis of Arvo.
+    ///
+    /// # Arguments
+    ///
+    /// * `axis` - The axis to slam.
+    /// * `ovo` - The sample noun.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the slammed result or an error.
     pub fn slam(&mut self, axis: u64, ovo: Noun) -> Result<Noun> {
         let arvo = self.serf.arvo;
         let stack = &mut self.serf.context.stack;
@@ -161,6 +218,16 @@ impl Kernel {
         res
     }
 
+    /// Performs a "soft" computation, handling errors gracefully.
+    ///
+    /// # Arguments
+    ///
+    /// * `ovo` - The input noun.
+    /// * `trace_name` - Optional name for tracing.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the computed noun or an error noun.
     fn soft(&mut self, ovo: Noun, trace_name: Option<String>) -> Result<Noun, Noun> {
         let slam_res = if self.serf.context.trace_info.is_some() {
             let start = Instant::now();
@@ -191,6 +258,15 @@ impl Kernel {
         }
     }
 
+    /// Plays a list of events.
+    ///
+    /// # Arguments
+    ///
+    /// * `lit` - The list of events to play.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the final Arvo state or an error.
     fn play_list(&mut self, mut lit: Noun) -> Result<Noun> {
         let mut eve = self.serf.event_num;
         while let Ok(cell) = lit.as_cell() {
@@ -221,6 +297,16 @@ impl Kernel {
         Ok(self.serf.arvo)
     }
 
+    /// Handles a poke error by swapping in a new event.
+    ///
+    /// # Arguments
+    ///
+    /// * `job` - The original poke job.
+    /// * `goof` - The error noun.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the new event or an error.
     fn poke_swap(&mut self, job: Noun, goof: Noun) -> Result<Noun> {
         let stack = &mut self.serf.context.stack;
         self.serf.context.cache = Hamt::<Noun>::new(stack);
@@ -262,6 +348,17 @@ impl Kernel {
         }
     }
 
+    /// Generates a trace name for a poke operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `stack` - The Nock stack.
+    /// * `wire` - The wire noun.
+    /// * `vent` - The vent atom.
+    ///
+    /// # Returns
+    ///
+    /// A string representing the trace name.
     fn poke_trace_name(stack: &mut NockStack, wire: Noun, vent: Atom) -> String {
         let wpc = path_to_cord(stack, wire);
         let wpc_len = met3_usize(wpc);
@@ -287,6 +384,15 @@ impl Kernel {
         format!("poke [{} {}]", wpc_str, vc_str)
     }
 
+    /// Performs a poke operation with a given cause.
+    ///
+    /// # Arguments
+    ///
+    /// * `cause` - The cause noun for the poke.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the poke response or an error.
     pub fn poke(&mut self, cause: Noun) -> Result<Noun> {
         let stack = &mut self.serf.context.stack;
 
@@ -311,13 +417,31 @@ impl Kernel {
     }
 }
 
+/// Represents the Serf, which maintains context and provides an interface to
+/// the Sword.
 pub struct Serf {
+    /// The current Arvo state.
     pub arvo: Noun,
+    /// The interpreter context.
     pub context: interpreter::Context,
+    /// The current event number.
     pub event_num: u64,
 }
 
 impl Serf {
+    /// Creates a new Serf instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `kernel` - Optional pre-loaded kernel noun.
+    /// * `event_num` - Starting event number.
+    /// * `kernel_bytes` - Byte slice containing the kernel code.
+    /// * `constant_hot_state` - Custom hot state entries.
+    /// * `trace_info` - Optional trace information.
+    ///
+    /// # Returns
+    ///
+    /// A new `Serf` instance.
     fn new(
         kernel: Option<Noun>,
         event_num: u64,
@@ -371,6 +495,19 @@ impl Serf {
         serf
     }
 
+    /// Creates a new Serf instance from a form (compiled Nock formula).
+    ///
+    /// # Arguments
+    ///
+    /// * `kernel` - Optional pre-loaded kernel noun.
+    /// * `event_num` - Starting event number.
+    /// * `form_bytes` - Byte slice containing the compiled Nock formula.
+    /// * `constant_hot_state` - Custom hot state entries.
+    /// * `trace_info` - Optional trace information.
+    ///
+    /// # Returns
+    ///
+    /// A new `Serf` instance.
     fn new_form(
         kernel: Option<Noun>,
         event_num: u64,
@@ -423,6 +560,18 @@ impl Serf {
         serf
     }
 
+    /// Loads a Serf instance from a snapshot or creates a new one.
+    ///
+    /// # Arguments
+    ///
+    /// * `snap_dir` - Directory for storing snapshots.
+    /// * `kernel_bytes` - Byte slice containing the kernel code as a jammed noun.
+    /// * `constant_hot_state` - Custom hot state entries.
+    /// * `trace` - Whether to enable tracing.
+    ///
+    /// # Returns
+    ///
+    /// A new `Serf` instance.
     pub fn load(
         snap_dir: PathBuf,
         kernel_bytes: &[u8],
@@ -469,6 +618,18 @@ impl Serf {
         )
     }
 
+    /// Loads a Serf instance from a form (compiled Nock formula).
+    ///
+    /// # Arguments
+    ///
+    /// * `snap_dir` - Directory for storing snapshots.
+    /// * `form_bytes` - Byte slice containing the compiled Nock formula.
+    /// * `constant_hot_state` - Custom hot state entries.
+    /// * `trace` - Whether to enable tracing.
+    ///
+    /// # Returns
+    ///
+    /// A new `Serf` instance.
     pub fn load_form(
         snap_dir: PathBuf,
         form_bytes: &[u8],
@@ -513,6 +674,16 @@ impl Serf {
         Self::new_form(arvo, event_num, form_bytes, constant_hot_state, trace_info)
     }
 
+    /// Updates the Serf's state after an event.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_event_num` - The new event number.
+    /// * `new_arvo` - The new Arvo state.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because it modifies the Serf's state directly.
     pub unsafe fn event_update(&mut self, new_event_num: u64, new_arvo: Noun) {
         self.arvo = new_arvo;
         self.event_num = new_event_num;
@@ -522,6 +693,11 @@ impl Serf {
         self.context.scry_stack = D(0);
     }
 
+    /// Preserves leftovers after an event update.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because it modifies the Serf's state directly.
     pub unsafe fn preserve_event_update_leftovers(&mut self) {
         let stack = &mut self.context.stack;
         stack.preserve(&mut self.context.warm);
@@ -530,6 +706,11 @@ impl Serf {
         stack.flip_top_frame(0);
     }
 
+    /// Saves the current Serf state to persistent memory.
+    ///
+    /// # Safety
+    ///
+    /// This function is unsafe because it interacts with raw pointers and memory.
     pub unsafe fn save(&mut self) {
         let handle = {
             let mut snapshot = Snapshot({
@@ -554,10 +735,27 @@ impl Serf {
         pma_meta_set(BTMetaField::Snapshot as usize, handle);
     }
 
+    /// Returns a mutable reference to the Nock stack.
+    ///
+    /// # Returns
+    ///
+    /// A mutable reference to the `NockStack`.
     pub fn stack(&mut self) -> &mut NockStack {
         &mut self.context.stack
     }
 
+    /// Creates a poke swap noun.
+    ///
+    /// # Arguments
+    ///
+    /// * `eve` - The event number.
+    /// * `mug` - The mug value.
+    /// * `ovo` - The original noun.
+    /// * `fec` - The effect noun.
+    ///
+    /// # Returns
+    ///
+    /// A noun representing the poke swap.
     pub fn poke_swap(&mut self, eve: u64, mug: u64, ovo: Noun, fec: Noun) -> Noun {
         T(
             self.stack(),
@@ -565,6 +763,15 @@ impl Serf {
         )
     }
 
+    /// Creates a poke bail noun.
+    ///
+    /// # Arguments
+    ///
+    /// * `lud` - The lud noun.
+    ///
+    /// # Returns
+    ///
+    /// A noun representing the poke bail.
     pub fn poke_bail(&mut self, lud: Noun) -> Noun {
         T(self.stack(), &[D(tas!(b"poke")), D(tas!(b"bail")), lud])
     }
@@ -632,4 +839,13 @@ mod tests {
     fn test_kernel_boot() {
         let _ = setup_kernel("dumb.jam");
     }
+
+    // To test your own kernel, place a `kernel.jam` file in the `assets` directory
+    // and uncomment the following test:
+    //
+    // #[test]
+    // fn test_custom_kernel() {
+    //     let (kernel, _temp_dir) = setup_kernel("kernel.jam");
+    //     // Add your custom assertions here to test the kernel's behavior
+    // }
 }
