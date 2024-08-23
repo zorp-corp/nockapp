@@ -3,7 +3,7 @@
 ::
 !:
 =<
-~&  "choo choo"
+~&  'choo choo'
 |_  k=kernel-state
 +*  this  .
 ::
@@ -43,9 +43,13 @@
 ::  subject, usually expected to be 0
 +$  knob  [t=type f=nock]
 +$  cause
-  $%  [%compile sub=knob pax=path fil=cord nok=?]
-      [%execute sub=knob pax=path fil=cord nok=? hoon=cord]
+  $%  [%compile sub=vase nok=? print=? =gen]
+      [%execute sub=vase nok=? print=? =gen]
   ==
+::
++$  gen
+  $@  cord
+  [pax=path fil=cord]
 ::
 +$  effect  [%jam p=*]
 +$  goof  [mote=term =tang]
@@ -88,48 +92,27 @@
     ^-  [(list effect) kernel-state]
     =;  p=*
       [[%jam p]~ k]
-    ?-    -.cause
-        %compile
-      =-  ~&  raw-nock+nok.cause
-          -
-      (compile [sub pax fil nok]:cause)
-    ::
-        %execute
-      (execute [sub pax fil nok hoon]:cause)
-    ==
+    (execute [sub nok print gen]:cause)
   --
 ::
-++  compile
-  |=  [sub=knob pax=path fil=cord nok=?]
-  ^-  *
-  =/  ast
-    ~&  %parsing  (rain pax fil)
-  =/  [t=type form=nock]
-    ~&  compiling+pax
-    (~(mint ut t.sub) %noun ast)
-  ?:  nok
-    `nock`[%7 f.sub form]
-  `knob`[t %7 f.sub form]
-::
 ++  execute
-  |=  [sub=knob pax=path fil=cord nok=? hoon=cord]
+  |=  [sub=vase nok=? print=? =gen]
   ^-  *
+  ~&  gen
   =/  ast
-    ~&  parsing+pax
-    (rain pax fil)
-  =/  vax
-    ~&  compiling-and-executing+pax
-    (slap sub ast)
-  =/  par
-    ~&  %parsing-expression
-    (ream hoon)
+    ?@  gen
+      ~&  %parsing
+      (ream gen)
+    ~&  parsing+pax.gen
+    (rain [pax fil]:gen)
   =/  compiled
     ~&  %compiling-expression
-    (~(mint ut p.vax) %noun par)
+    (~(mint ut p.sub) %noun ast)
   ~&  %executing
-  =/  out  .*(q.vax q.compiled)
-  ~&  out
+  =/  out  .*(q.sub q.compiled)
+  ~?  print  out
   ?:  nok
     out
   `vase`[p.compiled out]
 --
+

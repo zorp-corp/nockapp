@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use crown::kernel::boot;
+use crown::kernel::form::Kernel;
 use crown::{AtomExt, Noun, NounExt};
 use sword::noun::{Atom, D, NO, T, YES};
 use sword_macros::tas;
@@ -18,14 +19,20 @@ struct ChooCli {
     #[command(flatten)]
     boot: BootCli,
 
-    #[arg(help = "Path to Hoon file to compile")]
-    pax: String,
+    #[arg(long, help = "Hoon expression to run")]
+    hoon: Option<String>,
+
+    #[arg(long, help = "Path to Hoon file to compile")]
+    path: Option<String>,
 
     #[arg(long, help = "Optional flag to output raw nock", default_value = "false")]
     nock: bool,
 
     #[arg(short, long, help = "Execute a Hoon")]
-    exec: Option<String>,
+    exec: bool,
+
+    #[arg(long, help = "Print output", default_value = "false")]
+    print: bool,
 
     #[arg(short, long, help = "Optional path to subject jam file to compile against")]
     subj: Option<String>,
@@ -37,39 +44,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut kernel = boot::setup_form(KERNEL_JAM, Some(cli.boot))?;
 
-    let pax_noun = D(0);
+    let gen_noun = {
 
-    let contents = {
-        let mut contents_vec: Vec<u8> = vec![];
-        let mut file = File::open(cli.pax).await?;
-        file.read_to_end(&mut contents_vec).await?;
-        Atom::from_bytes(kernel.serf.stack(), &Bytes::from(contents_vec)).as_noun()
+        if let Some(hoon_option) = cli.hoon {
+            Atom::from_bytes(kernel.serf.stack(), &Bytes::from(hoon_option)).as_noun()
+        } else if let Some(path_option) = cli.path {
+            file_to_atom(&mut kernel, path_option).await.unwrap().as_noun()
+        } else {
+            panic!("invalid option");
+        }
     };
 
     let subj_knob = {
         if let Some(sub_path) = cli.subj {
-            let mut sub_contents_vec: Vec<u8> = vec![];
-            let mut sub_file = File::open(sub_path).await?;
-            sub_file.read_to_end(&mut sub_contents_vec).await?;
-            Noun::cue_bytes_slice(kernel.serf.stack(), &sub_contents_vec[..])
+            jamfile_to_noun(&mut kernel, sub_path).await.unwrap()
         } else {
             T(kernel.serf.stack(), &[D(tas!(b"noun")), D(1), D(0)])
         }
     };
 
     let nok_loobean = if cli.nock { YES } else { NO };
+    let print_loobean = if cli.print { YES } else { NO };
 
     let poke = {
-        if let Some(exec_string) = cli.exec {
-            let hoon_snippet = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(exec_string)).as_noun();
+        if cli.exec {
             T(
                 kernel.serf.stack(),
-                &[D(tas!(b"execute")), subj_knob, pax_noun, contents, nok_loobean, hoon_snippet],
+                &[D(tas!(b"execute")), subj_knob, nok_loobean, print_loobean, gen_noun],
             )
         } else {
             T(
                 kernel.serf.stack(),
-                &[D(tas!(b"compile")), subj_knob, pax_noun, contents, nok_loobean],
+                &[D(tas!(b"compile")), subj_knob, nok_loobean, print_loobean, gen_noun],
             )
         }
     };
@@ -93,4 +99,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
+}
+
+async fn jamfile_to_noun(kernel: &mut Kernel, path: String) -> Result<Noun, std::io::Error> {
+    let mut sub_contents_vec: Vec<u8> = vec![];
+    let mut sub_file = File::open(path).await?;
+    sub_file.read_to_end(&mut sub_contents_vec).await?;
+    Ok(Noun::cue_bytes_slice(kernel.serf.stack(), &sub_contents_vec[..]))
+}
+
+async fn file_to_atom(kernel: &mut Kernel, path: String) -> Result<Atom, std::io::Error> {
+    let mut contents_vec: Vec<u8> = vec![];
+    let mut file = File::open(path).await?;
+    file.read_to_end(&mut contents_vec).await?;
+    Ok(Atom::from_bytes(kernel.serf.stack(), &Bytes::from(contents_vec)))
 }
