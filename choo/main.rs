@@ -18,13 +18,16 @@ struct ChooCli {
     #[command(flatten)]
     boot: BootCli,
 
-    #[arg(long, help = "Compile vase?", default_value = "false")]
-    knob: bool,
-
-    #[arg(help = "Path to file to compile")]
+    #[arg(help = "Path to Hoon file to compile")]
     pax: String,
 
-    #[arg(help = "Path to subject")]
+    #[arg(long, help = "Optional flag to output raw nock", default_value = "false")]
+    nock: bool,
+
+    #[arg(short, long, help = "Execute a Hoon")]
+    exec: Option<String>,
+
+    #[arg(help = "Optional path to subject jam file to compile against")]
     sub: Option<String>,
 }
 
@@ -54,12 +57,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let nob_loobean = if cli.knob { YES } else { NO };
+    let nob_loobean = if cli.nock { NO } else { YES };
 
-    let poke = T(
-        kernel.serf.stack(),
-        &[D(tas!(b"compile")), sub_knob, pax_noun, contents, nob_loobean],
-    );
+    let poke = {
+        if let Some(exec_string) = cli.exec {
+            let hoon_snippet = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(exec_string)).as_noun();
+            T(
+                kernel.serf.stack(),
+                &[D(tas!(b"execute")), sub_knob, pax_noun, contents, nob_loobean, hoon_snippet],
+            )
+        } else {
+            T(
+                kernel.serf.stack(),
+                &[D(tas!(b"compile")), sub_knob, pax_noun, contents, nob_loobean],
+            )
+        }
+    };
 
     let mut poke_result = kernel.poke(poke)?;
 
