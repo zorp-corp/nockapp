@@ -27,8 +27,8 @@ struct ChooCli {
     #[arg(short, long, help = "Execute a Hoon")]
     exec: Option<String>,
 
-    #[arg(help = "Optional path to subject jam file to compile against")]
-    sub: Option<String>,
+    #[arg(short, long, help = "Optional path to subject jam file to compile against")]
+    subj: Option<String>,
 }
 
 #[tokio::main]
@@ -46,8 +46,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Atom::from_bytes(kernel.serf.stack(), &Bytes::from(contents_vec)).as_noun()
     };
 
-    let sub_knob = {
-        if let Some(sub_path) = cli.sub {
+    let subj_knob = {
+        if let Some(sub_path) = cli.subj {
             let mut sub_contents_vec: Vec<u8> = vec![];
             let mut sub_file = File::open(sub_path).await?;
             sub_file.read_to_end(&mut sub_contents_vec).await?;
@@ -57,19 +57,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    let nob_loobean = if cli.nock { NO } else { YES };
+    let nok_loobean = if cli.nock { YES } else { NO };
 
     let poke = {
         if let Some(exec_string) = cli.exec {
             let hoon_snippet = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(exec_string)).as_noun();
             T(
                 kernel.serf.stack(),
-                &[D(tas!(b"execute")), sub_knob, pax_noun, contents, nob_loobean, hoon_snippet],
+                &[D(tas!(b"execute")), subj_knob, pax_noun, contents, nok_loobean, hoon_snippet],
             )
         } else {
             T(
                 kernel.serf.stack(),
-                &[D(tas!(b"compile")), sub_knob, pax_noun, contents, nob_loobean],
+                &[D(tas!(b"compile")), subj_knob, pax_noun, contents, nok_loobean],
             )
         }
     };
