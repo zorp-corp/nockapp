@@ -9,7 +9,12 @@ bin/
 .vscode/settings.json
 
 # Junk
+.unikraft
 .DS_Store
+
+.data.crown
+**/.data.crown
+
 *.swp
 **/*.swp
 .DS_Store

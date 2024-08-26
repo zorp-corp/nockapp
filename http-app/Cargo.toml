@@ -1,0 +1,18 @@
+[package]
+name = "http-app"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+crown  = { path = "../crown" }
+sword = { git = "https://github.com/zorp-corp/sword.git", rev="8bcbf4a9a8f9c870aa171577ef002c6dbfc77292" }
+sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="8bcbf4a9a8f9c870aa171577ef002c6dbfc77292" }
+clap = { workspace = true, features = ["derive", "cargo", "color", "env"]}
+tokio = { workspace = true }
+tracing = { workspace = true }
+axum = "0.7.5"
+tower = "0.5.0"
+
+[[bin]]
+name = "http-app"
+path = "src/main.rs"
