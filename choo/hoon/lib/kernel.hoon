@@ -41,31 +41,19 @@
     !!
   =/  =cause  u.sof-cau
   |^
-  =;  p=*
-    ~&  nob+nob.cause
-    [[%jam p]~ k]
-  ?:  nob.cause
-    (compile-knob [sub pax fil]:cause)
-  (compile-nock [sub pax fil]:cause)
+  =-  [[%jam -]~ k]
+  (compile [sub pax fil nob]:cause)
   ::
-  ++  compile-knob
-    |=   [sub=knob pax=path fil=cord]
-    ~&  %compile-knob
-    ^-  knob
+  ++  compile
+    |=   [sub=knob pax=path fil=cord nob=?]
     =/  ast
       ~&  %parsing  (rain pax fil)
     =/  [t=type form=nock]
       ~&  %compiling  (~(mint ut t.sub) %noun ast)
-    [t %7 f.sub form]
-  ::
-  ++  compile-nock
-    |=   [sub=knob pax=path fil=cord]
-    ~&  %compile-knob
-    ^-  nock
-    =/  ast
-      ~&  %parsing  (rain pax fil)
-    =/  [t=type form=nock]
-      ~&  %compiling  (~(mint ut t.sub) %noun ast)
+    ?:  nob
+      ~&  %compiled-knob
+      [t %7 f.sub form]
+    ~&  %compiled-nock
     [%7 f.sub form]
   --
 --
