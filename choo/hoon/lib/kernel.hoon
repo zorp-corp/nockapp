@@ -1,7 +1,4 @@
 ::/+  *wrapper
-::
-::  arvo-shaped outer core
-::
 =>
 |%
 +$  choo-state  %stateless
@@ -28,15 +25,15 @@
 ::
 ::  +peek: external inspect
 ::
-++  peek                                                :: 22
+++  peek
   |=  path=*
   ^-  (unit (unit *))
   !!
 ::
 ::  +poke: external apply
 ::
-++  poke                                                :: 23
-  |=  [event-num=@ud eny=@ our=@ux now=@da dat=*]
+++  poke
+  |=  [event-num=@ eny=@ our=@ux now=@da dat=*]
   ^-  [(list *) choo-state]
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau
@@ -71,10 +68,4 @@
       ~&  %compiling  (~(mint ut t.sub) %noun ast)
     [%7 f.sub form]
   --
-::
-::  +wish: external compute
-::
-++  wish                                                :: 10
-  |=  txt=@
-  !!
 --

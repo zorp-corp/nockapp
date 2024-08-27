@@ -5,7 +5,7 @@
       [%crud =goof %poke =input]
   ==
 +$  crud    [=goof =input]
-+$  input   [event-num=@ud eny=@ our=@ux now=@da cause=*]
++$  input   [event-num=@ eny=@ our=@ux now=@da cause=*]
 ::
 ++  keep
   |*  inner=mold
@@ -42,9 +42,6 @@
     ++  poke
       |~  arg=input
       *[(list *) inner-state]
-    ++  wish
-      |~  txt=@
-      **
     --
   --
   ::
@@ -63,9 +60,9 @@
     (peek:inner arg)
   ::
   ++  wish
-    |=  arg=@
+    |=  txt=@
     ^-  *
-    (wish:inner arg)
+    q:(slap !>(~) (ream txt))
   ::
   ++  poke
     |=  =input
