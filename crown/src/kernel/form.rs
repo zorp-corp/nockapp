@@ -443,8 +443,7 @@ impl Serf {
     ///
     /// A new `Serf` instance.
     fn new(
-        kernel: Option<Noun>,
-        event_num: u64,
+        snapshot: Option<Snapshot>,
         kernel_bytes: &[u8],
         constant_hot_state: &[HotEntry],
         trace_info: Option<TraceInfo>,
@@ -452,7 +451,9 @@ impl Serf {
         let hot_state = [URBIT_HOT_STATE, constant_hot_state].concat();
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
         let cache = Hamt::<Noun>::new(&mut stack);
-        let mut cold = Cold::new(&mut stack);
+        let (mut cold, event_num) = snapshot.as_ref().map_or_else(|| { (Cold::new(&mut stack), 0) }, |snapshot_ref| {
+            unsafe { ((*snapshot_ref.0).cold, (*snapshot_ref.0).event_num) }
+        });
         let hot = Hot::init(&mut stack, &hot_state);
         let warm = Warm::init(&mut stack, &mut cold, &hot);
         let slogger = std::boxed::Box::pin(CrownSlogger {});
@@ -468,7 +469,7 @@ impl Serf {
             trace_info,
         };
 
-        let arvo = kernel.unwrap_or_else(|| {
+        let arvo = snapshot.as_ref().map_or_else(|| {
             let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes);
             let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
             let arvo = if context.trace_info.is_some() {
@@ -480,7 +481,9 @@ impl Serf {
                 interpret(&mut context, kernel_trap, fol).unwrap() // TODO better error
             };
             arvo
-        });
+        },
+            |snapshot_ptr| { unsafe { (*snapshot_ptr.0).arvo } }
+        );
 
         let mut serf = Self {
             arvo,
@@ -597,12 +600,6 @@ impl Serf {
             _ => panic!("Unsupported snapshot version"),
         };
 
-        let (arvo, event_num): (Option<Noun>, u64) =
-            snapshot.map_or((None, 0), |snapshot| unsafe {
-                let mem = snapshot.0;
-                (Some((*mem).arvo), (*mem).event_num)
-            });
-
         let trace_info = if trace {
             let file = File::create("trace.json").expect("Cannot create trace file trace.json");
             let pid = std::process::id();
@@ -617,7 +614,7 @@ impl Serf {
         };
 
         Self::new(
-            arvo, event_num, kernel_bytes, constant_hot_state, trace_info,
+            snapshot, kernel_bytes, constant_hot_state, trace_info,
         )
     }
 
