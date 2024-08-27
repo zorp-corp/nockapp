@@ -10,9 +10,9 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-sword = { git = "https://github.com/zorp-corp/sword.git", rev="8bcbf4a9a8f9c870aa171577ef002c6dbfc77292" }
-sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="8bcbf4a9a8f9c870aa171577ef002c6dbfc77292" }
-assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="8bcbf4a9a8f9c870aa171577ef002c6dbfc77292" }
+sword = { git = "https://github.com/zorp-corp/sword.git", rev="3860ff021d8c6152c5ef5c3eb94ea6e9ed5872e2" }
+sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="3860ff021d8c6152c5ef5c3eb94ea6e9ed5872e2" }
+assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="3860ff021d8c6152c5ef5c3eb94ea6e9ed5872e2" }
 anyhow = "1.0"
 async-trait = "0.1"
 bincode = "2.0.0-rc.3"
@@ -32,8 +32,8 @@ tracing-subscriber = { version = "0.3.18", features = ["ansi", "env-filter", "re
 yaque = "0.6.6"
 
 [profile.dev]
-opt-level = 3
+# opt-level = 3
 
 [profile.dev.package."*"]
-opt-level = 3
+# opt-level = 3
 

@@ -15,7 +15,7 @@ use sword::jets::warm::Warm;
 use sword::mem::NockStack;
 use sword::mug::met3_usize;
 use sword::noun::{Atom, Cell, DirectAtom, IndirectAtom, Noun, Slots, D, T};
-use sword::persist::{pma_meta_get, pma_meta_set, pma_open, Persist};
+use sword::persist::{pma_meta_get, pma_meta_set, pma_open, pma_sync, Persist};
 use sword::trace::{path_to_cord, write_serf_trace_safe, TraceInfo};
 use sword_macros::tas;
 
@@ -509,8 +509,7 @@ impl Serf {
     ///
     /// A new `Serf` instance.
     fn new_form(
-        kernel: Option<Noun>,
-        event_num: u64,
+        snapshot: Option<Snapshot>,
         form_bytes: &[u8],
         constant_hot_state: &[HotEntry],
         trace_info: Option<TraceInfo>,
@@ -518,7 +517,9 @@ impl Serf {
         let hot_state = [URBIT_HOT_STATE, constant_hot_state].concat();
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
         let cache = Hamt::<Noun>::new(&mut stack);
-        let mut cold = Cold::new(&mut stack);
+        let (mut cold, event_num) = snapshot.as_ref().map_or_else(|| { (Cold::new(&mut stack), 0) }, |snapshot_ref| {
+            unsafe { ((*snapshot_ref.0).cold, (*snapshot_ref.0).event_num) }
+        });
         let hot = Hot::init(&mut stack, &hot_state);
         let warm = Warm::init(&mut stack, &mut cold, &hot);
         let slogger = std::boxed::Box::pin(CrownSlogger {});
@@ -534,18 +535,20 @@ impl Serf {
             trace_info,
         };
 
-        let arvo = kernel.unwrap_or_else(|| {
-            let kernel_form = Noun::cue_bytes_slice(&mut context.stack, form_bytes);
-            let arvo = if context.trace_info.is_some() {
-                let start = Instant::now();
-                let arvo = interpret(&mut context, D(0), kernel_form).unwrap(); // TODO better error
-                write_serf_trace_safe(&mut context, "boot", start);
+        let arvo = snapshot.as_ref().map_or_else(|| {
+                let kernel_form = Noun::cue_bytes_slice(&mut context.stack, form_bytes);
+                let arvo = if context.trace_info.is_some() {
+                    let start = Instant::now();
+                    let arvo = interpret(&mut context, D(0), kernel_form).unwrap(); // TODO better error
+                    write_serf_trace_safe(&mut context, "boot", start);
+                    arvo
+                } else {
+                    interpret(&mut context, D(0), kernel_form).unwrap() // TODO better error
+                };
                 arvo
-            } else {
-                interpret(&mut context, D(0), kernel_form).unwrap() // TODO better error
-            };
-            arvo
-        });
+            },
+            |snapshot_ptr| { unsafe { (*snapshot_ptr.0).arvo } }
+        );
 
         let mut serf = Self {
             arvo,
@@ -652,12 +655,6 @@ impl Serf {
             _ => panic!("Unsupported snapshot version"),
         };
 
-        let (arvo, event_num): (Option<Noun>, u64) =
-            snapshot.map_or((None, 0), |snapshot| unsafe {
-                let mem = snapshot.0;
-                (Some((*mem).arvo), (*mem).event_num)
-            });
-
         let trace_info = if trace {
             let file = File::create("trace.json").expect("Cannot create trace file trace.json");
             let pid = std::process::id();
@@ -671,7 +668,7 @@ impl Serf {
             None
         };
 
-        Self::new_form(arvo, event_num, form_bytes, constant_hot_state, trace_info)
+        Self::new_form(snapshot, form_bytes, constant_hot_state, trace_info)
     }
 
     /// Updates the Serf's state after an event.
@@ -688,6 +685,7 @@ impl Serf {
         self.arvo = new_arvo;
         self.event_num = new_event_num;
         self.save();
+        pma_sync();
 
         self.context.cache = Hamt::new(&mut self.context.stack);
         self.context.scry_stack = D(0);
