@@ -451,9 +451,10 @@ impl Serf {
         let hot_state = [URBIT_HOT_STATE, constant_hot_state].concat();
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
         let cache = Hamt::<Noun>::new(&mut stack);
-        let (mut cold, event_num) = snapshot.as_ref().map_or_else(|| { (Cold::new(&mut stack), 0) }, |snapshot_ref| {
-            unsafe { ((*snapshot_ref.0).cold, (*snapshot_ref.0).event_num) }
-        });
+        let (mut cold, event_num) = snapshot.as_ref().map_or_else(
+            || (Cold::new(&mut stack), 0),
+            |snapshot_ref| unsafe { ((*snapshot_ref.0).cold, (*snapshot_ref.0).event_num) },
+        );
         let hot = Hot::init(&mut stack, &hot_state);
         let warm = Warm::init(&mut stack, &mut cold, &hot);
         let slogger = std::boxed::Box::pin(CrownSlogger {});
@@ -469,20 +470,21 @@ impl Serf {
             trace_info,
         };
 
-        let arvo = snapshot.as_ref().map_or_else(|| {
-            let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes);
-            let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
-            let arvo = if context.trace_info.is_some() {
-                let start = Instant::now();
-                let arvo = interpret(&mut context, kernel_trap, fol).unwrap(); // TODO better error
-                write_serf_trace_safe(&mut context, "boot", start);
+        let arvo = snapshot.as_ref().map_or_else(
+            || {
+                let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes);
+                let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
+                let arvo = if context.trace_info.is_some() {
+                    let start = Instant::now();
+                    let arvo = interpret(&mut context, kernel_trap, fol).unwrap(); // TODO better error
+                    write_serf_trace_safe(&mut context, "boot", start);
+                    arvo
+                } else {
+                    interpret(&mut context, kernel_trap, fol).unwrap() // TODO better error
+                };
                 arvo
-            } else {
-                interpret(&mut context, kernel_trap, fol).unwrap() // TODO better error
-            };
-            arvo
-        },
-            |snapshot_ptr| { unsafe { (*snapshot_ptr.0).arvo } }
+            },
+            |snapshot_ptr| unsafe { (*snapshot_ptr.0).arvo },
         );
 
         let mut serf = Self {
@@ -520,9 +522,10 @@ impl Serf {
         let hot_state = [URBIT_HOT_STATE, constant_hot_state].concat();
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
         let cache = Hamt::<Noun>::new(&mut stack);
-        let (mut cold, event_num) = snapshot.as_ref().map_or_else(|| { (Cold::new(&mut stack), 0) }, |snapshot_ref| {
-            unsafe { ((*snapshot_ref.0).cold, (*snapshot_ref.0).event_num) }
-        });
+        let (mut cold, event_num) = snapshot.as_ref().map_or_else(
+            || (Cold::new(&mut stack), 0),
+            |snapshot_ref| unsafe { ((*snapshot_ref.0).cold, (*snapshot_ref.0).event_num) },
+        );
         let hot = Hot::init(&mut stack, &hot_state);
         let warm = Warm::init(&mut stack, &mut cold, &hot);
         let slogger = std::boxed::Box::pin(CrownSlogger {});
@@ -538,7 +541,8 @@ impl Serf {
             trace_info,
         };
 
-        let arvo = snapshot.as_ref().map_or_else(|| {
+        let arvo = snapshot.as_ref().map_or_else(
+            || {
                 let kernel_form = Noun::cue_bytes_slice(&mut context.stack, form_bytes);
                 let arvo = if context.trace_info.is_some() {
                     let start = Instant::now();
@@ -550,7 +554,7 @@ impl Serf {
                 };
                 arvo
             },
-            |snapshot_ptr| { unsafe { (*snapshot_ptr.0).arvo } }
+            |snapshot_ptr| unsafe { (*snapshot_ptr.0).arvo },
         );
 
         let mut serf = Self {
@@ -613,9 +617,7 @@ impl Serf {
             None
         };
 
-        Self::new(
-            snapshot, kernel_bytes, constant_hot_state, trace_info,
-        )
+        Self::new(snapshot, kernel_bytes, constant_hot_state, trace_info)
     }
 
     /// Loads a Serf instance from a form (compiled Nock formula).
