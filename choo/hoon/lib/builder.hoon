@@ -1,7 +1,8 @@
 /*  hoon-139-hoon  %hoon  /lib/hoon-139/hoon
+/*  wrapper-hoon  %hoon  /lib/wrapper/hoon
 /*  kernel-hoon  %hoon  /lib/kernel/hoon
 !.
-::  
+::
 ::  Bootstrap builder: to build the bootstrap formula for Choo using
 ::  Urbit Ford
 ::
@@ -15,8 +16,12 @@
 =/  hoon-knob=[t=type form=nock]
   ~>  %bout
   (~(mint ut %noun) %noun (ream hoon-139-hoon))
+~&  "compiling wrapper"
+=/  wrapper-knob=[t=type form=nock]
+  ~>  %bout
+  (~(mint ut t.hoon-knob) %noun (ream wrapper-hoon))
 ~&  "compiling kernel"
 =/  kernel-knob=[t=type form=nock]
   ~>  %bout
-  (~(mint ut t.hoon-knob) %noun (rain /lib/choo/kernel/hoon kernel-hoon))
-[%7 form.hoon-knob form.kernel-knob]
+  (~(mint ut t.wrapper-knob) %noun (rain /lib/choo/kernel/hoon kernel-hoon))
+[%7 [%7 form.hoon-knob form.wrapper-knob] form.kernel-knob]
