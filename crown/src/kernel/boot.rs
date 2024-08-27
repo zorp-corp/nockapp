@@ -12,7 +12,7 @@ pub struct Cli {
     #[arg(
         long,
         help = "Start with a new data directory, removing any existing data",
-        default_value = "true"
+        default_value = "false"
     )]
     pub new: bool,
 

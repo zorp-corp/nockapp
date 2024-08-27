@@ -1,8 +1,8 @@
 use crate::{CrownError, Result};
+use assert_no_alloc::permit_alloc;
 use either::Either::*;
 use std::io::{stderr, Write};
 use sword::interpreter::Slogger;
-use assert_no_alloc::permit_alloc;
 use sword::jets::list::util::lent;
 use sword::mem::NockStack;
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
