@@ -11,7 +11,7 @@
 ::  dojo> .choo/jam choo
 ::
 ::  copy <your-fakezod>/.urb/put/choo.jam to choo/bootstrap/choo.jam
-^-  nock
+^-  *
 ~&  "compiling hoon"
 =/  hoon-knob=[t=type form=nock]
   ~>  %bout
@@ -24,4 +24,10 @@
 =/  kernel-knob=[t=type form=nock]
   ~>  %bout
   (~(mint ut t.wrapper-knob) %noun (rain /lib/choo/kernel/hoon kernel-hoon))
-[%7 [%7 form.hoon-knob form.wrapper-knob] form.kernel-knob]
+=/  trap-nock=nock
+  [%7 [%7 form.hoon-knob form.wrapper-knob] form.kernel-knob]
+~&  %built-trap-nock
+trap-nock
+::  TODO: use this once we can execute trap in NockApp
+::=>  [trap=trap-nock hash=(mug trap-nock)]
+::|.  .*([.*(0 trap) hash] [%9 2 %10 [6 %0 3] %0 2])

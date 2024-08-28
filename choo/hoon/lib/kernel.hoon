@@ -1,4 +1,3 @@
-::/+  *wrapper
 =>
 |%
 +$  choo-state  %stateless
@@ -11,6 +10,7 @@
 +$  effect  [%jam p=*]
 --
 ::
+=<  $
 ~&  %choo-choo
 %-  moat
 ^-  fort:moat
