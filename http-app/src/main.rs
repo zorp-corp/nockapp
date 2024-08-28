@@ -1,7 +1,9 @@
+use sword_macros::tas;
 use std::sync::mpsc;
 use std::sync::mpsc::SyncSender;
 use crate::mpsc::Receiver;
 
+use crown::Bytes;
 use tokio::sync::oneshot;
 use axum::body::Body;
 use axum::extract::State;
@@ -9,17 +11,17 @@ use axum::http::{HeaderMap, Method, StatusCode, Uri};
 use axum::response::Response;
 use axum::routing::any;
 
-use sword::noun::D;
-use sword::noun::T;
+use crown::{AtomExt, Noun, NounExt};
+use sword::noun::{Atom, D, NO, T, YES};
+
 use crown::kernel::boot;
 use crown::kernel::form::Kernel;
 use crown::utils::make_tas;
-use crown::Noun;
 use tracing::info;
 
 use clap::{arg, command, ColorChoice, Parser};
 static KERNEL_JAM: &[u8] =
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/kernel.jam"));
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/http.jam"));
 
 use crown::kernel::boot::Cli as BootCli;
 
@@ -36,7 +38,7 @@ struct TestCli {
 #[derive(Parser, Debug)]
 enum Command {
     #[command(about = "Serve a simple message over HTTP")]
-    ServeMessage {
+     Msg {
         #[arg(help = "The message")]
         n: String,
     },
@@ -51,7 +53,7 @@ struct Message {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (tx, rx) = mpsc::sync_channel::<Message>(1);
+    let (tx, rx) = mpsc::sync_channel::<Message>(0);
 
     let app = any(sword_handler).with_state(tx);
 
@@ -66,6 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     manage_kernel(rx).await;
 
     Ok(())
+
 }
 
 async fn manage_kernel(rx: Receiver<Message>) -> Result<(), Box<dyn std::error::Error>> {
@@ -73,14 +76,15 @@ async fn manage_kernel(rx: Receiver<Message>) -> Result<(), Box<dyn std::error::
     let mut kernel = boot::setup_form(KERNEL_JAM, Some(cli.boot))?;
 
     loop {
-        println!("manager looping");
          // Start receiving messages
         if let Ok(msg) = rx.recv() {
-            println!("{}", msg.data);
+            println!("msg: {}", msg.data);
+            let uri_bytes = msg.data.as_str().as_bytes().to_vec();
+            let uri =
+                Atom::from_bytes(kernel.serf.stack(), &Bytes::from(uri_bytes)).as_noun();
+
             let poke = {
-                let eve_tas = make_tas(kernel.serf.stack(), "serve-message");
-                let uri_tas = make_tas(kernel.serf.stack(), msg.data.as_str());
-                create_poke(&mut kernel, &[eve_tas.as_noun(), uri_tas.as_noun(), D(0)])
+                T(kernel.serf.stack(), &[D(tas!(b"msg")), uri])
             };
 
             let mut do_datom = || -> Result<u64, crown::CrownError> {
@@ -88,17 +92,19 @@ async fn manage_kernel(rx: Receiver<Message>) -> Result<(), Box<dyn std::error::
                 let poke_result = kernel.poke(poke)?;
                 info!("Poke response: {:?}", poke_result);
 
-                let d: u64 = poke_result
-                    .as_cell()?
-                    .head()
-                    .as_atom()?
-                    .direct()
-                    .unwrap()
-                    .data();
+                let res_cell = poke_result
+                    .as_cell()?;
+
+                let res_head =
+                    res_cell.head()
+                    .as_cell()?;
+
+                let d: u64 = res_head.tail().as_atom()?.direct().expect("choose a shorter message!").data();
                 Ok(d)
             };
 
             if let Ok(datom) = do_datom() {
+                println!("{:?}", datom);
                 let vec_u8 = datom.to_le_bytes().to_vec();
                 let body = Body::from(vec_u8);
                 let res = Response::builder()
@@ -141,10 +147,3 @@ async fn sword_handler(
     }
 }
 
-fn create_poke(kernel: &mut Kernel, args: &[Noun]) -> Noun {
-    // error if args is less than 2 elements
-    if args.len() < 2 {
-        panic!("args must have at least 2 elements");
-    }
-    T(kernel.serf.stack(), args)
-}

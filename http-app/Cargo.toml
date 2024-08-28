@@ -5,8 +5,8 @@ edition.workspace = true
 
 [dependencies]
 crown  = { path = "../crown" }
-sword = { git = "https://github.com/zorp-corp/sword.git", rev="8bcbf4a9a8f9c870aa171577ef002c6dbfc77292" }
-sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="8bcbf4a9a8f9c870aa171577ef002c6dbfc77292" }
+sword = { workspace = true }
+sword_macros = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo", "color", "env"]}
 tokio = { workspace = true }
 tracing = { workspace = true }
