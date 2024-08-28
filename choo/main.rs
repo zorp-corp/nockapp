@@ -32,7 +32,7 @@ struct ChooCli {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = ChooCli::parse();
 
-    let mut kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
+    let mut kernel = boot::setup_form(KERNEL_JAM, Some(cli.boot))?;
 
     let pax_noun = D(0);
 
