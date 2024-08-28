@@ -62,7 +62,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut poke_result = kernel.poke(poke)?;
-    println!("{:?}", poke_result);
 
     loop {
         if let Ok(fec_it) = poke_result.as_cell() {
