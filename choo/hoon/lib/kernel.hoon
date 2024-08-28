@@ -33,7 +33,7 @@
 ::  +poke: external apply
 ::
 ++  poke
-  |=  [event-num=@ eny=@ our=@ux now=@da dat=*]
+  |=  [eny=@ our=@ux now=@da dat=*]
   ^-  [(list *) choo-state]
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau

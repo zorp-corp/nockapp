@@ -5,7 +5,7 @@
       [%crud =goof %poke =input]
   ==
 +$  crud    [=goof =input]
-+$  input   [event-num=@ eny=@ our=@ux now=@da cause=*]
++$  input   [eny=@ our=@ux now=@da cause=*]
 ::
 ++  keep
   |*  inner=mold
@@ -23,7 +23,7 @@
       |~  arg=path
       *(unit (unit *))
     ++  poke
-      |~  arg=input
+      |~  [event-num=@ ovum]
       *[(list *) outer-state]
     ++  wish
       |~  txt=@
@@ -65,27 +65,24 @@
     q:(slap !>(~) (ream txt))
   ::
   ++  poke
-    |=  =input
+    |=  [num=@ =ovum]
     ^-  [(list *) outer-state]
-    ?@  input  ~&("bad poke type: {<input>}" !!)
-    ?+    +.input  ~&("invalid arg: {<input>}" !!)
-        [[%$ %arvo ~] %crud gof=* cru=*]
-      =/  g  ((soft goof) gof.arg)
+    ?+    ovum  ~&("invalid ovum: {<ovum>}" !!)
+        [[%$ %arvo ~] *]
+      =/  g  ((soft goof) gof.ovum)
       ?~  g  ~&(%invalid-goof !!)
       =-  [~ outer]
       %+  turn  tang.u.g
       |=(=tank ~>(%slog.[3 tank] 0))
     ::
-        [[%poke ~] pok=*]
-      =/  o  ((soft ovum) +.input)
+        [[%poke ~] *]
+      =/  o  ((soft input) input.ovum)
       ?~  o
-        ~&  "could not mold poke type: {<+.input>}"
-        =+  (road |.(;;(ovum +.input)))
+        ~&  "could not mold poke type: {<ovum>}"
+        =+  (road |.(;;(^ovum ovum)))
         ~^outer
-      ~&  "going to poke inner"
-      ?>  ?=([%poke ~] -.u.o)
       =^  effects  internal.outer
-        (poke:inner input)
+        (poke:inner input.ovum)
       [effects outer]
     ==
   --
