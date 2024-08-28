@@ -21,7 +21,7 @@ use tracing::info;
 
 use clap::{arg, command, ColorChoice, Parser};
 static KERNEL_JAM: &[u8] =
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/http.jam"));
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/http.jam"));
 
 use crown::kernel::boot::Cli as BootCli;
 
