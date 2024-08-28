@@ -311,14 +311,15 @@ impl Kernel {
         let stack = &mut self.serf.context.stack;
         self.serf.context.cache = Hamt::<Noun>::new(stack);
         let job_cell = job.as_cell().expect("serf: poke: job not a cell");
-        let job_data = job_cell.tail().as_cell().expect("serf: poke: data not a cell");
-        let job_wire = job_data.head();
+        let job_data = job_cell
+            .tail()
+            .as_cell()
+            .expect("serf: poke: data not a cell");
         let job_input = job_data.tail();
         let job_now = job_cell.head().as_atom().expect("serf: poke: now not atom");
         let now = inc(stack, job_now).as_noun();
         let wire = T(stack, &[D(0), D(tas!(b"arvo")), D(0)]);
         let crud = DirectAtom::new_panic(tas!(b"crud"));
-        let num = DirectAtom::new(self.serf.event_num)?;
         let mut ovo = T(stack, &[now, wire, goof, job_input]);
         let trace_name = if self.serf.context.trace_info.is_some() {
             Some(Self::poke_trace_name(
