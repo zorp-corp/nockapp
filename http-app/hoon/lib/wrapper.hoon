@@ -63,10 +63,8 @@
     (slap !>(~) (ream txt))
   ::
   ++  poke
-    ~&  %poke-gate
     |=  [num=@ ovum=*]
     ^-  [(list *) _..poke]
-    ~&  %poking
     ?+   ovum  ~&("invalid arg: {<ovum>}" ~^..poke)
         [[%$ %arvo ~] *]
       =/  g  ((soft crud) ovum)

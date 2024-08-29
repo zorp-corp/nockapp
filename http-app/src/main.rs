@@ -11,12 +11,10 @@ use axum::http::{HeaderMap, Method, StatusCode, Uri};
 use axum::response::Response;
 use axum::routing::any;
 
-use crown::{AtomExt, Noun, NounExt};
-use sword::noun::{Atom, D, NO, T, YES};
+use crown::AtomExt;
+use sword::noun::{Atom, D, T};
 
 use crown::kernel::boot;
-use crown::kernel::form::Kernel;
-use crown::utils::make_tas;
 use tracing::info;
 
 use clap::{arg, command, ColorChoice, Parser};
@@ -46,14 +44,23 @@ enum Command {
 
 type Responder = oneshot::Sender<Result<Response, StatusCode>>;
 
-struct Message {
-    data: String,
+struct RequestMessage {
+    uri: Uri,
+    method: Method,
+    headers: HeaderMap,
+    body: Option<axum::body::Bytes>,
     resp: Responder
+}
+
+struct ResponseBuilder {
+    status_code: StatusCode,
+    headers: Vec<(String, String)>,
+    body: Option<axum::body::Bytes>
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (tx, rx) = mpsc::sync_channel::<Message>(0);
+    let (tx, rx) = mpsc::sync_channel::<RequestMessage>(0);
 
     let app = any(sword_handler).with_state(tx);
 
@@ -65,74 +72,138 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         axum::serve(listener, app.into_make_service()).await
     });
 
-    manage_kernel(rx).await;
+    let _ = manage_kernel(rx).await;
 
     Ok(())
 
 }
 
-async fn manage_kernel(rx: Receiver<Message>) -> Result<(), Box<dyn std::error::Error>> {
+async fn manage_kernel(rx: Receiver<RequestMessage>) -> Result<(), Box<dyn std::error::Error>> {
     let cli = TestCli::parse();
     let mut kernel = boot::setup_form(KERNEL_JAM, Some(cli.boot))?;
 
     loop {
          // Start receiving messages
         if let Ok(msg) = rx.recv() {
-            println!("msg: {}", msg.data);
-            let uri_bytes = msg.data.as_str().as_bytes().to_vec();
+            let uri_bytes = msg.uri.to_string().as_bytes().to_vec();
             let uri =
                 Atom::from_bytes(kernel.serf.stack(), &Bytes::from(uri_bytes)).as_noun();
 
-            let poke = {
-                T(kernel.serf.stack(), &[D(tas!(b"msg")), uri])
+            let method_bytes = msg.method.to_string().as_bytes().to_vec();
+            let method =
+                Atom::from_bytes(kernel.serf.stack(), &Bytes::from(method_bytes)).as_noun();
+
+            let body: crown::Noun = {
+                if let Some(bod) = msg.body {
+                    let ato = Atom::from_bytes(kernel.serf.stack(), &bod).as_noun();
+                    T(kernel.serf.stack(), &[D(0), D(bod.len().try_into().unwrap()), ato])
+                } else {
+                    D(0)
+                }
             };
 
-            let mut do_datom = || -> Result<u64, crown::CrownError> {
+            let poke = {
+                T(kernel.serf.stack(), &[
+                    D(tas!(b"req")), uri, method, D(0), body
+                ])
+            };
+
+            let mut do_poke = || -> Result<ResponseBuilder, crown::CrownError> {
                 info!("Sending poke: {:?}", poke);
                 let poke_result = kernel.poke(poke)?;
                 info!("Poke response: {:?}", poke_result);
+                /*
+                    +$  effect
+                      $:  %res
+                          status=@ud
+                          headers=(list header)
+                          body=octs
+                      ==
+                */
+                let res_list = poke_result.as_cell()?;
+                let res = res_list.head().as_cell()?.tail().as_cell()?;
+                let status_code = res.head().as_atom()?.direct().expect("not a valid status code!").data();
+                let header_list = res.tail().as_cell()?.head();
+                let mut header_vec: Vec<(String, String)> = Vec::new();
+                loop {
+                    if header_list.is_atom() {
+                        break;
+                    } else {
+                        let header = header_list.as_cell()?.head().as_cell()?;
+                        let key = String::from_utf8(header.head().as_atom()?.as_bytes().to_vec())?;
+                        let val = String::from_utf8(header.tail().as_atom()?.as_bytes().to_vec())?;
+                        header_vec.push((key, val));
+                    }
+                }
 
-                let res_cell = poke_result
-                    .as_cell()?;
+                let maybe_body = res.tail().as_cell()?.tail();
 
-                let res_head =
-                    res_cell.head()
-                    .as_cell()?;
+                let body: Option<Bytes> = {
+                    if maybe_body.is_cell() {
+                        let body_octs = maybe_body.as_cell()?.tail().as_cell()?;
+                        let body_len = body_octs.head().as_atom()?.direct().expect("body len").data();
+                        let mut body_vec: Vec<u8> = b"0".repeat(body_len.try_into().unwrap());
+                        let body_atom = body_octs.tail().as_atom()?;
+                        body_vec.copy_from_slice(body_atom.as_bytes());
+                        Some(Bytes::from(body_vec))
+                    } else {
+                        None
+                    }
+                };
 
-                let d: u64 = res_head.tail().as_atom()?.direct().expect("choose a shorter message!").data();
-                Ok(d)
+                if let Ok(status) = StatusCode::from_u16(status_code as u16) {
+                    Ok(ResponseBuilder {
+                        status_code: status,
+                        headers: header_vec,
+                        body: body
+                    })
+                } else {
+                    Err(crown::CrownError::Unknown("Invalid status code".to_string()))
+                }
             };
 
-            if let Ok(datom) = do_datom() {
-                println!("{:?}", datom);
-                let vec_u8 = datom.to_le_bytes().to_vec();
-                let body = Body::from(vec_u8);
-                let res = Response::builder()
-                    .status(StatusCode::OK)
-                    .header("content-type", "text/html")
-                    .body(body)
-                    .unwrap();
+            if let Ok(res_builder) = do_poke() {
+                let mut res = Response::builder()
+                    .status(res_builder.status_code)
+                    .header("content-type", "text/html");
 
-                let _ = msg.resp.send(Ok(res));
+                if let Some(bod) = res_builder.body {
+                    let _ = msg.resp.send(
+                        Ok(res.body(Body::from(bod)).unwrap())
+                    );
+                } else {
+
+                }
+
             } else {
                 println!("statuscode internal server error");
                 let _ = msg.resp.send(Err(StatusCode::INTERNAL_SERVER_ERROR));
             }
         }
     }
-
-    Ok(())
 }
 
 async fn sword_handler(
-    _method: Method,
-    _headers: HeaderMap,
+    method: Method,
+    headers: HeaderMap,
     uri: Uri,
-    State(sender): State<SyncSender<Message>>,
+    State(sender): State<SyncSender<RequestMessage>>,
+    body: axum::body::Bytes
 ) -> Result<Response, StatusCode> {
     let (resp_tx, resp_rx) = oneshot::channel::<Result<Response, StatusCode>>();
-    let msg = Message {
-        data: uri.to_string(),
+
+    let opt_body: Option<axum::body::Bytes> = {
+        if body.len() == 0 {
+            None
+        } else {
+            Some(body)
+        }
+    };
+    let msg = RequestMessage {
+        uri: uri,
+        method: method,
+        headers: headers,
+        body: opt_body,
         resp: resp_tx,
     };
 
