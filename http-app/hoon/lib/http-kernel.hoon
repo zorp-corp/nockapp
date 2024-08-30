@@ -7,9 +7,16 @@
 +$  octs  [p=@ q=@]
 +$  method
   $?  %'GET'
-      %'PUT'
+      %'HEAD'
       %'POST'
+      %'PUT'
+      %'DELETE'
+      %'CONNECT'
+      %'OPTIONS'
+      %'TRACE'
+      %'PATCH'
   ==
+::
 +$  cause
   $:  %req
       uri=@t
@@ -55,19 +62,21 @@
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
     !!
-  =/  =cause  u.sof-cau
-  ~&  cause+cause
+  =+  [uri=@t =method headers=(list header) body=(unit octs)]=+.u.sof-cau
   :_  k
   :_  ~
   ^-  effect
   =-  ~&  effect+-
       -
-  ?+    method.cause  [%res %400 ~ ~]
+  ?+    method  [%res %400 ~ ~]
       %'GET'
     :^  %res  %200
       ~
     =+  %hi
     `[(met 1 -) -]
+  ::
+      %'POST'
+    !!
   ==
 --
 
