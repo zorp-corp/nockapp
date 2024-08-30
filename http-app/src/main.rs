@@ -1,4 +1,6 @@
 use crate::mpsc::Receiver;
+
+use std::ffi::CStr;
 use std::sync::mpsc;
 use std::sync::mpsc::SyncSender;
 use sword_macros::tas;
@@ -15,9 +17,8 @@ use crown::AtomExt;
 use sword::noun::{Atom, D, T};
 
 use crown::kernel::boot;
-use tracing::info;
 
-use clap::{arg, command, ColorChoice, Parser};
+use clap::{command, ColorChoice, Parser};
 static KERNEL_JAM: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/http.jam"));
 
 use crown::kernel::boot::Cli as BootCli;
@@ -27,18 +28,6 @@ use crown::kernel::boot::Cli as BootCli;
 struct TestCli {
     #[command(flatten)]
     boot: BootCli,
-
-    #[command(subcommand)]
-    command: Command,
-}
-
-#[derive(Parser, Debug)]
-enum Command {
-    #[command(about = "Serve a simple message over HTTP")]
-    Msg {
-        #[arg(help = "The message")]
-        n: String,
-    },
 }
 
 type Responder = oneshot::Sender<Result<Response, StatusCode>>;
@@ -121,6 +110,16 @@ async fn manage_kernel(rx: Receiver<RequestMessage>) -> Result<(), Box<dyn std::
             let method =
                 Atom::from_bytes(kernel.serf.stack(), &Bytes::from(method_bytes)).as_noun();
 
+            let mut headers = D(0);
+            for (k, v) in msg.headers {
+                let key = k.unwrap().as_str().to_string();
+                let val = v.to_str().unwrap().to_string();
+                let k_atom = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(key)).as_noun();
+                let v_atom = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(val)).as_noun();
+                let header_cell = T(kernel.serf.stack(), &[k_atom, v_atom]);
+                headers = T(kernel.serf.stack(), &[header_cell, headers]);
+            }
+
             let body: crown::Noun = {
                 if let Some(bod) = msg.body {
                     let ato = Atom::from_bytes(kernel.serf.stack(), &bod).as_noun();
@@ -136,22 +135,12 @@ async fn manage_kernel(rx: Receiver<RequestMessage>) -> Result<(), Box<dyn std::
             let poke = {
                 T(
                     kernel.serf.stack(),
-                    &[D(tas!(b"req")), uri, method, D(0), body],
+                    &[D(tas!(b"req")), uri, method, headers, body],
                 )
             };
 
             let mut do_poke = || -> Result<ResponseBuilder, crown::CrownError> {
-                info!("Sending poke: {:?}", poke);
                 let poke_result = kernel.poke(poke)?;
-                info!("Poke response: {:?}", poke_result);
-                /*
-                    +$  effect
-                      $:  %res
-                          status=@ud
-                          headers=(list header)
-                          body=octs
-                      ==
-                */
                 let res_list = poke_result.as_cell()?;
                 let res = res_list.head().as_cell()?.tail().as_cell()?;
                 let status_code = res
@@ -160,16 +149,25 @@ async fn manage_kernel(rx: Receiver<RequestMessage>) -> Result<(), Box<dyn std::
                     .direct()
                     .expect("not a valid status code!")
                     .data();
-                let header_list = res.tail().as_cell()?.head();
+                let mut header_list = res.tail().as_cell()?.head();
                 let mut header_vec: Vec<(String, String)> = Vec::new();
                 loop {
                     if header_list.is_atom() {
                         break;
                     } else {
                         let header = header_list.as_cell()?.head().as_cell()?;
-                        let key = String::from_utf8(header.head().as_atom()?.as_bytes().to_vec())?;
-                        let val = String::from_utf8(header.tail().as_atom()?.as_bytes().to_vec())?;
-                        header_vec.push((key, val));
+                        let key_vec = header.head().as_atom()?;
+                        let val_vec = header.tail().as_atom()?;
+
+                        if let Ok(key) = CStr::from_bytes_until_nul(key_vec.as_bytes()) {
+                            if let Ok(val) = CStr::from_bytes_until_nul(val_vec.as_bytes()) {
+                                header_vec.push((
+                                    String::from_utf8(key.to_bytes().to_vec())?,
+                                    String::from_utf8(val.to_bytes().to_vec())?
+                                ));
+                                header_list = header_list.as_cell()?.tail();
+                            } else { break; }
+                        } else { break; }
                     }
                 }
 
@@ -207,14 +205,14 @@ async fn manage_kernel(rx: Receiver<RequestMessage>) -> Result<(), Box<dyn std::
             };
 
             if let Ok(res_builder) = do_poke() {
-                let mut res = Response::builder()
-                    .status(res_builder.status_code)
-                    .header("content-type", "text/html");
+                let mut res = Response::builder().status(res_builder.status_code);
 
-                if let Some(bod) = res_builder.body {
-                    let _ = msg.resp.send(Ok(res.body(Body::from(bod)).unwrap()));
-                } else {
+                for (k, v) in res_builder.headers {
+                    res = res.header(k, v);
                 }
+
+                let bod = res_builder.body.ok_or("invalid response")?;
+                let _ = msg.resp.send(Ok(res.body(Body::from(bod)).unwrap()));
             } else {
                 println!("statuscode internal server error");
                 let _ = msg.resp.send(Err(StatusCode::INTERNAL_SERVER_ERROR));

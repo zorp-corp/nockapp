@@ -62,7 +62,8 @@
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
     !!
-  =+  [uri=@t =method headers=(list header) body=(unit octs)]=+.u.sof-cau
+  =/  [uri=@t =method headers=(list header) body=(unit octs)]  +.u.sof-cau
+  ~&  [uri+uri method+method headers+headers]
   :_  k
   :_  ~
   ^-  effect
@@ -71,7 +72,7 @@
   ?+    method  [%res %400 ~ ~]
       %'GET'
     :^  %res  %200
-      ~
+      ['content-type' 'text/html']~
     =+  %hi
     `[(met 1 -) -]
   ::
