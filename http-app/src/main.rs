@@ -86,7 +86,6 @@ async fn sword_handler(
     };
 
     let send_res = sender.send(msg);
-    println!("{:?}", send_res);
 
     // Await the response
     if let Ok(result) = resp_rx.await {
