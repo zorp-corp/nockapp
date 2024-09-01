@@ -1,5 +1,5 @@
 /+  *wrapper
-/*  hoon-139-txt  %txt  /lib/hoon-139/hoon
+/*  hoon-139-txt  %hoon  /lib/hoon-139/hoon
 =>
 |%
 +$  choo-state
@@ -12,7 +12,7 @@
 ::  subject, usually expected to be 0
 +$  knob  [t=type f=nock]
 +$  cause
-  $%  [%build entry=path nob=? directory=(map path cord)]
+  $%  [%build entry=cord directory=(list [cord cord])]
   ==
 +$  effect  [%jam p=*]
 --
@@ -43,19 +43,29 @@
 ::
 ++  poke
   |=  [eny=@ our=@ux now=@da dat=*]
-  ^-  [(list *) choo-state]
+  ^-  [(list effect) choo-state]
+  ~&  %poking
+  ~&  %softing
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
     !!
   =/  =cause  u.sof-cau
+  ~&  %stabbing
+  =/  entry  (stab entry.cause)
+  =/  cord-dir  (turn directory.cause |=((pair @t @t) [(stab p) q]))
+  =/  dir  (~(gas by *(map path cord)) cord-dir)
+  ~&  %building-hoon
   =?  cached-hoon.k  ?=(~ cached-hoon.k)  `build-honc
   ?>  ?=(^ cached-hoon.k)
+  ~&  %entering-create
   :_  k
+  =-  ~&  %all-done
+      -
   :_  ~
   :-  %jam
   %-  ~(create builder u.cached-hoon.k)
-  [entry directory]:cause
+  [entry dir]
 --
 ::
 ::  build system
@@ -77,6 +87,27 @@
       =hoon
   ==
 ::
+++  to-wain                                           ::  cord to line list
+  |=  txt=cord
+  ^-  wain
+  ?~  txt  ~
+  =/  len=@  (met 3 txt)
+  =/  cut  =+(cut -(a 3, c 1, d txt))
+  =/  sub  sub
+  =|  [i=@ out=wain]
+  |-  ^+  out
+  =+  |-  ^-  j=@
+      ?:  ?|  =(i len)
+              =(10 (cut(b i)))
+          ==
+        i
+      $(i +(i))
+    =.  out  :_  out
+    (cut(b i, c (sub j i)))
+  ?:  =(j len)
+    (flop out)
+  $(i +(j))
+::
 ++  parse-pile
   |=  [pax=path tex=tape]
   ^-  pile
@@ -90,7 +121,7 @@
   ^-  (list tank)
   :~  leaf+"syntax error at [{<lyn>} {<col>}] in {<pax>}"
     ::
-      =/  =wain  (to-wain:format (crip tex))
+      =/  =wain  (to-wain (crip tex))
       ?:  (gth lyn (lent wain))
         '<<end of file>>'
       (snag (dec lyn) wain)
@@ -207,6 +238,8 @@
       bar
     %+  turn  bar.pile
     |=  [face=term mark-unsupported=@tas pax=path]
+    ?:  =(mark-unsupported %hoon)
+      [`face `path`(snoc pax %hoon)]
     !!
   ==
 --
@@ -215,6 +248,7 @@
 ::
 |_  honc=(trap vase)
 ::
++$  import-cord  [=path face=(unit @tas) txt=@t]
 ++  import-graph
   $+  import-graph
   $~  [*path ~ ~ ~ ~ *(unit @tas) *hoon]  ::  not needed in the dojo but here for some reason
@@ -222,7 +256,7 @@
       sur=(list import-graph)
       lib=(list import-graph)
       raw=(list import-graph)
-      bar=(list import-graph)
+      bar=(list import-cord)
       face=(unit @tas)  ::  the face that this node of the import graph has
       =hoon
   ==
@@ -230,7 +264,7 @@
 ::  +build-honc: build hoon.hoon separately to avoid recompiling whenever rebuilding kernel
 ++  build-honc
   ^-  (trap vase)
-  (swat *(trap vase) (ream (crip hoon-139-txt)))
+  (swat *(trap vase) (ream hoon-139-txt))
 ::
 ++  create
   |=  [entry=path dir=(map path cord)]
@@ -265,10 +299,10 @@
     %^  spin  raw.rile  cache
     |=  [raut cache=(map path import-graph)]
     (make-import-graph face pax +(depth) cache dir)
-  =^  new-bar=(list import-graph)  cache
-    %^  spin  bar.rile  cache
-    |=  [raut cache=(map path import-graph)]
-    (make-import-graph face pax +(depth) cache dir)
+  =/  new-bar=(list import-cord)
+    %+  turn  bar.rile
+    |=  [face=(unit @tas) pax=path]
+    [pax face (~(got by dir) pax)]
   =/  graph=import-graph
     :*  suf
         sur=new-sur
@@ -295,14 +329,30 @@
   ?^  existing=(~(get by cache) path.graph)
     ~&  >  "reusing cached vase for {<path.graph>}"
     [(label-vase u.existing face.graph) cache]
+  ~&  %surs
   =^  surs  cache   (spin sur.graph cache compile-graph)
+  ~&  %libs
   =^  libs  cache   (spin lib.graph cache compile-graph)
+  ~&  %raws
   =^  raws  cache   (spin raw.graph cache compile-graph)
-  =^  bars  cache   (spin bar.graph cache compile-graph)
+  ~&  %bars
+  =/  bars=(list vase)
+    %+  turn  bar.graph
+    |=  [* face=(unit @tas) txt=@t]
+    ^-  vase
+    =/  vaz  !>(txt)
+    ?~  face  vaz
+    ~&  bar-face+u.face
+    [[%face u.face p.vaz] q.vaz]
+  ~&  %sur-all
   =/  sur-all=(trap vase)  (roll p.surs slew)
+  ~&  %lib-all
   =/  lib-all=(trap vase)  (roll p.libs slew)
+  ~&  %raw-all
   =/  raw-all=(trap vase)  (roll p.raws slew)
-  =/  bar-all=(trap vase)  (roll p.bars slew)
+  ~&  bar-all+(lent bars)
+  =/  bar-all=(trap vase)  (roll bars spol)
+  ~&  %deps
   =/  deps=(trap vase)
     ::  we must always make hoon.hoon available to each `hoon.graph`
     ::  in case it's not available on account of being hidden behind a face in other dependencies
@@ -327,6 +377,7 @@
     |=  [vaz=(trap vase) face=(unit @tas)]
     ^-  (trap vase)
     ?~  face  vaz
+    ::[[%face u.face p.res] q.res]
     (swat vaz (ream (crip :(weld "^=  " (scow %tas u.face) "  ."))))
   --
 ::
@@ -338,6 +389,16 @@
   |.  ~+
   =/  pro  q:$:tap
   [[%cell p.gun p:$:tap] [.*(pro q.gun) pro]]
+::
+::  cons a vase to a trap vase
+::
+++  spol
+  |=  [hed=vase tal=(trap vase)]
+  ^-  (trap vase)
+  =>  +<
+  |.
+  =/  res  $:tal
+  [[%cell p:hed p:res] [q:hed q:res]]
 ::
 ++  slew
   |=  [hed=(trap vase) tal=(trap vase)]

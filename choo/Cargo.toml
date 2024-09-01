@@ -11,6 +11,7 @@ edition.workspace = true
   tokio = { workspace = true }
   tracing = { workspace = true }
   bytes = { workspace = true }
+walkdir = "2.5.0"
 
 [[bin]]
 name = "choo"
