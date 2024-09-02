@@ -21,12 +21,11 @@
   ~>  %bout
   (~(mint ut t.hoon-knob) %noun (ream wrapper-hoon))
 ~&  "compiling kernel"
-=/  hoon-txt=vase  !>(hoon-139-txt=hoon-139-hoon)
 =/  kernel-knob=[t=type form=nock]
   ~>  %bout
-  (~(mint ut p:(slop hoon-txt wrapper-knob)) %noun (rain /lib/choo/kernel/hoon kernel-hoon))
+  (~(mint ut t.wrapper-knob) %noun (rain /lib/choo/kernel/hoon kernel-hoon))
 =/  trap-nock=nock
-  [%7 [[%1 hoon-139-hoon] [%7 form.hoon-knob form.wrapper-knob]] form.kernel-knob]
+  [%7 [%7 form.hoon-knob form.wrapper-knob] form.kernel-knob]
 ~&  %built-trap-nock
 trap-nock
 ::  TODO: use this once we can execute trap in NockApp

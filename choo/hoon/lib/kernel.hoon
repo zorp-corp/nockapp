@@ -1,5 +1,4 @@
 /+  *wrapper
-/*  hoon-139-txt  %hoon  /lib/hoon-139/hoon
 =>
 |%
 +$  choo-state
@@ -13,11 +12,12 @@
 +$  knob  [t=type f=nock]
 +$  cause
   $%  [%build entry=cord directory=(list [cord cord])]
+      [%boot hoon-txt=@cord]
   ==
 +$  effect  [%jam p=*]
 --
 ::
-=<  $
+::=<  $
 =<
 ~&  %choo-choo
 %-  moat
@@ -35,9 +35,9 @@
 ::  +peek: external inspect
 ::
 ++  peek
-  |=  path=*
+  |=  =path
   ^-  (unit (unit *))
-  !!
+  ``?=(^ cached-hoon.k)
 ::
 ::  +poke: external apply
 ::
@@ -51,12 +51,20 @@
     ~&  "cause incorrectly formatted!"
     !!
   =/  =cause  u.sof-cau
+  ?:  ?=(%boot -.cause)
+    ~&  %building-hoon
+    ?:  ?=(^ cached-hoon.k)
+      [~ k]
+    =>  .(cached-hoon.k `(unit (trap vase))`~)
+    =.  cached-hoon.k
+      :-  ~
+      ^-  (trap vase)
+      (swat *(trap vase) (ream hoon-txt.cause))
+    [~ k]
   ~&  %stabbing
   =/  entry  (stab entry.cause)
   =/  cord-dir  (turn directory.cause |=((pair @t @t) [(stab p) q]))
   =/  dir  (~(gas by *(map path cord)) cord-dir)
-  ~&  %building-hoon
-  =?  cached-hoon.k  ?=(~ cached-hoon.k)  `build-honc
   ?>  ?=(^ cached-hoon.k)
   ~&  %entering-create
   :_  k
@@ -207,10 +215,20 @@
 ++  get-fit
   |=  [pre=@ta pax=@tas dir=(map path cord)]
   ^-  (unit path)
+  =-  ~&  get-fit+[pre pax]
+      ~&  [%result -]
+      -
   =/  paz=(list path)  (segments pax)
   |-
   ?~  paz  ~
-  =/  puz  `path`(snoc `path`[pre i.paz] %hoon)
+  =/  last=term  (rear i.paz)
+  =.  i.paz   `path`(snip i.paz)
+  =/  puz
+    ^-  path
+    %+  snoc
+      `path`[pre i.paz]
+    `@ta`(rap 3 ~[last %'.' %hoon])
+  ~&  puz+puz
   ?^  (~(get by dir) puz)
     `puz
   $(paz t.paz)
@@ -240,6 +258,7 @@
     |=  [face=term mark-unsupported=@tas pax=path]
     ?:  =(mark-unsupported %hoon)
       [`face `path`(snoc pax %hoon)]
+    ~&  unsupported-mark+[mark-unsupported pax]
     !!
   ==
 --
@@ -261,19 +280,15 @@
       =hoon
   ==
 ::
-::  +build-honc: build hoon.hoon separately to avoid recompiling whenever rebuilding kernel
-++  build-honc
-  ^-  (trap vase)
-  (swat *(trap vase) (ream hoon-139-txt))
-::
 ++  create
   |=  [entry=path dir=(map path cord)]
   ^-  (trap)
-  =/  dir-hash  (mug dir)
+  =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
   =/  graph  (make-import-graph ~ entry 0 ~ dir)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
   =;  ker-gen
+    ~&  %ker-gen-call
     =>  (shot ker-gen |.(!>(dir-hash)))
     |.(+:^$)
   %-  head
@@ -287,6 +302,7 @@
     ~&  >  "reusing cached graph for {<suf>}"
     [u.existing(face face) cache]  ::  make sure to use the provided face
   =/  rile  (resolve-pile (parse-pile suf (get-hoon suf dir)) dir)
+  ~&  rile+rile
   =^  new-sur=(list import-graph)  cache
     %^  spin  sur.rile  cache
     |=  [raut cache=(map path import-graph)]
@@ -299,16 +315,12 @@
     %^  spin  raw.rile  cache
     |=  [raut cache=(map path import-graph)]
     (make-import-graph face pax +(depth) cache dir)
-  =/  new-bar=(list import-cord)
-    %+  turn  bar.rile
-    |=  [face=(unit @tas) pax=path]
-    [pax face (~(got by dir) pax)]
   =/  graph=import-graph
     :*  suf
         sur=new-sur
         lib=new-lib
         raw=new-raw
-        bar=new-bar
+        bar=~
         face
         hoon.rile
     ==
@@ -336,22 +348,12 @@
   ~&  %raws
   =^  raws  cache   (spin raw.graph cache compile-graph)
   ~&  %bars
-  =/  bars=(list vase)
-    %+  turn  bar.graph
-    |=  [* face=(unit @tas) txt=@t]
-    ^-  vase
-    =/  vaz  !>(txt)
-    ?~  face  vaz
-    ~&  bar-face+u.face
-    [[%face u.face p.vaz] q.vaz]
   ~&  %sur-all
   =/  sur-all=(trap vase)  (roll p.surs slew)
   ~&  %lib-all
   =/  lib-all=(trap vase)  (roll p.libs slew)
   ~&  %raw-all
   =/  raw-all=(trap vase)  (roll p.raws slew)
-  ~&  bar-all+(lent bars)
-  =/  bar-all=(trap vase)  (roll bars spol)
   ~&  %deps
   =/  deps=(trap vase)
     ::  we must always make hoon.hoon available to each `hoon.graph`
@@ -359,14 +361,16 @@
     ::
     ::  TODO make sure there are no bunted vases in here
     =-  (roll - |=([v=(trap vase) a=(trap vase)] (slew a v)))
-    %+  murn  ~[lib-all sur-all bar-all raw-all honc]
+    %+  murn  ~[lib-all sur-all raw-all honc]
     |=  dep=(trap vase)
     ?:  =(*(trap vase) dep)  ~
     `dep
+  ~&  %compiling-final
   ::  compile the current `hoon.graph` against its compiled dependencies
   ::
   =/  compiled=(trap vase)
     (swat deps hoon.graph)
+  ~&  compiled+path.graph
   ::  cache the vase before adding the face so that alias can be handled jit when pulling from cache
   ::
   =.  cache     (~(put by cache) path.graph compiled)

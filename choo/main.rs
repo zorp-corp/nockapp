@@ -13,6 +13,9 @@ use crown::kernel::boot::Cli as BootCli;
 static KERNEL_JAM: &[u8] =
     include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/choo.jam"));
 
+static HOON_TXT: &[u8] =
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/hoon-139.hoon"));
+
 #[derive(Parser, Debug)]
 #[command(about = "Tests various poke types for the kernel", author = "zorp", version, color = ColorChoice::Auto)]
 struct ChooCli {
@@ -37,12 +40,18 @@ fn is_hoon_or_dir(entry: &DirEntry) -> bool {
     is_dir || is_hoon
 }
 
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = ChooCli::parse();
 
-    let mut kernel = boot::setup_form(KERNEL_JAM, Some(cli.boot))?;
+    let mut kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
+
+    let hoon_cord =
+        Atom::from_bytes(kernel.serf.stack(), &Bytes::from(HOON_TXT)).as_noun();
+
+    let bootstrap_poke = T(kernel.serf.stack(), &[D(tas!(b"boot")), hoon_cord]);
+    let mut bootstrap_res = kernel.poke(bootstrap_poke)?;
+    println!("boot result: {}", bootstrap_res);
 
     let entry_string = cli.entry.strip_prefix("hoon").unwrap();
     let entry_noun = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(entry_string.as_bytes().to_vec())).as_noun();
@@ -76,7 +85,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let mut poke_result = kernel.poke(poke)?;
-    println!("result: {}", poke_result);
+    //println!("result: {}", poke_result);
 
     loop {
         if let Ok(fec_it) = poke_result.as_cell() {
