@@ -374,20 +374,10 @@
   =/  pro  q:$:tap
   [[%cell p.gun p:$:tap] [.*(pro q.gun) pro]]
 ::
-::  cons a vase to a trap vase
-::
-++  spol
-  |=  [hed=vase tal=(trap vase)]
-  ^-  (trap vase)
-  =>  +<
-  |.
-  =/  res  $:tal
-  [[%cell p:hed p:res] [q:hed q:res]]
-::
 ++  slew
   |=  [hed=(trap vase) tal=(trap vase)]
   ^-  (trap vase)
-  =>  +
+  =>  +<
   |.  ~+
   =+  [bed bal]=[$:hed $:tal]
   [[%cell p:bed p:bal] [q:bed q:bal]]
