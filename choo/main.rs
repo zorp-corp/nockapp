@@ -50,8 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Atom::from_bytes(kernel.serf.stack(), &Bytes::from(HOON_TXT)).as_noun();
 
     let bootstrap_poke = T(kernel.serf.stack(), &[D(tas!(b"boot")), hoon_cord]);
-    let mut bootstrap_res = kernel.poke(bootstrap_poke)?;
-    println!("boot result: {}", bootstrap_res);
+    let _ = kernel.poke(bootstrap_poke)?;
 
     let entry_string = cli.entry.strip_prefix("hoon").unwrap();
     let entry_noun = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(entry_string.as_bytes().to_vec())).as_noun();

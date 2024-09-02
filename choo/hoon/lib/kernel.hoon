@@ -17,7 +17,6 @@
 +$  effect  [%jam p=*]
 --
 ::
-::=<  $
 =<
 ~&  %choo-choo
 %-  moat
@@ -44,8 +43,6 @@
 ++  poke
   |=  [eny=@ our=@ux now=@da dat=*]
   ^-  [(list effect) choo-state]
-  ~&  %poking
-  ~&  %softing
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
@@ -61,15 +58,12 @@
       ^-  (trap vase)
       (swat *(trap vase) (ream hoon-txt.cause))
     [~ k]
-  ~&  %stabbing
   =/  entry  (stab entry.cause)
   =/  cord-dir  (turn directory.cause |=((pair @t @t) [(stab p) q]))
   =/  dir  (~(gas by *(map path cord)) cord-dir)
   ?>  ?=(^ cached-hoon.k)
   ~&  %entering-create
   :_  k
-  =-  ~&  %all-done
-      -
   :_  ~
   :-  %jam
   %-  ~(create builder u.cached-hoon.k)
@@ -215,9 +209,6 @@
 ++  get-fit
   |=  [pre=@ta pax=@tas dir=(map path cord)]
   ^-  (unit path)
-  =-  ~&  get-fit+[pre pax]
-      ~&  [%result -]
-      -
   =/  paz=(list path)  (segments pax)
   |-
   ?~  paz  ~
@@ -228,7 +219,6 @@
     %+  snoc
       `path`[pre i.paz]
     `@ta`(rap 3 ~[last %'.' %hoon])
-  ~&  puz+puz
   ?^  (~(get by dir) puz)
     `puz
   $(paz t.paz)
@@ -288,7 +278,6 @@
   =/  graph  (make-import-graph ~ entry 0 ~ dir)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
   =;  ker-gen
-    ~&  %ker-gen-call
     =>  (shot ker-gen |.(!>(dir-hash)))
     |.(+:^$)
   %-  head
@@ -302,7 +291,6 @@
     ~&  >  "reusing cached graph for {<suf>}"
     [u.existing(face face) cache]  ::  make sure to use the provided face
   =/  rile  (resolve-pile (parse-pile suf (get-hoon suf dir)) dir)
-  ~&  rile+rile
   =^  new-sur=(list import-graph)  cache
     %^  spin  sur.rile  cache
     |=  [raut cache=(map path import-graph)]
@@ -341,20 +329,12 @@
   ?^  existing=(~(get by cache) path.graph)
     ~&  >  "reusing cached vase for {<path.graph>}"
     [(label-vase u.existing face.graph) cache]
-  ~&  %surs
   =^  surs  cache   (spin sur.graph cache compile-graph)
-  ~&  %libs
   =^  libs  cache   (spin lib.graph cache compile-graph)
-  ~&  %raws
   =^  raws  cache   (spin raw.graph cache compile-graph)
-  ~&  %bars
-  ~&  %sur-all
   =/  sur-all=(trap vase)  (roll p.surs slew)
-  ~&  %lib-all
   =/  lib-all=(trap vase)  (roll p.libs slew)
-  ~&  %raw-all
   =/  raw-all=(trap vase)  (roll p.raws slew)
-  ~&  %deps
   =/  deps=(trap vase)
     ::  we must always make hoon.hoon available to each `hoon.graph`
     ::  in case it's not available on account of being hidden behind a face in other dependencies
