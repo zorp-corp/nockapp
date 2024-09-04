@@ -279,8 +279,8 @@
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
   =;  ker-gen
     =>  %+  shot  ker-gen
-        =>  dir-hash=!>(dir-hash)
-        |.(dir-hash)
+        =>  d=!>(dir-hash)
+        |.(d)
     |.(+:^$)
   %-  head
   (compile-graph (head graph) ~)

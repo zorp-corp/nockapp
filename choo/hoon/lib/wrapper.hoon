@@ -16,13 +16,13 @@
     |_  outer-state
     ++  load
       |~  arg=*
-      [*(list *) **]
+      *[(list *) *]
     ++  peek
       |~  arg=path
       *(unit (unit *))
     ++  poke
-      |*  [num=@ ovum=*]
-      [*(list *) *outer-state]
+      |~  [num=@ ovum=*]
+      *[(list *) *]
     ++  wish
       |~  txt=@
       **
@@ -33,13 +33,13 @@
     |_  state=inner-state
     ++  load
       |~  arg=*
-      [*(list *) **]
+      *[(list *) *]
     ++  peek
       |~  arg=path
       *(unit (unit *))
     ++  poke
       |~  arg=input
-      [*(list *) *inner-state]
+      *[(list *) inner-state]
     --
   --
   ::
@@ -60,7 +60,7 @@
   ++  wish
     |=  txt=@
     ^-  *
-    (slap !>(~) (ream txt))
+    q:(slap !>(~) (ream txt))
   ::
   ++  poke
     |=  [num=@ ovum=*]
