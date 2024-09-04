@@ -362,8 +362,10 @@
     |=  [vaz=(trap vase) face=(unit @tas)]
     ^-  (trap vase)
     ?~  face  vaz
-    ::[[%face u.face p.vas] q.vas]
-    (swet vaz (ream (crip :(weld "^=  " (scow %tas u.face) "  ."))))
+    =>  [vaz=vaz face=u.face]
+    |.
+    =/  vas  $:vaz
+    [[%face face p.vas] q.vas]
   --
 ::
 ++  slew
