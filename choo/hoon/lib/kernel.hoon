@@ -52,12 +52,7 @@
     ?:  ?=(^ cached-hoon.k)
       [~ k]
     ~&  %building-hoon
-    =>  .(cached-hoon.k `(unit (trap vase))`~)
-    =.  cached-hoon.k
-      :-  ~
-      ^-  (trap vase)
-      (swat *(trap vase) (ream hoon-txt.cause))
-    [~ k]
+    [~ k(cached-hoon `(build-honc hoon-txt.cause))]
   =/  entry  (stab entry.cause)
   =/  dir
     %-  ~(gas by *(map path cord))
@@ -258,6 +253,11 @@
 ::
 |_  honc=(trap vase)
 ::
+++  build-honc
+  |=  hoon-txt=cord
+  ^-  (trap vase)
+  (swet *(trap vase) (ream hoon-txt))
+::
 ++  import-graph
   $+  import-graph
   $~  [*path ~ ~ ~ ~ *(unit @tas) *hoon]  ::  not needed in the dojo but here for some reason
@@ -350,7 +350,7 @@
   ::  compile the current `hoon.graph` against its compiled dependencies
   ::
   =/  compiled=(trap vase)
-    (swat deps hoon.graph)
+    (swet deps hoon.graph)
   ~&  compiled+path.graph
   ::  cache the vase before adding the face so that alias can be handled jit when pulling from cache
   ::
@@ -363,7 +363,7 @@
     ^-  (trap vase)
     ?~  face  vaz
     ::[[%face u.face p.vas] q.vas]
-    (swat vaz (ream (crip :(weld "^=  " (scow %tas u.face) "  ."))))
+    (swet vaz (ream (crip :(weld "^=  " (scow %tas u.face) "  ."))))
   --
 ::
 ++  slew
@@ -388,6 +388,18 @@
   =>  [typ=p.gun +<.$]
   |.
   [typ .*([q:$:gat q:$:sam] [%9 2 %10 [6 %0 3] %0 2])]
+::
+::  +swet: deferred +slap
+::  NOTE: this is +swat but with a bug fixed that caused a space leak in
+::  the resulting trap vases.
+::
+++  swet
+  |=  [tap=(trap vase) gen=hoon]
+  ^-  (trap vase)
+  =/  gun  (~(mint ut p:$:tap) %noun gen)
+  =>  [gun=gun tap=tap]
+  |.  ~+
+  [p.gun .*(q:$:tap q.gun)]
 ::
 ++  get-hoon
   ::  produces the hoon source at the given path

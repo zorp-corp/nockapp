@@ -11464,7 +11464,6 @@
   |=  [tap=(trap vase) gen=hoon]
   ^-  (trap vase)
   =/  gun  (~(mint ut p:$:tap) %noun gen)
-  =>  [gun=gun tap=tap]
   |.  ~+
   [p.gun .*(q:$:tap q.gun)]
 ::
