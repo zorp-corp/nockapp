@@ -6,7 +6,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Instant;
 use sword::hamt::Hamt;
-use sword::interpreter::{self, inc, interpret, Error, Mote};
+use sword::interpreter::{self, interpret, Error, Mote};
 use sword::jets::cold::Cold;
 use sword::jets::hot::{Hot, HotEntry, URBIT_HOT_STATE};
 use sword::jets::list::util::zing;

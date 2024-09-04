@@ -2,6 +2,9 @@
 target
 bin/
 
+.data.crown
+**/.data.crown
+
 # Dev config
 .vscode/settings.json
 

@@ -49,9 +49,9 @@
     !!
   =/  =cause  u.sof-cau
   ?:  ?=(%boot -.cause)
-    ~&  %building-hoon
     ?:  ?=(^ cached-hoon.k)
       [~ k]
+    ~&  %building-hoon
     =>  .(cached-hoon.k `(unit (trap vase))`~)
     =.  cached-hoon.k
       :-  ~
@@ -59,10 +59,10 @@
       (swat *(trap vase) (ream hoon-txt.cause))
     [~ k]
   =/  entry  (stab entry.cause)
-  =/  cord-dir  (turn directory.cause |=((pair @t @t) [(stab p) q]))
-  =/  dir  (~(gas by *(map path cord)) cord-dir)
+  =/  dir
+    %-  ~(gas by *(map path cord))
+    (turn directory.cause |=((pair @t @t) [(stab p) q]))
   ?>  ?=(^ cached-hoon.k)
-  ~&  %entering-create
   :_  k
   :_  ~
   :-  %jam
@@ -206,6 +206,7 @@
   ^-  (list (list @tas))
   ?>  ?=(^ s)
   ~[[i.torn s] [(crip "{(trip i.torn)}-{(trip i.s)}") t.s]]
+::
 ++  get-fit
   |=  [pre=@ta pax=@tas dir=(map path cord)]
   ^-  (unit path)
@@ -257,7 +258,6 @@
 ::
 |_  honc=(trap vase)
 ::
-+$  import-cord  [=path face=(unit @tas) txt=@t]
 ++  import-graph
   $+  import-graph
   $~  [*path ~ ~ ~ ~ *(unit @tas) *hoon]  ::  not needed in the dojo but here for some reason
@@ -265,7 +265,7 @@
       sur=(list import-graph)
       lib=(list import-graph)
       raw=(list import-graph)
-      bar=(list import-cord)
+      bar=(list import-graph)
       face=(unit @tas)  ::  the face that this node of the import graph has
       =hoon
   ==
@@ -278,7 +278,9 @@
   =/  graph  (make-import-graph ~ entry 0 ~ dir)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
   =;  ker-gen
-    =>  (shot ker-gen |.(!>(dir-hash)))
+    =>  %+  shot  ker-gen
+        =>  dir-hash=!>(dir-hash)
+        |.(dir-hash)
     |.(+:^$)
   %-  head
   (compile-graph (head graph) ~)
@@ -345,7 +347,6 @@
     |=  dep=(trap vase)
     ?:  =(*(trap vase) dep)  ~
     `dep
-  ~&  %compiling-final
   ::  compile the current `hoon.graph` against its compiled dependencies
   ::
   =/  compiled=(trap vase)
@@ -361,24 +362,15 @@
     |=  [vaz=(trap vase) face=(unit @tas)]
     ^-  (trap vase)
     ?~  face  vaz
-    ::[[%face u.face p.res] q.res]
+    ::[[%face u.face p.vas] q.vas]
     (swat vaz (ream (crip :(weld "^=  " (scow %tas u.face) "  ."))))
   --
-::
-++  swel
-  |=  [tap=(trap vase) gen=hoon]
-  ^-  (trap vase)
-  =/  gun  (~(mint ut p:$:tap) %noun gen)
-  =>  [tap=tap gun=gun]
-  |.  ~+
-  =/  pro  q:$:tap
-  [[%cell p.gun p:$:tap] [.*(pro q.gun) pro]]
 ::
 ++  slew
   |=  [hed=(trap vase) tal=(trap vase)]
   ^-  (trap vase)
   =>  +<
-  |.  ~+
+  |.
   =+  [bed bal]=[$:hed $:tal]
   [[%cell p:bed p:bal] [q:bed q:bal]]
 ::  +shot: deferred slam
@@ -394,7 +386,7 @@
     [%cnsg [%$ ~] [%$ 2] [%$ 3] ~]
   =+  gun=(~(mint ut typ) %noun gen)
   =>  [typ=p.gun +<.$]
-  |.  ~+
+  |.
   [typ .*([q:$:gat q:$:sam] [%9 2 %10 [6 %0 3] %0 2])]
 ::
 ++  get-hoon
