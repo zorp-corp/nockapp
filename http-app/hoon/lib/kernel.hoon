@@ -31,6 +31,13 @@
       headers=(list header)
       body=(unit octs)
   ==
+::
+++  to-octs
+  |=  bod=@
+  ^-  (unit octs)
+  =/  len  (met 3 bod)
+  ?:  =(len 0)  ~
+  `[len bod]
 --
 ::
 ~&  %serving
@@ -60,6 +67,7 @@
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
+    ~&  dat
     !!
   =/  [uri=@t =method headers=(list header) body=(unit octs)]  +.u.sof-cau
   ~&  [uri+uri method+method headers+headers]
@@ -72,8 +80,15 @@
       %'GET'
     :^  %res  %200
       ['content-type' 'text/html']~
-    =+  %hi
-    `[(met 1 -) -]
+    %-  to-octs
+    '''
+    <!doctype html>
+    <html>
+      <body>
+        <h1>Hello NockApp!</h1>
+      </body>
+    </html>
+    '''
   ::
       %'POST'
     !!

@@ -32,6 +32,7 @@ struct TestCli {
 
 type Responder = oneshot::Sender<Result<Response, StatusCode>>;
 
+#[derive(Debug)]
 struct RequestMessage {
     uri: Uri,
     method: Method,
@@ -85,7 +86,7 @@ async fn sword_handler(
         resp: resp_tx,
     };
 
-    let send_res = sender.send(msg);
+    let _ = sender.send(msg);
 
     // Await the response
     if let Ok(result) = resp_rx.await {
@@ -97,30 +98,30 @@ async fn sword_handler(
 
 async fn manage_kernel(rx: Receiver<RequestMessage>) -> Result<(), Box<dyn std::error::Error>> {
     let cli = TestCli::parse();
-    let mut kernel = boot::setup_form(KERNEL_JAM, Some(cli.boot))?;
+    let mut kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
 
     loop {
         // Start receiving messages
         if let Ok(msg) = rx.recv() {
-            let uri_bytes = msg.uri.to_string().as_bytes().to_vec();
-            let uri = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(uri_bytes)).as_noun();
+            let uri =
+                Atom::from_value(kernel.serf.stack(), msg.uri.to_string()).unwrap().as_noun();
 
-            let method_bytes = msg.method.to_string().as_bytes().to_vec();
             let method =
-                Atom::from_bytes(kernel.serf.stack(), &Bytes::from(method_bytes)).as_noun();
+                Atom::from_value(kernel.serf.stack(), msg.method.to_string()).unwrap().as_noun();
 
             let mut headers = D(0);
             for (k, v) in msg.headers {
                 let key = k.unwrap().as_str().to_string();
                 let val = v.to_str().unwrap().to_string();
-                let k_atom = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(key)).as_noun();
-                let v_atom = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(val)).as_noun();
-                let header_cell = T(kernel.serf.stack(), &[k_atom, v_atom]);
+                let k_atom = Atom::from_value(kernel.serf.stack(), key).unwrap();
+                let v_atom = Atom::from_value(kernel.serf.stack(), val).unwrap();
+                let header_cell = T(kernel.serf.stack(), &[k_atom.as_noun(), v_atom.as_noun()]);
                 headers = T(kernel.serf.stack(), &[header_cell, headers]);
             }
 
             let body: crown::Noun = {
                 if let Some(bod) = msg.body {
+                    println!("bod: {:?}", bod);
                     let ato = Atom::from_bytes(kernel.serf.stack(), &bod).as_noun();
                     T(
                         kernel.serf.stack(),
@@ -162,11 +163,15 @@ async fn manage_kernel(rx: Receiver<RequestMessage>) -> Result<(), Box<dyn std::
                             if let Ok(val) = CStr::from_bytes_until_nul(val_vec.as_bytes()) {
                                 header_vec.push((
                                     String::from_utf8(key.to_bytes().to_vec())?,
-                                    String::from_utf8(val.to_bytes().to_vec())?
+                                    String::from_utf8(val.to_bytes().to_vec())?,
                                 ));
                                 header_list = header_list.as_cell()?.tail();
-                            } else { break; }
-                        } else { break; }
+                            } else {
+                                break;
+                            }
+                        } else {
+                            break;
+                        }
                     }
                 }
 
@@ -183,7 +188,7 @@ async fn manage_kernel(rx: Receiver<RequestMessage>) -> Result<(), Box<dyn std::
                             .data();
                         let mut body_vec: Vec<u8> = b"0".repeat(body_len.try_into().unwrap());
                         let body_atom = body_octs.tail().as_atom()?;
-                        body_vec.copy_from_slice(body_atom.as_bytes());
+                        body_vec.copy_from_slice(&body_atom.to_bytes_until_nul().unwrap());
                         Some(Bytes::from(body_vec))
                     } else {
                         None
