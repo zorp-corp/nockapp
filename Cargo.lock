@@ -315,6 +315,7 @@ dependencies = [
  "sword_macros",
  "tokio",
  "tracing",
+ "walkdir",
 ]
 
 [[package]]

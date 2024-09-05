@@ -1,9 +1,7 @@
 |%
 +$  goof    [mote=term =tang]
-+$  ovum
-  $%  [[%poke ~] =input]
-      [%crud =goof %poke =input]
-  ==
++$  wire    path
++$  ovum    [=wire =input]
 +$  crud    [=goof =input]
 +$  input   [eny=@ our=@ux now=@da cause=*]
 ::
@@ -23,8 +21,8 @@
       |~  arg=path
       *(unit (unit *))
     ++  poke
-      |~  [event-num=@ ovum]
-      *[(list *) outer-state]
+      |~  [num=@ ovum=*]
+      *[(list *) *]
     ++  wish
       |~  txt=@
       **
@@ -32,7 +30,7 @@
   ::
   +$  fort
     $_  ^|
-    |_  inner-state
+    |_  state=inner-state
     ++  load
       |~  arg=*
       *[(list *) *]
@@ -65,25 +63,27 @@
     q:(slap !>(~) (ream txt))
   ::
   ++  poke
-    |=  [num=@ =ovum]
-    ^-  [(list *) outer-state]
-    ?+    ovum  ~&("invalid ovum: {<ovum>}" !!)
+    |=  [num=@ ovum=*]
+    ^-  [(list *) _..poke]
+    ?+   ovum  ~&("invalid arg: {<ovum>}" ~^..poke)
         [[%$ %arvo ~] *]
-      =/  g  ((soft goof) gof.ovum)
-      ?~  g  ~&(%invalid-goof !!)
-      =-  [~ outer]
-      %+  turn  tang.u.g
-      |=(=tank ~>(%slog.[3 tank] 0))
+      =/  g  ((soft crud) +.ovum)
+      ?~  g  ~&(%invalid-goof ~^..poke)
+      =-  [~ ..poke]
+      (slog tang.goof.u.g)
     ::
         [[%poke ~] *]
-      =/  o  ((soft input) input.ovum)
+      =/  ovum  ((soft ^ovum) ovum)
+      ?~  ovum  ~&("invalid arg: {<ovum>}" ~^..poke)
+      =/  o  ((soft input) input.u.ovum)
       ?~  o
         ~&  "could not mold poke type: {<ovum>}"
-        =+  (road |.(;;(^ovum ovum)))
-        ~^outer
+        =+  (road |.(;;(^^ovum ovum)))
+        ~^..poke
       =^  effects  internal.outer
-        (poke:inner input.ovum)
-      [effects outer]
+        (poke:inner input.u.ovum)
+      =.  state.inner  internal.outer
+      [effects ..poke(internal.outer internal.outer)]
     ==
   --
 --
