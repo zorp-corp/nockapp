@@ -8,6 +8,8 @@ The NockApp framework is a set of tools for building NockApps: self-contained No
 
 NockApps use [Sword](https://github.com/zorp-corp/sword) for durable Nock execution.
 
+<br>
+
 ## Get Started
 
 To test compiling a Nock kernel using the `choo` command-line Hoon compiler, run the following commands:
