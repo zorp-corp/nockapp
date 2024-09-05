@@ -4,9 +4,11 @@
 
 ***DEVELOPER ALPHA***
 
-The NockApp framework is a set of tools for building NockApps: self-contained Nock state machines with Rust IO drivers.
+NockApps are pure-functional state machines with automatic persistence and modular IO.
 
-NockApps use [Sword](https://github.com/zorp-corp/sword) for durable Nock execution.
+The NockApp framework provides two modules, Crown and Sword:
+1. Crown provides a minimal Rust interface to a Nock kernel.
+2. [Sword](https://github.com/zorp-corp/sword) is a modern Nock runtime.
 
 <br>
 
