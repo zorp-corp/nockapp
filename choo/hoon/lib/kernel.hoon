@@ -46,6 +46,7 @@
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
+    ~&  dat
     !!
   =/  =cause  u.sof-cau
   ?:  ?=(%boot -.cause)

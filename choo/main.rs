@@ -52,18 +52,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bootstrap_poke = T(kernel.serf.stack(), &[D(tas!(b"boot")), hoon_cord]);
     let _ = kernel.poke(bootstrap_poke)?;
 
-    let entry_string = cli.entry.strip_prefix("hoon").unwrap();
+    let entry_string = cli.entry.strip_prefix(&cli.directory).unwrap();
     let entry_noun = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(entry_string.as_bytes().to_vec())).as_noun();
 
     let mut directory_noun = D(0);
 
-    let walker = WalkDir::new(cli.directory).follow_links(true).into_iter();
+    let walker = WalkDir::new(cli.directory.clone()).follow_links(true).into_iter();
     for entry_result in walker
         .filter_entry(|e| is_hoon_or_dir(e)) {
         let entry = entry_result?;
         let is_file = entry.metadata().unwrap().is_file();
         if is_file {
-            let path_str = entry.path().to_str().unwrap().strip_prefix("hoon").unwrap();
+            let path_str = entry.path().to_str().unwrap().strip_prefix(&cli.directory).unwrap();
             let path_cord = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(path_str.as_bytes().to_vec())).as_noun();
 
             let contents = {
