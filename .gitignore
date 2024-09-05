@@ -12,9 +12,6 @@ bin/
 .unikraft
 .DS_Store
 
-.data.crown
-**/.data.crown
-
 *.swp
 **/*.swp
 .DS_Store
