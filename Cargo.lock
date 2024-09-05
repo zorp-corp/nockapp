@@ -1398,6 +1398,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b"
 
 [[package]]
+name = "repl"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "clap 4.5.16",
+ "crown",
+ "sword",
+ "sword_macros",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
