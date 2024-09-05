@@ -70,8 +70,8 @@
     ?~  ran
       ~&  "failed to run!"
       [~ k]
-    ~&  u.ran
-    [~ k]
+    =-  [~ k]
+    (slog (sell u.ran)^~)
   ?:  ?=(%boot -.cause)
     ?:  ?=(^ cached-hoon.k)
       [~ k]

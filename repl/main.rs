@@ -71,18 +71,18 @@ async fn respond(line: &str, kernel: &mut Kernel) -> Result<bool, Box<dyn std::e
 
     let poke_result = kernel.poke(poke)?;
 
-    if let Ok(fec_it) = poke_result.as_cell() {
-        if let Ok(fec) = fec_it.head().as_cell() {
-            if fec.head().eq_bytes(b"jam") {
+    if let Ok(effect_list) = poke_result.as_cell() {
+        if let Ok(effect) = effect_list.head().as_cell() {
+            if effect.head().eq_bytes(b"jam") {
                 let mut fil = File::create("out.jam").await?;
-                fil.write_all(fec.tail().jam_self(kernel.serf.stack()).as_ref())
+                fil.write_all(effect.tail().jam_self(kernel.serf.stack()).as_ref())
                     .await?;
 
                 write!(std::io::stdout(), "jammed to out.jam").map_err(|e| e.to_string())?;
                 std::io::stdout().flush().map_err(|e| e.to_string())?;
                 Ok(false)
             } else {
-                debug!("Unknown effect {:?}", fec_it.head());
+                debug!("Unknown effect {:?}", effect_list.head());
                 Ok(true)
             }
         } else {
