@@ -8,7 +8,7 @@ NockApps are pure-functional state machines with automatic persistence and modul
 
 The NockApp framework provides two modules, Crown and Sword:
 1. Crown provides a minimal Rust interface to a Nock kernel.
-2. [Sword](https://github.com/zorp-corp/sword) is a modern Nock runtime.
+2. [Sword](https://github.com/zorp-corp/sword) is a modern Nock runtime that achieves durable execution.
 
 <br>
 
