@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use crown::kernel::boot;
 use crown::{AtomExt, NounExt};
 use sword::noun::{Atom, D, T};
@@ -47,13 +46,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
 
     let hoon_cord =
-        Atom::from_bytes(kernel.serf.stack(), &Bytes::from(HOON_TXT)).as_noun();
+        Atom::from_value(kernel.serf.stack(), HOON_TXT).unwrap().as_noun();
 
     let bootstrap_poke = T(kernel.serf.stack(), &[D(tas!(b"boot")), hoon_cord]);
     let _ = kernel.poke(bootstrap_poke)?;
 
     let entry_string = cli.entry.strip_prefix("hoon").unwrap();
-    let entry_noun = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(entry_string.as_bytes().to_vec())).as_noun();
+    let entry_noun = Atom::from_value(kernel.serf.stack(), entry_string).unwrap().as_noun();
 
     let mut directory_noun = D(0);
 
@@ -64,13 +63,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let is_file = entry.metadata().unwrap().is_file();
         if is_file {
             let path_str = entry.path().to_str().unwrap().strip_prefix("hoon").unwrap();
-            let path_cord = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(path_str.as_bytes().to_vec())).as_noun();
+            let path_cord = Atom::from_value(kernel.serf.stack(), path_str).unwrap().as_noun();
 
             let contents = {
                 let mut contents_vec: Vec<u8> = vec![];
                 let mut file = File::open(entry.path()).await?;
                 file.read_to_end(&mut contents_vec).await?;
-                Atom::from_bytes(kernel.serf.stack(), &Bytes::from(contents_vec)).as_noun()
+                Atom::from_value(kernel.serf.stack(), contents_vec).unwrap().as_noun()
             };
 
             let entry_cell = T(kernel.serf.stack(), &[path_cord, contents]);
