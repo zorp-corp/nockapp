@@ -25,8 +25,8 @@ struct ChooCli {
     #[arg(help = "Path to file to compile")]
     entry: String,
 
-    #[arg(help = "Path to subject")]
-    sub: Option<String>,
+    #[arg(help = "Path to root of dependency directory", default_value = "hoon")]
+    directory: String,
 }
 
 fn is_hoon_or_dir(entry: &DirEntry) -> bool {
@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut directory_noun = D(0);
 
-    let walker = WalkDir::new("hoon").follow_links(true).into_iter();
+    let walker = WalkDir::new(cli.directory).follow_links(true).into_iter();
     for entry_result in walker
         .filter_entry(|e| is_hoon_or_dir(e)) {
         let entry = entry_result?;
