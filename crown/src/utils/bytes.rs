@@ -2,6 +2,7 @@ use std::any;
 
 use bytes::Bytes;
 
+use crate::CrownError;
 use crate::utils::error::ConversionError;
 use crate::Result;
 
@@ -81,5 +82,29 @@ impl<T: ToBytes, const SIZE: usize> ToBytes for [T; SIZE] {
 impl ToBytes for String {
     fn to_bytes(&self) -> Result<Vec<u8>> {
         Ok(self.bytes().chain(std::iter::once(0)).collect())
+    }
+}
+
+impl ToBytes for [u8] {
+    fn to_bytes(&self) -> Result<Vec<u8>> {
+        let data = self.to_vec();
+        Ok(data)
+    }
+}
+
+impl ToBytes for &[u8] {
+    fn to_bytes(&self) -> Result<Vec<u8>> {
+        let data = self.to_vec();
+        Ok(data)
+    }
+}
+
+impl ToBytes for &str {
+    fn to_bytes(&self) -> Result<Vec<u8>> {
+        if let Ok(data) = self.as_bytes() {
+            Ok(data.to_vec())
+        } else {
+            Err(CrownError::Unknown("ToBytes".to_string()))
+        }
     }
 }
