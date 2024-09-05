@@ -1,6 +1,5 @@
 use crate::mpsc::Receiver;
 
-use std::ffi::CStr;
 use std::sync::mpsc;
 use std::sync::mpsc::SyncSender;
 use sword_macros::tas;
@@ -121,7 +120,6 @@ async fn manage_kernel(rx: Receiver<RequestMessage>) -> Result<(), Box<dyn std::
 
             let body: crown::Noun = {
                 if let Some(bod) = msg.body {
-                    println!("bod: {:?}", bod);
                     let ato = Atom::from_bytes(kernel.serf.stack(), &bod).as_noun();
                     T(
                         kernel.serf.stack(),
@@ -159,11 +157,11 @@ async fn manage_kernel(rx: Receiver<RequestMessage>) -> Result<(), Box<dyn std::
                         let key_vec = header.head().as_atom()?;
                         let val_vec = header.tail().as_atom()?;
 
-                        if let Ok(key) = CStr::from_bytes_until_nul(key_vec.as_bytes()) {
-                            if let Ok(val) = CStr::from_bytes_until_nul(val_vec.as_bytes()) {
+                        if let Some(key) = key_vec.to_bytes_until_nul() {
+                            if let Some(val) = val_vec.to_bytes_until_nul() {
                                 header_vec.push((
-                                    String::from_utf8(key.to_bytes().to_vec())?,
-                                    String::from_utf8(val.to_bytes().to_vec())?,
+                                    String::from_utf8(key)?,
+                                    String::from_utf8(val)?,
                                 ));
                                 header_list = header_list.as_cell()?.tail();
                             } else {
