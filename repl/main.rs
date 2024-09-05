@@ -90,7 +90,7 @@ async fn respond(line: &str, kernel: &mut Kernel) -> Result<bool, Box<dyn std::e
         }
     } else {
         // all done
-        Ok(true)
+        Ok(false)
     }
 }
 
