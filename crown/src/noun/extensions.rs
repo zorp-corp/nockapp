@@ -1,5 +1,6 @@
 use sword::mem::NockStack;
 
+use std::ffi::CStr;
 use crate::{Noun, Result, ToBytes, ToBytesExt};
 use bincode::{Decode, Encode};
 use bytes::Bytes;
@@ -51,6 +52,7 @@ pub trait AtomExt {
     fn from_bytes(stack: &mut NockStack, bytes: &Bytes) -> Atom;
     fn from_value<T: ToBytes>(stack: &mut NockStack, value: T) -> Result<Atom>;
     fn eq_bytes(self, bytes: impl AsRef<[u8]>) -> bool;
+    fn to_bytes_until_nul(self) -> Option<Vec<u8>>;
 }
 
 impl AtomExt for Atom {
@@ -85,6 +87,14 @@ impl AtomExt for Atom {
                 }
             }
             &atom_bytes[0..bytes_ref.len()] == bytes_ref
+        }
+    }
+
+    fn to_bytes_until_nul(self) -> Option<Vec<u8>>   {
+        if let Ok(cstr) = CStr::from_bytes_until_nul(self.as_bytes()) {
+            Some(cstr.to_bytes().to_vec())
+        } else {
+            None
         }
     }
 }
