@@ -16,13 +16,13 @@
     |_  outer-state
     ++  load
       |~  arg=*
-      [*(list *) **]
+      *[(list *) *]
     ++  peek
       |~  arg=path
       *(unit (unit *))
     ++  poke
-      |*  [num=@ ovum=*]
-      [*(list *) *outer-state]
+      |~  [num=@ ovum=*]
+      *[(list *) *]
     ++  wish
       |~  txt=@
       **
@@ -33,13 +33,13 @@
     |_  state=inner-state
     ++  load
       |~  arg=*
-      [*(list *) **]
+      *[(list *) *]
     ++  peek
       |~  arg=path
       *(unit (unit *))
     ++  poke
       |~  arg=input
-      [*(list *) *inner-state]
+      *[(list *) inner-state]
     --
   --
   ::
@@ -58,21 +58,19 @@
     (peek:inner arg)
   ::
   ++  wish
-    |=  txt=@t
+    |=  txt=@
     ^-  *
-    (slap !>(~) (ream txt))
+    q:(slap !>(~) (ream txt))
   ::
   ++  poke
     |=  [num=@ ovum=*]
     ^-  [(list *) _..poke]
     ?+   ovum  ~&("invalid arg: {<ovum>}" ~^..poke)
         [[%$ %arvo ~] *]
-      =/  g  ((soft crud) ovum)
+      =/  g  ((soft crud) +.ovum)
       ?~  g  ~&(%invalid-goof ~^..poke)
       =-  [~ ..poke]
-      %+  turn  tang.goof.u.g
-      ~>  %slog.[3 leaf+"crud"]
-      |=(=tank ~>(%slog.[3 tank] 0))
+      (slog tang.goof.u.g)
     ::
         [[%poke ~] *]
       =/  ovum  ((soft ^ovum) ovum)

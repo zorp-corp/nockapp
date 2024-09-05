@@ -1,4 +1,4 @@
-::/+  *wrapper
+/+  *wrapper
 =>
 |%
 +$  server-state  %stateless
@@ -34,7 +34,6 @@
 --
 ::
 ~&  %serving
-=<  $
 %-  moat
 ^-  fort:moat
 |_  k=server-state
@@ -49,7 +48,7 @@
 ::  +peek: external inspect
 ::
 ++  peek
-  |=  path=*
+  |=  =path
   ^-  (unit (unit *))
   !!
 ::
