@@ -1,8 +1,8 @@
 # NockApp
 
-<img align="right" src="https://zorp.io/img/nockapp.png" height="150px" alt="NockApp">
-
 ***DEVELOPER ALPHA***
+
+<img align="right" src="https://zorp.io/img/nockapp.png" height="150px" alt="NockApp">
 
 NockApps are pure-functional state machines with automatic persistence and modular IO.
 
