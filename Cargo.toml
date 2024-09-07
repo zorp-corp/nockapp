@@ -3,6 +3,7 @@ members = [
     "crown",
     "choo",
     "http-app",
+    "synth"
 ]
 resolver = "2"
 
@@ -27,7 +28,7 @@ samply = "0.11.0"
 serde = "1.0.195"
 tempfile = "3.3"
 thiserror = "1.0"
-tokio = { version = "1.32", features = ["rt", "rt-multi-thread", "net", "macros", "io-util", "fs"] }
+tokio = { version = "1.32", features = ["rt", "rt-multi-thread", "net", "macros", "io-util", "fs", "sync"] }
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["ansi", "env-filter", "registry"] }
 yaque = "0.6.6"

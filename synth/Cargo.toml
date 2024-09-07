@@ -1,0 +1,21 @@
+[package]
+name = "synth"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+crown  = { path = "../crown" }
+sword = { workspace = true }
+sword_macros = { workspace = true }
+clap = { workspace = true, features = ["derive", "cargo", "color", "env"]}
+tokio = { workspace = true }
+tracing = { workspace = true }
+fundsp = "0.19.0"
+cpal = "0.15.3"
+assert_no_alloc = "1.1.2"
+anyhow = "1.0.86"
+
+
+[[bin]]
+name = "synth"
+path = "main.rs"
