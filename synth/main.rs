@@ -1,5 +1,8 @@
 use assert_no_alloc::*;
 
+use std::time::Duration;
+
+use std::io::Write;
 use crate::mpsc::Receiver;
 use std::sync::mpsc;
 use std::sync::mpsc::SyncSender;
@@ -9,11 +12,19 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SizedSample};
 
 use crown::kernel::boot;
+use crown::Bytes;
+use crown::NounExt;
+use crown::AtomExt;
+use sword::noun::{Atom, D, T};
 
+use crown::kernel::form::Kernel;
 use clap::{command, ColorChoice, Parser};
 
 use fundsp::hacker::*;
 use crown::kernel::boot::Cli as BootCli;
+
+use tracing::debug;
+use sword_macros::tas;
 
 
 static KERNEL_JAM: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/synth.jam"));
@@ -28,34 +39,90 @@ struct TestCli {
 
 #[derive(Debug)]
 struct Message {
-    idea: String
+    note: u64
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, rx) = mpsc::sync_channel::<Message>(0);
 
-    tokio::spawn(async move { synthesizer(tx).await });
+    tokio::spawn(async move { synthesizer(rx).await });
 
-    let _ = manage_kernel(rx).await;
+    let _ = manage_kernel(tx).await;
 
     Ok(())
 }
 
-async fn manage_kernel(rx: Receiver<Message>) -> Result<(), Box<dyn std::error::Error>> {
+async fn manage_kernel(sender: SyncSender<Message>) -> Result<(), Box<dyn std::error::Error>> {
     let cli = TestCli::parse();
-    let mut _kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
-
+    let mut kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
 
     loop {
-        // Start receiving messages
-        if let Ok(msg) = rx.recv() {
-            println!("message: {:?}", msg);
+        // get keyboard input
+        //
+        let line = readline()?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+
+        match respond(line, &mut kernel).await {
+            Ok(maybe_msg) => {
+                let msg = maybe_msg.unwrap();
+                let _ = sender.send(msg);
+            }
+            Err(err) => {
+                write!(std::io::stdout(), "{err}").map_err(|e| e.to_string())?;
+                std::io::stdout().flush().map_err(|e| e.to_string())?;
+            }
         }
     }
 }
 
-async fn synthesizer(_tx: SyncSender<Message>) {
+fn readline() -> Result<String, String> {
+    write!(std::io::stdout(), "♫ ").map_err(|e| e.to_string())?;
+    std::io::stdout().flush().map_err(|e| e.to_string())?;
+    let mut buffer = String::new();
+    std::io::stdin()
+        .read_line(&mut buffer)
+        .map_err(|e| e.to_string())?;
+    Ok(buffer)
+}
+
+async fn respond(line: &str, kernel: &mut Kernel) -> Result<Option<Message>, Box<dyn std::error::Error>> {
+    let input_noun = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(line.as_bytes().to_vec())).as_noun();
+
+    let poke = T(
+        kernel.serf.stack(),
+        &[D(tas!(b"input")), input_noun],
+    );
+
+    let poke_result = kernel.poke(poke)?;
+
+    if let Ok(effect_list) = poke_result.as_cell() {
+        if let Ok(effect) = effect_list.head().as_cell() {
+            if effect.head().eq_bytes(b"emit") {
+                //write!(std::io::stdout(), "playing sequence").map_err(|e| e.to_string())?;
+                std::io::stdout().flush().map_err(|e| e.to_string())?;
+                let sound_atom = effect.tail().as_atom()?.direct().unwrap();
+                //let sound_bytes = sound_atom.to_bytes_until_nul().unwrap();
+                let msg = Message {
+                    note: sound_atom.data()
+                };
+                Ok(Some(msg))
+            } else {
+                debug!("Unknown effect {:?}", effect_list.head());
+                Ok(None)
+            }
+        } else {
+            Ok(None)
+        }
+    } else {
+        Ok(None)
+    }
+}
+
+async fn synthesizer(rx: Receiver<Message>) {
     let host = cpal::default_host();
 
     let device = host
@@ -63,27 +130,27 @@ async fn synthesizer(_tx: SyncSender<Message>) {
         .expect("failed to find a default output device");
     let config = device.default_output_config().unwrap();
 
-    match config.sample_format() {
-        cpal::SampleFormat::F32 => run::<f32>(&device, &config.into()).unwrap(),
-        cpal::SampleFormat::I16 => run::<i16>(&device, &config.into()).unwrap(),
-        cpal::SampleFormat::U16 => run::<u16>(&device, &config.into()).unwrap(),
-        _ => panic!("Unsupported format"),
+
+    loop {
+        // Start receiving messages
+
+        let config = config.clone();
+        if let Ok(msg) = rx.recv() {
+            match config.sample_format() {
+                cpal::SampleFormat::F32 => run::<f32>(&device, &config.into(), msg).unwrap(),
+                cpal::SampleFormat::I16 => run::<i16>(&device, &config.into(), msg).unwrap(),
+                cpal::SampleFormat::U16 => run::<u16>(&device, &config.into(), msg).unwrap(),
+                _ => panic!("Unsupported format"),
+            }
+        }
     }
 }
 
-fn run<T>(device: &cpal::Device, config: &cpal::StreamConfig) -> Result<(), anyhow::Error> where T: SizedSample + FromSample<f32> {
+fn run<T>(device: &cpal::Device, config: &cpal::StreamConfig, msg: Message) -> Result<(), anyhow::Error> where T: SizedSample + FromSample<f32> {
     let sample_rate = config.sample_rate.0 as f64;
     let channels = config.channels as usize;
 
-    let c = 0.2 * (organ_hz(midi_hz(57.0)) + organ_hz(midi_hz(61.0)) + organ_hz(midi_hz(64.0)));
-    let c = c >> pan(0.0);
-    let c = c >> (chorus(0, 0.0, 0.01, 0.2) | chorus(1, 0.0, 0.01, 0.2));
-
-    let mut c = c
-        >> (declick() | declick())
-        >> (dcblock() | dcblock())
-        >> limiter_stereo(1.0, 5.0);
-
+    let mut c = organ_hz(midi_hz(msg.note as f32));
     c.set_sample_rate(sample_rate);
     c.allocate();
 
@@ -101,7 +168,7 @@ fn run<T>(device: &cpal::Device, config: &cpal::StreamConfig) -> Result<(), anyh
     )?;
     stream.play()?;
 
-    std::thread::sleep(std::time::Duration::from_millis(10000));
+    std::thread::sleep(Duration::from_millis(1000));
 
     Ok(())
 }

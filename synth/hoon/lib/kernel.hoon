@@ -4,21 +4,14 @@
 +$  state  %stateless
 ++  moat  (keep state)
 +$  cause
-  $:  %req
-      ~
+  $:  %input
+      p=cord
   ==
 ::
 +$  effect
-  $:  %res
-      ~
+  $:  %emit
+      num=@
   ==
-::
-++  to-octs
-  |=  bod=@
-  ^-  (unit octs)
-  =/  len  (met 3 bod)
-  ?:  =(len 0)  ~
-  `[len bod]
 --
 ::
 ~&  %synthing
@@ -44,12 +37,17 @@
 ::
 ++  poke
   |=  [eny=@ our=@ux now=@da dat=*]
-  ^-  [(list effect) server-state]
+  ^-  [(list effect) state]
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
     ~&  dat
     !!
-  [~ k]
+  =/  =cause  u.sof-cau
+  =/  res  (slap !>(~) (ream p.cause))
+  =/  out-atom  ;;(@ q.res)
+  :_  k
+  :_  ~
+  [%emit out-atom]
 --
 
