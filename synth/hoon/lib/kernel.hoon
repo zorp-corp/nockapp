@@ -3,14 +3,23 @@
 |%
 +$  state  %stateless
 ++  moat  (keep state)
+::
++$  riff
+  $@  midi=@
+  $%  [%organ freq=@]
+      [%saw freq=@]
+      [%sine freq=@]
+      [%triangle freq=@]
+  ==
+::
 +$  cause
   $:  %input
       p=cord
   ==
 ::
 +$  effect
-  $:  %emit
-      num=@
+  $:  %riff
+      riff
   ==
 --
 ::
@@ -45,9 +54,9 @@
     !!
   =/  =cause  u.sof-cau
   =/  res  (slap !>(~) (ream p.cause))
-  =/  out-atom  ;;(@ q.res)
+  =/  out-riff  ;;(riff q.res)
   :_  k
   :_  ~
-  [%emit out-atom]
+  [%riff out-riff]
 --
 

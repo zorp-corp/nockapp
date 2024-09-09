@@ -11,6 +11,7 @@ use tokio::sync::oneshot;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, SizedSample};
 
+use crown::Noun;
 use crown::kernel::boot;
 use crown::Bytes;
 use crown::NounExt;
@@ -38,13 +39,22 @@ struct TestCli {
 }
 
 #[derive(Debug)]
-struct Message {
-    note: u64
+struct Riff {
+    oscillator: Oscillator,
+    frequency: u64
+}
+
+#[derive(Debug, PartialEq)]
+enum Oscillator {
+    Organ,
+    Saw,
+    Sine,
+    Triangle,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let (tx, rx) = mpsc::sync_channel::<Message>(0);
+    let (tx, rx) = mpsc::sync_channel::<Riff>(0);
 
     tokio::spawn(async move { synthesizer(rx).await });
 
@@ -53,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-async fn manage_kernel(sender: SyncSender<Message>) -> Result<(), Box<dyn std::error::Error>> {
+async fn manage_kernel(sender: SyncSender<Riff>) -> Result<(), Box<dyn std::error::Error>> {
     let cli = TestCli::parse();
     let mut kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
 
@@ -89,7 +99,7 @@ fn readline() -> Result<String, String> {
     Ok(buffer)
 }
 
-async fn respond(line: &str, kernel: &mut Kernel) -> Result<Option<Message>, Box<dyn std::error::Error>> {
+async fn respond(line: &str, kernel: &mut Kernel) -> Result<Option<Riff>, Box<dyn std::error::Error>> {
     let input_noun = Atom::from_bytes(kernel.serf.stack(), &Bytes::from(line.as_bytes().to_vec())).as_noun();
 
     let poke = T(
@@ -101,15 +111,14 @@ async fn respond(line: &str, kernel: &mut Kernel) -> Result<Option<Message>, Box
 
     if let Ok(effect_list) = poke_result.as_cell() {
         if let Ok(effect) = effect_list.head().as_cell() {
-            if effect.head().eq_bytes(b"emit") {
-                //write!(std::io::stdout(), "playing sequence").map_err(|e| e.to_string())?;
+            if effect.head().eq_bytes(b"riff") {
                 std::io::stdout().flush().map_err(|e| e.to_string())?;
-                let sound_atom = effect.tail().as_atom()?.direct().unwrap();
-                //let sound_bytes = sound_atom.to_bytes_until_nul().unwrap();
-                let msg = Message {
-                    note: sound_atom.data()
-                };
-                Ok(Some(msg))
+                let maybe_riff = parse_riff(effect.tail());
+                if let Some(riff) = maybe_riff {
+                    Ok(Some(riff))
+                } else {
+                    Ok(None)
+                }
             } else {
                 debug!("Unknown effect {:?}", effect_list.head());
                 Ok(None)
@@ -122,7 +131,43 @@ async fn respond(line: &str, kernel: &mut Kernel) -> Result<Option<Message>, Box
     }
 }
 
-async fn synthesizer(rx: Receiver<Message>) {
+fn parse_riff(n: Noun) -> Option<Riff> {
+    if let Ok(note_atom) = n.as_atom() {
+        let msg = Riff {
+            oscillator: Oscillator::Organ,
+            frequency: note_atom.direct()?.data()
+        };
+
+        return Some(msg);
+    }
+
+    if let Ok(riff_cell) = n.as_cell() {
+        let oscillator = {
+            use Oscillator::*;
+            if riff_cell.head().eq_bytes(b"sine") {
+                Sine
+            } else if riff_cell.head().eq_bytes(b"saw") {
+                Saw
+            } else if riff_cell.head().eq_bytes(b"triangle") {
+                Triangle
+            } else if riff_cell.head().eq_bytes(b"organ") {
+                Organ
+            } else {
+                panic!("no known oscillator!");
+            }
+        };
+        let frequency = riff_cell.tail().as_atom().ok()?.direct()?.data();
+
+        Some(Riff {
+            oscillator,
+            frequency
+        })
+    } else {
+        None
+    }
+}
+
+async fn synthesizer(rx: Receiver<Riff>) {
     let host = cpal::default_host();
 
     let device = host
@@ -146,29 +191,61 @@ async fn synthesizer(rx: Receiver<Message>) {
     }
 }
 
-fn run<T>(device: &cpal::Device, config: &cpal::StreamConfig, msg: Message) -> Result<(), anyhow::Error> where T: SizedSample + FromSample<f32> {
+fn run<T>(device: &cpal::Device, config: &cpal::StreamConfig, msg: Riff) -> Result<(), anyhow::Error> where T: SizedSample + FromSample<f32> {
     let sample_rate = config.sample_rate.0 as f64;
     let channels = config.channels as usize;
 
-    let mut c = organ_hz(midi_hz(msg.note as f32));
-    c.set_sample_rate(sample_rate);
-    c.allocate();
+    let f = midi_hz(msg.frequency as f32);
 
-    let mut next_value = move || assert_no_alloc(|| c.get_stereo());
+    if msg.oscillator == Oscillator::Sine {
+        let mut c = sine_hz(f);
+        c.set_sample_rate(sample_rate);
+        c.allocate();
 
-    let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
+        let mut next_value = move || assert_no_alloc(|| c.get_stereo());
 
-    let stream = device.build_output_stream(
-        config,
-        move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-            write_data(data, channels, &mut next_value)
-        },
-        err_fn,
-        None,
-    )?;
-    stream.play()?;
+        let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
 
-    std::thread::sleep(Duration::from_millis(1000));
+        let stream = device.build_output_stream(
+            config,
+            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                write_data(data, channels, &mut next_value)
+            },
+            err_fn,
+            None,
+        )?;
+        stream.play()?;
+        std::thread::sleep(Duration::from_millis(1000));
+    } else {
+        let mut c = {
+            use Oscillator::*;
+            match msg.oscillator {
+                Organ => organ_hz(f),
+                Saw => saw_hz(f),
+                Sine => panic!("not sine"),
+                Triangle => triangle_hz(f)
+            }
+        };
+
+        c.set_sample_rate(sample_rate);
+        c.allocate();
+
+
+        let mut next_value = move || assert_no_alloc(|| c.get_stereo());
+
+        let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
+
+        let stream = device.build_output_stream(
+            config,
+            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+                write_data(data, channels, &mut next_value)
+            },
+            err_fn,
+            None,
+        )?;
+        stream.play()?;
+        std::thread::sleep(Duration::from_millis(1000));
+    }
 
     Ok(())
 }
