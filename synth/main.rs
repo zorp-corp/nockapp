@@ -196,56 +196,34 @@ fn run<T>(device: &cpal::Device, config: &cpal::StreamConfig, msg: Riff) -> Resu
     let channels = config.channels as usize;
 
     let f = midi_hz(msg.frequency as f32);
-
-    if msg.oscillator == Oscillator::Sine {
-        let mut c = sine_hz(f);
-        c.set_sample_rate(sample_rate);
-        c.allocate();
-
-        let mut next_value = move || assert_no_alloc(|| c.get_stereo());
-
-        let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
-
-        let stream = device.build_output_stream(
-            config,
-            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                write_data(data, channels, &mut next_value)
-            },
-            err_fn,
-            None,
-        )?;
-        stream.play()?;
-        std::thread::sleep(Duration::from_millis(1000));
-    } else {
-        let mut c = {
-            use Oscillator::*;
-            match msg.oscillator {
-                Organ => organ_hz(f),
-                Saw => saw_hz(f),
-                Sine => panic!("not sine"),
-                Triangle => triangle_hz(f)
-            }
-        };
-
-        c.set_sample_rate(sample_rate);
-        c.allocate();
+    let mut c: An<Unit<U0, U1>> = {
+        use Oscillator::*;
+        match msg.oscillator {
+            Organ => unit::<U0, U1>(Box::new(organ_hz(f))),
+            Saw => unit::<U0, U1>(Box::new(saw_hz(f))),
+            Sine => unit::<U0, U1>(Box::new(sine_hz(f))),
+            Triangle => unit::<U0, U1>(Box::new(triangle_hz(f)))
+        }
+    };
+    c.set_sample_rate(sample_rate);
+    c.allocate();
 
 
-        let mut next_value = move || assert_no_alloc(|| c.get_stereo());
 
-        let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
+    let mut next_value = move || assert_no_alloc(|| c.get_stereo());
 
-        let stream = device.build_output_stream(
-            config,
-            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
-                write_data(data, channels, &mut next_value)
-            },
-            err_fn,
-            None,
-        )?;
-        stream.play()?;
-        std::thread::sleep(Duration::from_millis(1000));
-    }
+    let err_fn = |err| eprintln!("an error occurred on stream: {}", err);
+
+    let stream = device.build_output_stream(
+        config,
+        move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+            write_data(data, channels, &mut next_value)
+        },
+        err_fn,
+        None,
+    )?;
+    stream.play()?;
+    std::thread::sleep(Duration::from_millis(1000));
 
     Ok(())
 }
