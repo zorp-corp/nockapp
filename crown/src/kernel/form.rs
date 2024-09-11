@@ -323,7 +323,7 @@ impl Kernel {
         let eve = self.serf.event_num;
         let event_num = D(eve);
 
-        let mut ovo = T(stack, &[event_num, wire, goof, job_input]);
+        let ovo = T(stack, &[event_num, wire, goof, job_input]);
         let trace_name = if self.serf.context.trace_info.is_some() {
             Some(Self::poke_trace_name(
                 &mut self.serf.context.stack,
