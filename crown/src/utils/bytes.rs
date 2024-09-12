@@ -99,6 +99,12 @@ impl ToBytes for &[u8] {
     }
 }
 
+impl ToBytes for Vec<u8> {
+    fn to_bytes(&self) -> Result<Vec<u8>> {
+        Ok(self.clone())
+    }
+}
+
 impl ToBytes for &str {
     fn to_bytes(&self) -> Result<Vec<u8>> {
         if let Ok(data) = self.as_bytes() {
