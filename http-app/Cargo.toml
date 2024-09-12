@@ -1,0 +1,18 @@
+[package]
+name = "http-app"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+crown  = { path = "../crown" }
+sword = { workspace = true }
+sword_macros = { workspace = true }
+clap = { workspace = true, features = ["derive", "cargo", "color", "env"]}
+tokio = { workspace = true }
+tracing = { workspace = true }
+axum = "0.7.5"
+tower = "0.5.0"
+
+[[bin]]
+name = "http-app"
+path = "main.rs"
