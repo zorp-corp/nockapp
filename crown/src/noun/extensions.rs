@@ -1,11 +1,11 @@
 use sword::mem::NockStack;
 
-use std::ffi::CStr;
 use crate::{Noun, Result, ToBytes, ToBytesExt};
 use bincode::{Decode, Encode};
 use bytes::Bytes;
+use std::ffi::CStr;
 use std::iter::Iterator;
-use sword::noun::{Atom, IndirectAtom, D};
+use sword::noun::{Atom, IndirectAtom, NounAllocator, D};
 use sword::serialization::{cue, jam};
 
 pub trait NounExt {
@@ -49,23 +49,26 @@ impl NounExt for Noun {
 }
 
 pub trait AtomExt {
-    fn from_bytes(stack: &mut NockStack, bytes: &Bytes) -> Atom;
-    fn from_value<T: ToBytes>(stack: &mut NockStack, value: T) -> Result<Atom>;
+    fn from_bytes<A: NounAllocator>(allocator: &mut A, bytes: &Bytes) -> Atom;
+    fn from_value<A: NounAllocator, T: ToBytes>(allocator: &mut A, value: T) -> Result<Atom>;
     fn eq_bytes(self, bytes: impl AsRef<[u8]>) -> bool;
     fn to_bytes_until_nul(self) -> Option<Vec<u8>>;
 }
 
 impl AtomExt for Atom {
-    fn from_bytes(stack: &mut NockStack, bytes: &Bytes) -> Atom {
+    fn from_bytes<A: NounAllocator>(allocator: &mut A, bytes: &Bytes) -> Atom {
         unsafe {
-            IndirectAtom::new_raw_bytes(stack, bytes.len(), bytes.as_ptr()).normalize_as_atom()
+            IndirectAtom::new_raw_bytes(allocator, bytes.len(), bytes.as_ptr()).normalize_as_atom()
         }
     }
 
-    fn from_value<T: ToBytes>(stack: &mut NockStack, value: T) -> Result<Atom> {
+    fn from_value<A: NounAllocator, T: ToBytes>(allocator: &mut A, value: T) -> Result<Atom> {
         unsafe {
             let data: Bytes = value.as_bytes()?;
-            Ok(IndirectAtom::new_raw_bytes(stack, data.len(), data.as_ptr()).normalize_as_atom())
+            Ok(
+                IndirectAtom::new_raw_bytes(allocator, data.len(), data.as_ptr())
+                    .normalize_as_atom(),
+            )
         }
     }
 
@@ -90,7 +93,7 @@ impl AtomExt for Atom {
         }
     }
 
-    fn to_bytes_until_nul(self) -> Option<Vec<u8>>   {
+    fn to_bytes_until_nul(self) -> Option<Vec<u8>> {
         if let Ok(cstr) = CStr::from_bytes_until_nul(self.as_bytes()) {
             Some(cstr.to_bytes().to_vec())
         } else {

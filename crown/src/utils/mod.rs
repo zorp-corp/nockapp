@@ -10,7 +10,7 @@ use std::ptr::copy_nonoverlapping;
 use std::slice::from_raw_parts_mut;
 use std::time::{SystemTime, UNIX_EPOCH};
 use sword::mem::NockStack;
-use sword::noun::{Atom, IndirectAtom, Noun};
+use sword::noun::{Atom, IndirectAtom, Noun, NounAllocator};
 use sword::serialization::jam;
 
 // urbit @da timestamp
@@ -68,10 +68,11 @@ pub fn current_epoch_ms() -> u128 {
         .as_millis()
 }
 
-pub fn make_tas(stack: &mut NockStack, tas: &str) -> Atom {
+pub fn make_tas<A: NounAllocator>(allocator: &mut A, tas: &str) -> Atom {
     let tas_bytes: &[u8] = tas.as_bytes();
     unsafe {
-        let mut tas_atom = IndirectAtom::new_raw_bytes(stack, tas_bytes.len(), tas_bytes.as_ptr());
+        let mut tas_atom =
+            IndirectAtom::new_raw_bytes(allocator, tas_bytes.len(), tas_bytes.as_ptr());
         tas_atom.normalize_as_atom()
     }
 }
