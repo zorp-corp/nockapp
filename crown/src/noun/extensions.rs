@@ -1,11 +1,11 @@
 use sword::mem::NockStack;
 
-use std::ffi::CStr;
 use crate::{Noun, Result, ToBytes, ToBytesExt};
 use bincode::{Decode, Encode};
 use bytes::Bytes;
+use std::ffi::CStr;
 use std::iter::Iterator;
-use sword::noun::{Atom, IndirectAtom, D, NounAllocator};
+use sword::noun::{Atom, IndirectAtom, NounAllocator, D};
 use sword::serialization::{cue, jam};
 
 pub trait NounExt {
@@ -65,7 +65,10 @@ impl AtomExt for Atom {
     fn from_value<A: NounAllocator, T: ToBytes>(allocator: &mut A, value: T) -> Result<Atom> {
         unsafe {
             let data: Bytes = value.as_bytes()?;
-            Ok(IndirectAtom::new_raw_bytes(allocator, data.len(), data.as_ptr()).normalize_as_atom())
+            Ok(
+                IndirectAtom::new_raw_bytes(allocator, data.len(), data.as_ptr())
+                    .normalize_as_atom(),
+            )
         }
     }
 
@@ -90,7 +93,7 @@ impl AtomExt for Atom {
         }
     }
 
-    fn to_bytes_until_nul(self) -> Option<Vec<u8>>   {
+    fn to_bytes_until_nul(self) -> Option<Vec<u8>> {
         if let Ok(cstr) = CStr::from_bytes_until_nul(self.as_bytes()) {
             Some(cstr.to_bytes().to_vec())
         } else {
