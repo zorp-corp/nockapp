@@ -6,7 +6,7 @@ use tracing::{debug, info};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{fmt, EnvFilter};
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Clone)]
 #[command(about = "boot a nockapp", author, version, color = ColorChoice::Auto)]
 pub struct Cli {
     #[arg(
