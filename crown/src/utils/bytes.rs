@@ -103,13 +103,9 @@ impl ToBytes for Vec<u8> {
         Ok(self.clone())
     }
 }
-
 impl ToBytes for &str {
     fn to_bytes(&self) -> Result<Vec<u8>> {
-        if let Ok(data) = self.as_bytes() {
-            Ok(data.to_vec())
-        } else {
-            Err(CrownError::Unknown("ToBytes".to_string()))
-        }
+        let bytes = self.bytes();
+        Ok(bytes.collect::<Vec<u8>>())
     }
 }
