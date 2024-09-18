@@ -3,7 +3,7 @@ use std::any;
 use bytes::Bytes;
 
 use crate::utils::error::ConversionError;
-use crate::{CrownError, Result};
+use crate::Result;
 
 pub trait ToBytes {
     fn to_bytes(&self) -> Result<Vec<u8>>;
