@@ -11,9 +11,9 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-sword = { git = "https://github.com/zorp-corp/sword.git", rev="47f88d19554e5ece38b50dc86102d095cd8241df" }
-sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="47f88d19554e5ece38b50dc86102d095cd8241df" }
-assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="47f88d19554e5ece38b50dc86102d095cd8241df" }
+sword = { git = "https://github.com/zorp-corp/sword.git", rev="74fad40bdc1588c4d3d8d5a78e3da4cc4414a702" }
+sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="74fad40bdc1588c4d3d8d5a78e3da4cc4414a702" }
+assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="74fad40bdc1588c4d3d8d5a78e3da4cc4414a702" }
 anyhow = "1.0"
 async-trait = "0.1"
 bincode = "2.0.0-rc.3"
@@ -31,6 +31,9 @@ tokio = { version = "1.32", features = ["rt", "rt-multi-thread", "net", "macros"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["ansi", "env-filter", "registry"] }
 yaque = "0.6.6"
+bitvec = "1.0.1"
+futures = "0.3.30"
+intmap = "2.0.0"
 
 [profile.dev]
 # opt-level = 3

@@ -1,6 +1,7 @@
 use sword::mem::NockStack;
 
 use crate::{Noun, Result, ToBytes, ToBytesExt};
+use crate::noun::slab::NounSlab;
 use bincode::{Decode, Encode};
 use bytes::Bytes;
 use std::ffi::CStr;
@@ -168,3 +169,64 @@ impl Iterator for NounListIterator {
         }
     }
 }
+
+pub trait IntoNoun {
+    fn into_noun(self) -> Noun;
+}
+
+impl IntoNoun for Atom {
+    fn into_noun(self) -> Noun {
+        self.as_noun()
+    }
+}
+impl IntoNoun for u64 {
+    fn into_noun(self) -> Noun {
+        unsafe { Atom::from_raw(self).into_noun() }
+    }
+}
+
+impl FromAtom for u64 {
+    fn from_atom(atom: Atom) -> Self {
+        atom.as_u64().unwrap()
+    }
+}
+
+impl IntoNoun for Noun {
+    fn into_noun(self) -> Noun {
+        self
+    }
+}
+impl IntoNoun for &str {
+    fn into_noun(self) -> Noun {
+        let mut slab = NounSlab::new();
+        let contents_atom = unsafe {
+            let bytes = self.to_bytes().unwrap();
+            IndirectAtom::new_raw_bytes_ref(&mut slab, bytes.as_slice())
+                .normalize_as_atom()
+        };
+        Noun::from_atom(contents_atom)
+    }
+}
+
+pub trait FromAtom {
+    fn from_atom(atom: Atom) -> Self;
+}
+impl FromAtom for Noun {
+    fn from_atom(atom: Atom) -> Self {
+        atom.as_noun()
+    }
+}
+
+pub trait IntoSlab {
+    fn into_slab(self) -> NounSlab;
+}
+
+impl IntoSlab for &str {
+    fn into_slab(self) -> NounSlab {
+        let mut slab = NounSlab::new();
+        let noun = self.into_noun();
+        slab.set_root(noun);
+        slab
+    }
+}
+
