@@ -18,7 +18,7 @@ sword_macros = { workspace = true }
 assert_no_alloc = { workspace = true }
 async-trait = { workspace = true }
 bincode = { workspace = true, features = ["serde"] }
-byteorder = { workspace = true } 
+byteorder = { workspace = true }
 bytes = { workspace = true, features = ["serde"] }
 either = { workspace = true }
 getrandom = { workspace = true }
@@ -27,7 +27,7 @@ serde = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features=["time", "sync"]}
 yaque = { workspace = true }
 
 [lib]
