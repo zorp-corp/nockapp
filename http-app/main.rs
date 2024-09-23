@@ -2,6 +2,7 @@
 use crown::nockapp::http_driver::http;
 
 use crown::kernel::boot;
+use crown::kernel::form::Kernel;
 use crown::nockapp::NockApp;
 
 use clap::{command, ColorChoice, Parser};
@@ -18,22 +19,17 @@ struct TestCli {
     boot: BootCli,
 }
 
-
-struct Mock {
-    app: NockApp
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = TestCli::parse();
     debug!("KERNEL_JAM len: {:?}", KERNEL_JAM.to_vec().len());
     let kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
-    let mut mock = Mock{app: NockApp::new(kernel)};
-    mock.app.add_io_driver(http()).await;
+    let mut http_app = NockApp::new(kernel);
+    http_app.add_io_driver(http()).await;
 
     loop {
         select! {
-            work_res = mock.app.work() => {
+            work_res = http_app.work() => {
                 if let Err(e) = work_res {
                     debug!("work error: {:?}", e);
                     break
