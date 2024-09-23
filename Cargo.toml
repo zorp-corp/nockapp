@@ -16,6 +16,7 @@ sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="74fad40bdc
 assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="74fad40bdc1588c4d3d8d5a78e3da4cc4414a702" }
 anyhow = "1.0"
 async-trait = "0.1"
+axum = "0.7.5"
 bincode = "2.0.0-rc.3"
 byteorder = "1.5.0"
 bytes = "1.5.0"

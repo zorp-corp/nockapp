@@ -7,12 +7,10 @@ edition.workspace = true
 trait-alias = []
 
 [dependencies]
-bitvec = { workspace = true }
-futures = { workspace = true }
-intmap = { workspace = true }
-clap = { workspace = true, features = ["derive", "cargo", "color", "env"] }
-tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
+axum = { workspace = true }
+bitvec = { workspace = true }
+clap = { workspace = true, features = ["derive", "cargo", "color", "env"] }
 sword = { workspace = true }
 sword_macros = { workspace = true }
 assert_no_alloc = { workspace = true }
@@ -21,17 +19,17 @@ bincode = { workspace = true, features = ["serde"] }
 byteorder = { workspace = true }
 bytes = { workspace = true, features = ["serde"] }
 either = { workspace = true }
+futures = { workspace = true }
 getrandom = { workspace = true }
+intmap = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["time", "sync"]}
 yaque = { workspace = true }
-axum = "0.7.5"
-tower = "0.5.0"
-
 
 [lib]
 name = "crown"
