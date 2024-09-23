@@ -22,7 +22,7 @@ pub struct Cli {
     #[arg(
         long,
         env = "RUST_LOG",
-        default_value = "debug",
+        default_value = "info",
         help = "Set the log level"
     )]
     log_level: String,
