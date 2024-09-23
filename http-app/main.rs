@@ -1,17 +1,12 @@
-
 use crown::nockapp::http_driver::http;
-
 use crown::kernel::boot;
-use crown::kernel::form::Kernel;
-use crown::nockapp::NockApp;
-
-use clap::{command, ColorChoice, Parser};
-static KERNEL_JAM: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/http.jam"));
-
 use crown::kernel::boot::Cli as BootCli;
+use crown::nockapp::NockApp;
+use clap::{command, ColorChoice, Parser};
 use tokio::select;
 use tracing::debug;
 
+static KERNEL_JAM: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/http.jam"));
 #[derive(Parser, Debug)]
 #[command(about = "Tests various poke types for the kernel", author = "zorp", version, color = ColorChoice::Auto)]
 struct TestCli {
