@@ -632,6 +632,8 @@ fn slab_mug(a: Noun) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use crate::AtomExt;
+
     use super::*;
     use sword::noun::{D, T};
     use sword_macros::tas;

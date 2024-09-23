@@ -19,6 +19,7 @@
 ::
 +$  cause
   $:  %req
+      id=@
       uri=@t
       =method
       headers=(list header)
@@ -27,6 +28,7 @@
 ::
 +$  effect
   $:  %res
+      id=@
       status=@ud
       headers=(list header)
       body=(unit octs)
@@ -69,16 +71,16 @@
     ~&  "cause incorrectly formatted!"
     ~&  dat
     !!
-  =/  [uri=@t =method headers=(list header) body=(unit octs)]  +.u.sof-cau
-  ~&  [uri+uri method+method headers+headers]
+  =/  [id=@ uri=@t =method headers=(list header) body=(unit octs)]  +.u.sof-cau
+  ~&  [id+id uri+uri method+method headers+headers]
   :_  k
   :_  ~
   ^-  effect
   =-  ~&  effect+-
       -
-  ?+    method  [%res %400 ~ ~]
+  ?+    method  [%res ~ %400 ~ ~]
       %'GET'
-    :^  %res  %200
+    :*  %res  id=id  %200
       ['content-type' 'text/html']~
     %-  to-octs
     '''
@@ -89,9 +91,9 @@
       </body>
     </html>
     '''
+   ==
   ::
       %'POST'
     !!
   ==
 --
-

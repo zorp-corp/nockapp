@@ -591,6 +591,7 @@ dependencies = [
  "anyhow",
  "assert_no_alloc",
  "async-trait",
+ "axum",
  "bincode",
  "bitvec",
  "byteorder",
@@ -607,6 +608,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "tower 0.5.0",
  "tracing",
  "tracing-subscriber",
  "yaque",
@@ -958,13 +960,11 @@ dependencies = [
 name = "http-app"
 version = "0.1.0"
 dependencies = [
- "axum",
  "clap 4.5.16",
  "crown",
  "sword",
  "sword_macros",
  "tokio",
- "tower 0.5.0",
  "tracing",
 ]
 
@@ -2023,6 +2023,7 @@ dependencies = [
  "libc",
  "mio 1.0.2",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.52.0",

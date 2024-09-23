@@ -27,6 +27,8 @@ pub type ActionReceiver = mpsc::Receiver<IOAction>;
 pub type EffectSender = broadcast::Sender<NounSlab>;
 pub type EffectReceiver = broadcast::Receiver<NounSlab>;
 
+pub mod http_driver;
+
 /// File IO Driver
 ///
 /// ## Effects
