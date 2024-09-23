@@ -45,12 +45,10 @@ pub fn http() -> IODriverFn {
         let app = any(sword_handler).with_state(tx);
 
         let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
-        println!("listening on {}", listener.local_addr().unwrap());
+        debug!("listening on {}", listener.local_addr().unwrap());
         tokio::spawn(async move {
             axum::serve(listener, app.into_make_service()).await.unwrap();
         });
-
-        eprintln!("spawned axum server");
 
         let channel_map = RwLock::new(HashMap::<u64, Responder>::new());
 
