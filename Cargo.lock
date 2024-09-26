@@ -194,7 +194,7 @@ dependencies = [
  "serde_urlencoded",
  "sync_wrapper 1.0.1",
  "tokio",
- "tower 0.4.13",
+ "tower",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -591,6 +591,7 @@ dependencies = [
  "anyhow",
  "assert_no_alloc",
  "async-trait",
+ "axum",
  "bincode",
  "bitvec",
  "byteorder",
@@ -958,13 +959,11 @@ dependencies = [
 name = "http-app"
 version = "0.1.0"
 dependencies = [
- "axum",
  "clap 4.5.16",
  "crown",
  "sword",
  "sword_macros",
  "tokio",
- "tower 0.5.0",
  "tracing",
 ]
 
@@ -2023,6 +2022,7 @@ dependencies = [
  "libc",
  "mio 1.0.2",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.52.0",
@@ -2053,16 +2053,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
-]
-
-[[package]]
-name = "tower"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36b837f86b25d7c0d7988f00a54e74739be6477f2aac6201b8f429a7569991b7"
-dependencies = [
- "tower-layer",
- "tower-service",
 ]
 
 [[package]]
