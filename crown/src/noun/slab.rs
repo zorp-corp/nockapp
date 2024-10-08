@@ -766,7 +766,8 @@ mod tests {
         use std::io::Read;
         use bytes::Bytes;
 
-        // Read the jammed data from the file
+        // Read the jammed data from the file. This is a jammed vase of a small
+        // file with a few dependencies.
         let mut file = File::open("tests/cue-test.jam").expect("Failed to open file");
         let mut jammed_data = Vec::new();
         file.read_to_end(&mut jammed_data).expect("Failed to read file");
