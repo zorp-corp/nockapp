@@ -432,7 +432,7 @@ fn rub_backref(cursor: &mut usize, buffer: &BitSlice<u8, Lsb0>) -> Result<usize,
                 Err(CueError::TruncatedBuffer)?;
             };
             sz_slice[0..idx - 1].clone_from_bitslice(&buffer[*cursor..*cursor + idx - 1]);
-            sz_slice.set(idx, true);
+            sz_slice.set(idx - 1, true);
             *cursor += idx - 1;
             if sz > size_of::<usize>() << 3 {
                 Err(CueError::BackrefTooBig)?;
