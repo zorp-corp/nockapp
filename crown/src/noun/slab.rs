@@ -695,7 +695,7 @@ mod tests {
 
         // Compare the original and cued nouns
         assert!(
-            unsafe { original_slab.root().raw_equals(cued_noun) },
+            slab_equality(unsafe { original_slab.root() }, cued_noun),
             "Original and cued nouns should be equal"
         );
     }
@@ -714,7 +714,7 @@ mod tests {
         let cued_noun = cued_slab.cue_into(jammed).expect("Cue should succeed");
 
         assert!(
-            unsafe { slab.root().raw_equals(cued_noun) },
+            slab_equality(unsafe { slab.root() }, cued_noun),
             "Complex nouns should be equal after jam/cue roundtrip"
         );
     }
@@ -735,7 +735,7 @@ mod tests {
         println!("cued_noun: {:?}", cued_noun);
 
         assert!(
-            unsafe { slab.root().raw_equals(cued_noun) },
+            slab_equality(noun_with_indirect, cued_noun),
             "Nouns with indirect atoms should be equal after jam/cue roundtrip"
         );
     }
@@ -754,7 +754,7 @@ mod tests {
         let cued_noun = cued_slab.cue_into(jammed).expect("Cue should succeed");
 
         assert!(
-            unsafe { slab.root().raw_equals(cued_noun) },
+            slab_equality(unsafe { slab.root() }, cued_noun),
             "Nouns with tas! macros should be equal after jam/cue roundtrip"
         );
     }
