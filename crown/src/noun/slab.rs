@@ -649,6 +649,7 @@ mod tests {
     use crate::AtomExt;
     use sword::noun::{D, T};
     use sword_macros::tas;
+    use bitvec::prelude::*;
 
     #[test]
     fn test_jam() {
@@ -777,5 +778,49 @@ mod tests {
 
         // Assert that cue_into does not return an error
         assert!(result.is_ok(), "cue_into returned an error: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_cyclic_structure() {
+        let mut slab = NounSlab::new();
+        
+        // Create a jammed representation of a cyclic structure
+        // [0 *] where * refers back to the entire cell, i.e. 0b10001111
+        let mut jammed = BitVec::<u8, Lsb0>::new();
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 1, 1]);  //Backref to the entire structure
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0 ,0]);  // Atom 0
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 0, 1]);     // Cell
+
+        let jammed_bytes = Bytes::from(jammed.into_vec());
+
+        let result = slab.cue_into(jammed_bytes);
+        
+        assert!(result.is_err(), "Expected error due to cyclic structure, but cue_into completed successfully");
+        
+        if let Err(e) = result {
+            println!("Error type: {:?}", e);
+            assert!(matches!(e, CueError::BadBackref), "Expected CueError::BadBackref, but got a different error");
+        }
+    }
+
+    #[test]
+    fn test_cue_simple_cell() {
+        let mut slab = NounSlab::new();
+        
+        // Create a jammed representation of [1 0] by hand
+        let mut jammed = BitVec::<u8, Lsb0>::new();
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0, 0, 0, 1, 1, 0, 1]);  // 0b10110001
+
+        let jammed_bytes = Bytes::from(jammed.into_vec());
+
+        let result = slab.cue_into(jammed_bytes);
+        println!("result: {:?}", result);
+        
+        assert!(result.is_ok(), "cue_into should succeed");
+        
+        if let Ok(cued_noun) = result {
+            let expected_noun = T(&mut slab, &[D(1), D(0)]);
+            assert!(slab_equality(cued_noun, expected_noun), "Cued noun should equal [1 0]");
+        }
     }
 }
