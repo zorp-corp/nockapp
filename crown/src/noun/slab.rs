@@ -786,7 +786,7 @@ mod tests {
         let mut slab = NounSlab::new();
         
         // Create a jammed representation of a cyclic structure
-        // [0 *] where * refers back to the entire cell, i.e. 0b10001111
+        // [0 *] where * refers back to the entire cell, i.e. 0b11110001
         let mut jammed = BitVec::<u8, Lsb0>::new();
         jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 1, 1]);  //Backref to the entire structure
         jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0 ,0]);  // Atom 0
