@@ -758,4 +758,24 @@ mod tests {
             "Nouns with tas! macros should be equal after jam/cue roundtrip"
         );
     }
+
+    #[test]
+    fn test_cue_from_file() {
+        use std::fs::File;
+        use std::io::Read;
+        use bytes::Bytes;
+
+        // Read the jammed data from the file
+        let mut file = File::open("tests/cue-test.jam").expect("Failed to open file");
+        let mut jammed_data = Vec::new();
+        file.read_to_end(&mut jammed_data).expect("Failed to read file");
+        let jammed = Bytes::from(jammed_data);
+
+        // Create a new NounSlab and attempt to cue the data
+        let mut slab = NounSlab::new();
+        let result = slab.cue_into(jammed);
+
+        // Assert that cue_into does not return an error
+        assert!(result.is_ok(), "cue_into returned an error: {:?}", result.err());
+    }
 }
