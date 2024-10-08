@@ -1,4 +1,5 @@
 use sword::mem::NockStack;
+use sword::interpreter::Error;
 
 use crate::{Noun, Result, ToBytes, ToBytesExt};
 use crate::noun::slab::NounSlab;
@@ -10,22 +11,22 @@ use sword::noun::{Atom, IndirectAtom, NounAllocator, D};
 use sword::serialization::{cue, jam};
 
 pub trait NounExt {
-    fn cue_bytes(stack: &mut NockStack, bytes: &Bytes) -> Noun;
-    fn cue_bytes_slice(stack: &mut NockStack, bytes: &[u8]) -> Noun;
+    fn cue_bytes(stack: &mut NockStack, bytes: &Bytes) -> Result<Noun, Error>;
+    fn cue_bytes_slice(stack: &mut NockStack, bytes: &[u8]) -> Result<Noun, Error>;
     fn jam_self(self, stack: &mut NockStack) -> JammedNoun;
     fn list_iter(self) -> impl Iterator<Item = Noun>;
     fn eq_bytes(self, bytes: impl AsRef<[u8]>) -> bool;
 }
 
 impl NounExt for Noun {
-    fn cue_bytes(stack: &mut NockStack, bytes: &Bytes) -> Noun {
+    fn cue_bytes(stack: &mut NockStack, bytes: &Bytes) -> Result<Noun,Error> {
         let atom = Atom::from_bytes(stack, bytes);
         cue(stack, atom)
     }
 
     // generally, we should be using `cue_bytes`, but if we're not going to be passing it around
     // its OK to just cue a byte slice to avoid copying.
-    fn cue_bytes_slice(stack: &mut NockStack, bytes: &[u8]) -> Noun {
+    fn cue_bytes_slice(stack: &mut NockStack, bytes: &[u8]) -> Result<Noun,Error> {
         let atom = unsafe {
             IndirectAtom::new_raw_bytes(stack, bytes.len(), bytes.as_ptr()).normalize_as_atom()
         };
@@ -116,7 +117,7 @@ impl JammedNoun {
         JammedNoun(Bytes::copy_from_slice(jammed_atom.as_bytes()))
     }
 
-    pub fn cue_self(&self, stack: &mut NockStack) -> Noun {
+    pub fn cue_self(&self, stack: &mut NockStack) -> Result<Noun,Error> {
         let atom = unsafe {
             IndirectAtom::new_raw_bytes(stack, self.0.len(), self.0.as_ptr()).normalize_as_atom()
         };

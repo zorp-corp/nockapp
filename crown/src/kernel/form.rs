@@ -479,7 +479,7 @@ impl Serf {
 
         let arvo = snapshot.as_ref().map_or_else(
             || {
-                let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes);
+                let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes).expect("invalid kernel jam");
                 let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
                 let arvo = if context.trace_info.is_some() {
                     let start = Instant::now();
@@ -550,7 +550,7 @@ impl Serf {
 
         let arvo = snapshot.as_ref().map_or_else(
             || {
-                let kernel_form = Noun::cue_bytes_slice(&mut context.stack, form_bytes);
+                let kernel_form = Noun::cue_bytes_slice(&mut context.stack, form_bytes).expect("Invalid kernel jam");
                 let arvo = if context.trace_info.is_some() {
                     let start = Instant::now();
                     let arvo = interpret(&mut context, D(0), kernel_form).unwrap(); // TODO better error
