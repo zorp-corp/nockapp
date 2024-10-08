@@ -317,45 +317,53 @@ impl NounSlab {
         let bitslice = jammed.view_bits::<Lsb0>();
         let mut cursor = 0usize;
         let mut res = D(0);
-        let mut stack = vec![&mut res as *mut Noun];
+        let mut stack = vec![CueStackEntry::DestinationPointer(&mut res)];
         loop {
-            if let Some(dest) = stack.pop() {
-                let backref = cursor as u64;
-                if bitslice[cursor] {
-                    // 1
-                    cursor += 1;
+            match stack.pop() {
+                Some(CueStackEntry::DestinationPointer(dest)) => {
+                    let backref = cursor as u64;
                     if bitslice[cursor] {
-                        // 1 - backref
+                        // 1
                         cursor += 1;
-                        let backref = rub_backref(&mut cursor, bitslice)?;
-                        if let Some(noun) = backref_map.get(backref as u64) {
-                            unsafe {
-                                *dest = *noun;
+                        if bitslice[cursor] {
+                            // 1 - backref
+                            cursor += 1;
+                            let backref = rub_backref(&mut cursor, bitslice)?;
+                            if let Some(noun) = backref_map.get(backref as u64) {
+                                unsafe {
+                                    *dest = *noun;
+                                }
+                            } else {
+                                Err(CueError::BadBackref)?
                             }
                         } else {
-                            Err(CueError::BadBackref)?
+                            // 0 - cell
+                            cursor += 1;
+                            let (cell, cell_mem) = unsafe { Cell::new_raw_mut(self) };
+                            unsafe {
+                                *dest = cell.as_noun();
+                            }
+                            unsafe {
+                                stack.push(CueStackEntry::BackRef(backref, dest as *const Noun));
+                                stack
+                                    .push(CueStackEntry::DestinationPointer(&mut (*cell_mem).tail));
+                                stack
+                                    .push(CueStackEntry::DestinationPointer(&mut (*cell_mem).head));
+                            }
                         }
                     } else {
-                        // 0 - cell
+                        // 0 - atom
                         cursor += 1;
-                        let (cell, cell_mem) = unsafe { Cell::new_raw_mut(self) };
-                        unsafe {
-                            *dest = cell.as_noun();
-                        }
-                        backref_map.insert(backref, cell.as_noun());
-                        unsafe {
-                            stack.push(&mut (*cell_mem).tail as *mut Noun);
-                            stack.push(&mut (*cell_mem).head as *mut Noun);
-                        }
+                        unsafe { *dest = rub_atom(self, &mut cursor, bitslice)?.as_noun() };
+                        backref_map.insert(backref, unsafe { *dest });
                     }
-                } else {
-                    // 0 - atom
-                    cursor += 1;
-                    unsafe { *dest = rub_atom(self, &mut cursor, bitslice)?.as_noun() };
-                    backref_map.insert(backref, unsafe { *dest });
                 }
-            } else {
-                break;
+                Some(CueStackEntry::BackRef(backref, noun_ptr)) => {
+                    backref_map.insert(backref, unsafe { *noun_ptr });
+                }
+                None => {
+                    break;
+                }
             }
         }
         Ok(res)
@@ -424,7 +432,7 @@ fn rub_backref(cursor: &mut usize, buffer: &BitSlice<u8, Lsb0>) -> Result<usize,
                 Err(CueError::TruncatedBuffer)?;
             };
             sz_slice[0..idx - 1].clone_from_bitslice(&buffer[*cursor..*cursor + idx - 1]);
-            sz_slice.set(idx, true);
+            sz_slice.set(idx - 1, true);
             *cursor += idx - 1;
             if sz > size_of::<usize>() << 3 {
                 Err(CueError::BackrefTooBig)?;
@@ -630,12 +638,18 @@ fn slab_mug(a: Noun) -> u32 {
     get_mug(a).expect("Noun should have a mug once mugged.")
 }
 
+enum CueStackEntry {
+    DestinationPointer(*mut Noun),
+    BackRef(u64, *const Noun),
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::AtomExt;
     use super::*;
+    use crate::AtomExt;
     use sword::noun::{D, T};
     use sword_macros::tas;
+    use bitvec::prelude::*;
 
     #[test]
     fn test_jam() {
@@ -665,10 +679,7 @@ mod tests {
     #[test]
     fn test_jam_cue_roundtrip() {
         let mut original_slab = NounSlab::new();
-        let original_noun = T(
-            &mut original_slab,
-            &[D(5), D(23)],
-        );
+        let original_noun = T(&mut original_slab, &[D(5), D(23)]);
         println!("original_noun: {:?}", original_noun);
         original_slab.set_root(original_noun);
 
@@ -677,12 +688,17 @@ mod tests {
 
         // Cue the jammed data into a new slab
         let mut cued_slab = NounSlab::new();
-        let cued_noun = cued_slab.cue_into(jammed.into()).expect("Cue should succeed");
+        let cued_noun = cued_slab
+            .cue_into(jammed.into())
+            .expect("Cue should succeed");
 
         println!("cued_noun: {:?}", cued_noun);
 
         // Compare the original and cued nouns
-        assert!(unsafe { original_slab.root().raw_equals(cued_noun) }, "Original and cued nouns should be equal");
+        assert!(
+            slab_equality(unsafe { original_slab.root() }, cued_noun),
+            "Original and cued nouns should be equal"
+        );
     }
 
     #[test]
@@ -698,7 +714,10 @@ mod tests {
         let mut cued_slab = NounSlab::new();
         let cued_noun = cued_slab.cue_into(jammed).expect("Cue should succeed");
 
-        assert!(unsafe { slab.root().raw_equals(cued_noun) }, "Complex nouns should be equal after jam/cue roundtrip");
+        assert!(
+            slab_equality(unsafe { slab.root() }, cued_noun),
+            "Complex nouns should be equal after jam/cue roundtrip"
+        );
     }
 
     #[test]
@@ -716,7 +735,10 @@ mod tests {
         let cued_noun = cued_slab.cue_into(jammed).expect("Cue should succeed");
         println!("cued_noun: {:?}", cued_noun);
 
-        assert!(unsafe { slab.root().raw_equals(cued_noun) }, "Nouns with indirect atoms should be equal after jam/cue roundtrip");
+        assert!(
+            slab_equality(noun_with_indirect, cued_noun),
+            "Nouns with indirect atoms should be equal after jam/cue roundtrip"
+        );
     }
 
     #[test]
@@ -724,11 +746,7 @@ mod tests {
         let mut slab = NounSlab::new();
         let tas_noun = T(
             &mut slab,
-            &[
-                D(tas!(b"foo")),
-                D(tas!(b"bar")),
-                D(tas!(b"baz")),
-            ],
+            &[D(tas!(b"foo")), D(tas!(b"bar")), D(tas!(b"baz"))],
         );
         slab.set_root(tas_noun);
 
@@ -736,6 +754,74 @@ mod tests {
         let mut cued_slab = NounSlab::new();
         let cued_noun = cued_slab.cue_into(jammed).expect("Cue should succeed");
 
-        assert!(unsafe { slab.root().raw_equals(cued_noun) }, "Nouns with tas! macros should be equal after jam/cue roundtrip");
+        assert!(
+            slab_equality(unsafe { slab.root() }, cued_noun),
+            "Nouns with tas! macros should be equal after jam/cue roundtrip"
+        );
+    }
+
+    #[test]
+    fn test_cue_from_file() {
+        use std::fs::File;
+        use std::io::Read;
+        use bytes::Bytes;
+
+        // Read the jammed data from the file. This is a jammed vase of a small
+        // file with a few dependencies.
+        let mut file = File::open("tests/cue-test.jam").expect("Failed to open file");
+        let mut jammed_data = Vec::new();
+        file.read_to_end(&mut jammed_data).expect("Failed to read file");
+        let jammed = Bytes::from(jammed_data);
+
+        // Create a new NounSlab and attempt to cue the data
+        let mut slab = NounSlab::new();
+        let result = slab.cue_into(jammed);
+
+        // Assert that cue_into does not return an error
+        assert!(result.is_ok(), "cue_into returned an error: {:?}", result.err());
+    }
+
+    #[test]
+    fn test_cyclic_structure() {
+        let mut slab = NounSlab::new();
+        
+        // Create a jammed representation of a cyclic structure
+        // [0 *] where * refers back to the entire cell, i.e. 0b10001111
+        let mut jammed = BitVec::<u8, Lsb0>::new();
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 1, 1]);  //Backref to the entire structure
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0 ,0]);  // Atom 0
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 0, 1]);     // Cell
+
+        let jammed_bytes = Bytes::from(jammed.into_vec());
+
+        let result = slab.cue_into(jammed_bytes);
+        
+        assert!(result.is_err(), "Expected error due to cyclic structure, but cue_into completed successfully");
+        
+        if let Err(e) = result {
+            println!("Error type: {:?}", e);
+            assert!(matches!(e, CueError::BadBackref), "Expected CueError::BadBackref, but got a different error");
+        }
+    }
+
+    #[test]
+    fn test_cue_simple_cell() {
+        let mut slab = NounSlab::new();
+        
+        // Create a jammed representation of [1 0] by hand
+        let mut jammed = BitVec::<u8, Lsb0>::new();
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0, 0, 0, 1, 1, 0, 1]);  // 0b10110001
+
+        let jammed_bytes = Bytes::from(jammed.into_vec());
+
+        let result = slab.cue_into(jammed_bytes);
+        println!("result: {:?}", result);
+        
+        assert!(result.is_ok(), "cue_into should succeed");
+        
+        if let Ok(cued_noun) = result {
+            let expected_noun = T(&mut slab, &[D(1), D(0)]);
+            assert!(slab_equality(cued_noun, expected_noun), "Cued noun should equal [1 0]");
+        }
     }
 }
