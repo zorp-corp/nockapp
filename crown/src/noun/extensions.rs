@@ -155,6 +155,8 @@ impl Default for JammedNoun {
     }
 }
 
+// TODO: Make iterator fallible with Result instead of panicking
+// TODO: Move to Sword
 pub struct NounListIterator(Noun);
 
 impl Iterator for NounListIterator {
@@ -171,6 +173,7 @@ impl Iterator for NounListIterator {
     }
 }
 
+// TODO: Rename Nounable, move to Sword
 pub trait IntoNoun {
     fn into_noun(self) -> Noun;
 }
@@ -186,6 +189,7 @@ impl IntoNoun for u64 {
     }
 }
 
+// FIXME: Purge the unwrap
 impl FromAtom for u64 {
     fn from_atom(atom: Atom) -> Self {
         atom.as_u64().unwrap()
@@ -197,6 +201,8 @@ impl IntoNoun for Noun {
         self
     }
 }
+
+// FIXME: Purge the unwrap
 impl IntoNoun for &str {
     fn into_noun(self) -> Noun {
         let mut slab = NounSlab::new();
