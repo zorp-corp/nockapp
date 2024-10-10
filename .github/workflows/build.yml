@@ -15,6 +15,9 @@ on:
     branches: [ "master" ]
   push:
     branches: [ "master" ]
+    tags:
+      - "nockapp-*"
+      - "choo-*"
 
 jobs:
   build:
@@ -25,12 +28,18 @@ jobs:
     - uses: zorp-corp/rust-cache@v2
       with:
         workspaces: ". -> target"
-    # Test building and running are split for caching and build time tracking purposes
-    # XX need to fix all the tests
-    #- name: Build tests
-    #  run: cargo test --no-run
-    #- name: Run tests
-    #  run: cargo test
-    - name: Build
-      run: cargo build
+    - name: Build all
+      run: cargo build --release
+    - name: Compile choo kernel with bootstrap choo
+      run: target/release/choo choo/hoon/lib/kernel.hoon choo/hoon
+    - name: Move choo jam back into assets
+      run: mv out.jam choo/bootstrap/choo.jam
+    - name: Rebuild choo with built jamfile
+      run: cargo build --release --bin choo
+    - name: Release Choo Artifact
+      if: ${{ github.ref_type == 'tag' && startsWith(github.ref_name, 'choo') }}
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          target/release/choo
 
