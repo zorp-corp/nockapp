@@ -179,6 +179,7 @@ impl Kernel {
     ///
     /// Result containing the poke response or an error.
     pub fn do_poke(&mut self, job: Noun) -> Result<Noun> {
+        eprintln!("poke: {:?}", job);
         match self.soft(job, Some("poke".to_string())) {
             Ok(res) => {
                 let cell = res.as_cell().expect("serf: poke: +slam returned atom");
