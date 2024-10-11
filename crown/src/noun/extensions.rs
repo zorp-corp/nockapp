@@ -6,7 +6,6 @@ use crate::noun::slab::NounSlab;
 use bincode::{Decode, Encode};
 use bytes::Bytes;
 use core::str;
-use std::ffi::CStr;
 use std::iter::Iterator;
 use sword::noun::{Atom, IndirectAtom, NounAllocator, D};
 use sword::serialization::{cue, jam};
