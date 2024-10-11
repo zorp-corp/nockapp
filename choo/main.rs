@@ -26,6 +26,9 @@ struct ChooCli {
 
     #[arg(help = "Path to root of dependency directory", default_value = "hoon")]
     directory: String,
+
+    #[arg(long, help = "Build raw, without file hash injection", default_value = "false")]
+    arbitrary: bool,
 }
 
 fn is_hoon_or_dir(entry: &DirEntry) -> bool {
@@ -77,9 +80,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", path_str);
         }
     }
+    let arbitrary_noun = if cli.arbitrary { D(0) } else { D(1) };
     let poke = T(
         kernel.serf.stack(),
-        &[D(tas!(b"build")), entry_noun, directory_noun],
+        &[D(tas!(b"build")), entry_noun, directory_noun, arbitrary_noun],
     );
 
     let mut poke_result = kernel.poke(poke)?;

@@ -11,7 +11,7 @@
 ::  subject, usually expected to be 0
 +$  knob  [t=type f=nock]
 +$  cause
-  $%  [%build entry=cord directory=(list [cord cord])]
+  $%  [%build entry=cord directory=(list [cord cord]) arbitrary=?]
       [%boot hoon-txt=@cord]
   ==
 +$  effect  [%jam p=*]
@@ -62,6 +62,9 @@
   :_  k
   :_  ~
   :-  %jam
+  ?:  arbitrary.cause
+    %-  ~(create-arbitrary builder u.cached-hoon.k)
+    [entry dir]
   %-  ~(create builder u.cached-hoon.k)
   [entry dir]
 --
@@ -289,6 +292,17 @@
     |.(+:^$)
   %-  head
   (compile-graph (head graph) ~)
+++  create-arbitrary
+  |=  [entry=path dir=(map path cord)]
+  ^-  (trap)
+  =/  dir-hash  `@uvI`(mug dir)
+  ~&  dir-hash+dir-hash
+  =/  graph  (make-import-graph ~ entry 0 ~ dir)
+  =/  tase
+    %-  head
+    (compile-graph (head graph) ~)
+  =>  tase
+  |.(+:^$)
 ::
 ++  make-import-graph
   |=  [face=(unit @tas) suf=path depth=@ cache=(map path import-graph) dir=(map path cord)]
