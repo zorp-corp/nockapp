@@ -11,9 +11,9 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-sword = { git = "https://github.com/zorp-corp/sword.git", rev="058a44a11f405e4a90f0dfe9a17cac12c291a68c" }
-sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="058a44a11f405e4a90f0dfe9a17cac12c291a68c" }
-assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="058a44a11f405e4a90f0dfe9a17cac12c291a68c" }
+sword = { git = "https://github.com/zorp-corp/sword.git", rev="3a0b8e770353da5db006277eb5055abbeadc41a0" }
+sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="3a0b8e770353da5db006277eb5055abbeadc41a0" }
+assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="3a0b8e770353da5db006277eb5055abbeadc41a0" }
 anyhow = "1.0"
 async-trait = "0.1"
 axum = "0.7.5"
