@@ -238,13 +238,17 @@
       raw
     %+  turn  raw.pile
     |=  [face=term pax=path]
-    [`face `path`(snoc pax %hoon)]
+    =/  pax-snip  (snip pax)
+    =/  pax-rear  (rear pax)
+    [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' %hoon]))]
   ::
       bar
     %+  turn  bar.pile
     |=  [face=term mark-unsupported=@tas pax=path]
     ?:  =(mark-unsupported %hoon)
-      [`face `path`(snoc pax %hoon)]
+      =/  pax-snip  (snip pax)
+      =/  pax-rear  (rear pax)
+      [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' %hoon]))]
     ~&  unsupported-mark+[mark-unsupported pax]
     !!
   ==
