@@ -55,7 +55,7 @@ pub trait AtomExt {
     fn from_value<A: NounAllocator, T: ToBytes>(allocator: &mut A, value: T) -> Result<Atom>;
     fn eq_bytes(self, bytes: impl AsRef<[u8]>) -> bool;
     fn to_bytes_until_nul(self) -> Result<Vec<u8>>;
-    fn to_string(self) -> Result<String>;
+    fn as_string(self) -> Result<String>;
 }
 
 impl AtomExt for Atom {
@@ -101,7 +101,7 @@ impl AtomExt for Atom {
         Ok(bytes.trim_end_matches('\0').as_bytes().to_vec())
     }
 
-    fn to_string(self) -> Result<String> {
+    fn as_string(self) -> Result<String> {
         let str = str::from_utf8(self.as_bytes())?;
         Ok(str.trim_end_matches('\0').to_string())
     }
