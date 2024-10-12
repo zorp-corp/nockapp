@@ -13,7 +13,7 @@ static KERNEL_JAM: &[u8] =
     include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/choo.jam"));
 
 static HOON_TXT: &[u8] =
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/hoon-139.hoon"));
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/hoon-138.hoon"));
 
 #[derive(Parser, Debug)]
 #[command(about = "Tests various poke types for the kernel", author = "zorp", version, color = ColorChoice::Auto)]
