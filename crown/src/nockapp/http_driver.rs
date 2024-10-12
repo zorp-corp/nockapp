@@ -127,8 +127,8 @@ pub fn http() -> IODriverFn {
                             let key_vec = header.head().as_atom()?;
                             let val_vec = header.tail().as_atom()?;
 
-                            if let Some(key) = key_vec.to_bytes_until_nul() {
-                                if let Some(val) = val_vec.to_bytes_until_nul() {
+                            if let Ok(key) = key_vec.to_bytes_until_nul() {
+                                if let Ok(val) = val_vec.to_bytes_until_nul() {
                                     header_vec.push((
                                         String::from_utf8(key)?,
                                         String::from_utf8(val)?,

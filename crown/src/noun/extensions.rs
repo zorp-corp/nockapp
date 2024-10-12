@@ -5,7 +5,7 @@ use crate::{Noun, Result, ToBytes, ToBytesExt};
 use crate::noun::slab::NounSlab;
 use bincode::{Decode, Encode};
 use bytes::Bytes;
-use std::ffi::CStr;
+use core::str;
 use std::iter::Iterator;
 use sword::noun::{Atom, IndirectAtom, NounAllocator, D};
 use sword::serialization::{cue, jam};
@@ -54,7 +54,8 @@ pub trait AtomExt {
     fn from_bytes<A: NounAllocator>(allocator: &mut A, bytes: &Bytes) -> Atom;
     fn from_value<A: NounAllocator, T: ToBytes>(allocator: &mut A, value: T) -> Result<Atom>;
     fn eq_bytes(self, bytes: impl AsRef<[u8]>) -> bool;
-    fn to_bytes_until_nul(self) -> Option<Vec<u8>>;
+    fn to_bytes_until_nul(self) -> Result<Vec<u8>>;
+    fn as_string(self) -> Result<String>;
 }
 
 impl AtomExt for Atom {
@@ -95,12 +96,14 @@ impl AtomExt for Atom {
         }
     }
 
-    fn to_bytes_until_nul(self) -> Option<Vec<u8>> {
-        if let Ok(cstr) = CStr::from_bytes_until_nul(self.as_bytes()) {
-            Some(cstr.to_bytes().to_vec())
-        } else {
-            None
-        }
+    fn to_bytes_until_nul(self) -> Result<Vec<u8>> {
+        let bytes = str::from_utf8(self.as_bytes())?;
+        Ok(bytes.trim_end_matches('\0').as_bytes().to_vec())
+    }
+
+    fn as_string(self) -> Result<String> {
+        let str = str::from_utf8(self.as_bytes())?;
+        Ok(str.trim_end_matches('\0').to_string())
     }
 }
 
