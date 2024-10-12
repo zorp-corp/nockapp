@@ -12,7 +12,7 @@
 +$  knob  [t=type f=nock]
 +$  cause
   $%  [%build entry=cord directory=(list [cord cord]) arbitrary=?]
-      [%boot hoon-txt=@cord]
+      [%boot hoon-txt=cord]
   ==
 +$  effect  [%jam p=*]
 --
@@ -49,10 +49,10 @@
     ~&  dat
     !!
   =/  =cause  u.sof-cau
+  ~&  hoon-version+hoon-version
   ?:  ?=(%boot -.cause)
     ?:  ?=(^ cached-hoon.k)
       [~ k]
-    ~&  %building-hoon
     [~ k(cached-hoon `(build-honc hoon-txt.cause))]
   =/  entry  (stab entry.cause)
   =/  dir

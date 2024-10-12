@@ -1,4 +1,4 @@
-/*  hoon-139-hoon  %hoon  /lib/hoon-139/hoon
+/*  hoon-138-hoon  %hoon  /lib/hoon-138/hoon
 /*  wrapper-hoon  %hoon  /lib/wrapper/hoon
 /*  kernel-hoon  %hoon  /lib/kernel/hoon
 !.
@@ -15,7 +15,7 @@
 ~&  "compiling hoon"
 =/  hoon-knob=[t=type form=nock]
   ~>  %bout
-  (~(mint ut %noun) %noun (ream hoon-139-hoon))
+  (~(mint ut %noun) %noun (ream hoon-138-hoon))
 ~&  "compiling wrapper"
 =/  wrapper-knob=[t=type form=nock]
   ~>  %bout
