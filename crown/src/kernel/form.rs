@@ -571,7 +571,7 @@ impl Serf {
         snap_path.push(".crown");
         snap_path.push("chk");
         std::fs::create_dir_all(&snap_path).unwrap();
-        //pma_open(snap_path).expect("serf: pma open failed");
+        pma_open(snap_path).expect("serf: pma open failed");
 
         let trace_info = if trace {
             let file = File::create("trace.json").expect("Cannot create trace file trace.json");
@@ -611,7 +611,7 @@ impl Serf {
         snap_path.push(".crown");
         snap_path.push("chk");
         std::fs::create_dir_all(&snap_path).unwrap();
-        //pma_open(snap_path).expect("serf: pma open failed");
+        pma_open(snap_path).expect("serf: pma open failed");
 
         let trace_info = if trace {
             let file = File::create("trace.json").expect("Cannot create trace file trace.json");
