@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use byteorder::{LittleEndian, WriteBytesExt};
+use tracing::trace;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -668,7 +669,7 @@ impl Serf {
     ///
     /// This function is unsafe because it interacts with raw pointers and memory.
     pub unsafe fn save(&mut self) {
-        todo!("serf: save: implement save with double jam buffer");
+        trace!("TODO serf: save: implement save with double jam buffer");
     }
 
     /// Returns a mutable reference to the Nock stack.
