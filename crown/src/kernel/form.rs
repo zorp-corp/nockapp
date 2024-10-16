@@ -667,29 +667,9 @@ impl Serf {
     /// # Safety
     ///
     /// This function is unsafe because it interacts with raw pointers and memory.
-    //pub unsafe fn save(&mut self) {
-    //    let handle = {
-    //        let mut snapshot = Snapshot({
-    //            let snapshot_mem_ptr: *mut SnapshotMem = self.context.stack.struct_alloc(1);
-
-    //            // Save into PMA (does not sync)
-    //            (*snapshot_mem_ptr).event_num = self.event_num;
-    //            (*snapshot_mem_ptr).arvo = self.arvo;
-    //            (*snapshot_mem_ptr).cold = self.context.cold;
-    //            snapshot_mem_ptr
-    //        });
-
-    //        let handle = snapshot.save_to_pma(&mut self.context.stack);
-
-    //        self.arvo = (*snapshot.0).arvo;
-    //        self.event_num = (*snapshot.0).event_num;
-    //        self.context.cold = (*snapshot.0).cold;
-
-    //        handle
-    //    };
-    //    pma_meta_set(BTMetaField::SnapshotVersion as usize, 1);
-    //    pma_meta_set(BTMetaField::Snapshot as usize, handle);
-    //}
+    pub unsafe fn save(&mut self) {
+        todo!("serf: save: implement save with double jam buffer");
+    }
 
     /// Returns a mutable reference to the Nock stack.
     ///
