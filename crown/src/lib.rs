@@ -10,6 +10,8 @@
 //! - `noun`: Extensions and utilities for working with Urbit nouns.
 //! - `utils`: Errors, misc functions and extensions.
 //!
+// fetch not feature was stablized, see: https://github.com/rust-lang/rust/pull/127204
+#![feature(atomic_bool_fetch_not)]
 #![feature(trait_alias)]
 pub mod kernel;
 pub mod noun;
