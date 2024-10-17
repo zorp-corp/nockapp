@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use byteorder::{LittleEndian, WriteBytesExt};
+use tracing::trace;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -15,7 +16,7 @@ use sword::jets::warm::Warm;
 use sword::mem::NockStack;
 use sword::mug::met3_usize;
 use sword::noun::{Atom, Cell, DirectAtom, IndirectAtom, Noun, Slots, D, T};
-use sword::persist::{pma_meta_get, pma_meta_set, pma_open, pma_sync, Persist};
+use sword::persist::pma_open;
 use sword::trace::{path_to_cord, write_serf_trace_safe, TraceInfo};
 use sword_macros::tas;
 
@@ -43,20 +44,6 @@ pub struct Kernel {
     terminator: Arc<AtomicBool>,
 }
 
-/// Represents a snapshot of the Sword state.
-struct Snapshot(pub(crate) *mut SnapshotMem);
-
-/// Memory layout for storing snapshot data.
-#[repr(C)]
-#[repr(packed)]
-struct SnapshotMem {
-    /// The current Arvo state.
-    pub(crate) arvo: Noun,
-    /// The Cold jet state.
-    pub(crate) cold: Cold,
-    /// The current event number.
-    pub(crate) event_num: u64,
-}
 
 impl Kernel {
     /// Loads a kernel with a custom hot state.
@@ -450,7 +437,6 @@ impl Serf {
     ///
     /// A new `Serf` instance.
     fn new(
-        snapshot: Option<Snapshot>,
         kernel_bytes: &[u8],
         constant_hot_state: &[HotEntry],
         trace_info: Option<TraceInfo>,
@@ -458,10 +444,7 @@ impl Serf {
         let hot_state = [URBIT_HOT_STATE, constant_hot_state].concat();
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
         let cache = Hamt::<Noun>::new(&mut stack);
-        let (mut cold, event_num) = snapshot.as_ref().map_or_else(
-            || (Cold::new(&mut stack), 0),
-            |snapshot_ref| unsafe { ((*snapshot_ref.0).cold, (*snapshot_ref.0).event_num) },
-        );
+        let (mut cold, event_num) = (Cold::new(&mut stack), 0);
         let hot = Hot::init(&mut stack, &hot_state);
         let warm = Warm::init(&mut stack, &mut cold, &hot);
         let slogger = std::boxed::Box::pin(CrownSlogger {});
@@ -477,22 +460,19 @@ impl Serf {
             trace_info,
         };
 
-        let arvo = snapshot.as_ref().map_or_else(
-            || {
-                let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes).expect("invalid kernel jam");
-                let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
-                let arvo = if context.trace_info.is_some() {
-                    let start = Instant::now();
-                    let arvo = interpret(&mut context, kernel_trap, fol).unwrap(); // TODO better error
-                    write_serf_trace_safe(&mut context, "boot", start);
-                    arvo
-                } else {
-                    interpret(&mut context, kernel_trap, fol).unwrap() // TODO better error
-                };
+        let arvo = {
+            let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes).expect("invalid kernel jam");
+            let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
+            let arvo = if context.trace_info.is_some() {
+                let start = Instant::now();
+                let arvo = interpret(&mut context, kernel_trap, fol).unwrap(); // TODO better error
+                write_serf_trace_safe(&mut context, "boot", start);
                 arvo
-            },
-            |snapshot_ptr| unsafe { (*snapshot_ptr.0).arvo },
-        );
+            } else {
+                interpret(&mut context, kernel_trap, fol).unwrap() // TODO better error
+            };
+            arvo
+        };
 
         let mut serf = Self {
             arvo,
@@ -521,7 +501,6 @@ impl Serf {
     ///
     /// A new `Serf` instance.
     fn new_form(
-        snapshot: Option<Snapshot>,
         form_bytes: &[u8],
         constant_hot_state: &[HotEntry],
         trace_info: Option<TraceInfo>,
@@ -529,10 +508,7 @@ impl Serf {
         let hot_state = [URBIT_HOT_STATE, constant_hot_state].concat();
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
         let cache = Hamt::<Noun>::new(&mut stack);
-        let (mut cold, event_num) = snapshot.as_ref().map_or_else(
-            || (Cold::new(&mut stack), 0),
-            |snapshot_ref| unsafe { ((*snapshot_ref.0).cold, (*snapshot_ref.0).event_num) },
-        );
+        let (mut cold, event_num) = (Cold::new(&mut stack), 0);
         let hot = Hot::init(&mut stack, &hot_state);
         let warm = Warm::init(&mut stack, &mut cold, &hot);
         let slogger = std::boxed::Box::pin(CrownSlogger {});
@@ -548,21 +524,18 @@ impl Serf {
             trace_info,
         };
 
-        let arvo = snapshot.as_ref().map_or_else(
-            || {
-                let kernel_form = Noun::cue_bytes_slice(&mut context.stack, form_bytes).expect("Invalid kernel jam");
-                let arvo = if context.trace_info.is_some() {
-                    let start = Instant::now();
-                    let arvo = interpret(&mut context, D(0), kernel_form).unwrap(); // TODO better error
-                    write_serf_trace_safe(&mut context, "boot", start);
-                    arvo
-                } else {
-                    interpret(&mut context, D(0), kernel_form).unwrap() // TODO better error
-                };
+        let arvo = {
+            let kernel_form = Noun::cue_bytes_slice(&mut context.stack, form_bytes).expect("Invalid kernel jam");
+            let arvo = if context.trace_info.is_some() {
+                let start = Instant::now();
+                let arvo = interpret(&mut context, D(0), kernel_form).unwrap(); // TODO better error
+                write_serf_trace_safe(&mut context, "boot", start);
                 arvo
-            },
-            |snapshot_ptr| unsafe { (*snapshot_ptr.0).arvo },
-        );
+            } else {
+                interpret(&mut context, D(0), kernel_form).unwrap() // TODO better error
+            };
+            arvo
+        };
 
         let mut serf = Self {
             arvo,
@@ -601,16 +574,6 @@ impl Serf {
         std::fs::create_dir_all(&snap_path).unwrap();
         pma_open(snap_path).expect("serf: pma open failed");
 
-        let snapshot_version = pma_meta_get(BTMetaField::SnapshotVersion as usize);
-
-        let snapshot = match snapshot_version {
-            0 => None,
-            1 => Some(Snapshot(
-                pma_meta_get(BTMetaField::Snapshot as usize) as *mut SnapshotMem
-            )),
-            _ => panic!("Unsupported snapshot version"),
-        };
-
         let trace_info = if trace {
             let file = File::create("trace.json").expect("Cannot create trace file trace.json");
             let pid = std::process::id();
@@ -624,7 +587,7 @@ impl Serf {
             None
         };
 
-        Self::new(snapshot, kernel_bytes, constant_hot_state, trace_info)
+        Self::new(kernel_bytes, constant_hot_state, trace_info)
     }
 
     /// Loads a Serf instance from a form (compiled Nock formula).
@@ -651,16 +614,6 @@ impl Serf {
         std::fs::create_dir_all(&snap_path).unwrap();
         pma_open(snap_path).expect("serf: pma open failed");
 
-        let snapshot_version = pma_meta_get(BTMetaField::SnapshotVersion as usize);
-
-        let snapshot = match snapshot_version {
-            0 => None,
-            1 => Some(Snapshot(
-                pma_meta_get(BTMetaField::Snapshot as usize) as *mut SnapshotMem
-            )),
-            _ => panic!("Unsupported snapshot version"),
-        };
-
         let trace_info = if trace {
             let file = File::create("trace.json").expect("Cannot create trace file trace.json");
             let pid = std::process::id();
@@ -674,7 +627,7 @@ impl Serf {
             None
         };
 
-        Self::new_form(snapshot, form_bytes, constant_hot_state, trace_info)
+        Self::new_form(form_bytes, constant_hot_state, trace_info)
     }
 
     /// Updates the Serf's state after an event.
@@ -690,8 +643,6 @@ impl Serf {
     pub unsafe fn event_update(&mut self, new_event_num: u64, new_arvo: Noun) {
         self.arvo = new_arvo;
         self.event_num = new_event_num;
-        self.save();
-        pma_sync();
 
         self.context.cache = Hamt::new(&mut self.context.stack);
         self.context.scry_stack = D(0);
@@ -707,6 +658,8 @@ impl Serf {
         stack.preserve(&mut self.context.warm);
         stack.preserve(&mut self.context.hot);
         stack.preserve(&mut self.context.cache);
+        stack.preserve(&mut self.context.cold);
+        stack.preserve(&mut self.arvo);
         stack.flip_top_frame(0);
     }
 
@@ -716,27 +669,7 @@ impl Serf {
     ///
     /// This function is unsafe because it interacts with raw pointers and memory.
     pub unsafe fn save(&mut self) {
-        let handle = {
-            let mut snapshot = Snapshot({
-                let snapshot_mem_ptr: *mut SnapshotMem = self.context.stack.struct_alloc(1);
-
-                // Save into PMA (does not sync)
-                (*snapshot_mem_ptr).event_num = self.event_num;
-                (*snapshot_mem_ptr).arvo = self.arvo;
-                (*snapshot_mem_ptr).cold = self.context.cold;
-                snapshot_mem_ptr
-            });
-
-            let handle = snapshot.save_to_pma(&mut self.context.stack);
-
-            self.arvo = (*snapshot.0).arvo;
-            self.event_num = (*snapshot.0).event_num;
-            self.context.cold = (*snapshot.0).cold;
-
-            handle
-        };
-        pma_meta_set(BTMetaField::SnapshotVersion as usize, 1);
-        pma_meta_set(BTMetaField::Snapshot as usize, handle);
+        trace!("TODO serf: save: implement save with double jam buffer");
     }
 
     /// Returns a mutable reference to the Nock stack.
@@ -778,41 +711,6 @@ impl Serf {
     /// A noun representing the poke bail.
     pub fn poke_bail(&mut self, lud: Noun) -> Noun {
         T(self.stack(), &[D(tas!(b"poke")), D(tas!(b"bail")), lud])
-    }
-}
-
-impl Persist for Snapshot {
-    unsafe fn space_needed(&mut self, stack: &mut NockStack) -> usize {
-        let mut arvo = (*(self.0)).arvo;
-        let mut cold = (*(self.0)).cold;
-        let arvo_space_needed = arvo.space_needed(stack);
-        let cold_space_needed = cold.space_needed(stack);
-        (((std::mem::size_of::<SnapshotMem>() + 7) >> 3) << 3)
-            + arvo_space_needed
-            + cold_space_needed
-    }
-
-    unsafe fn copy_to_buffer(&mut self, stack: &mut NockStack, buffer: &mut *mut u8) {
-        let snapshot_buffer = *buffer as *mut SnapshotMem;
-        std::ptr::copy_nonoverlapping(self.0, snapshot_buffer, 1);
-        *self = Snapshot(snapshot_buffer);
-        *buffer = snapshot_buffer.add(1) as *mut u8;
-
-        let mut arvo = (*snapshot_buffer).arvo;
-        arvo.copy_to_buffer(stack, buffer);
-        (*snapshot_buffer).arvo = arvo;
-
-        let mut cold = (*snapshot_buffer).cold;
-        cold.copy_to_buffer(stack, buffer);
-        (*snapshot_buffer).cold = cold;
-    }
-
-    unsafe fn handle_to_u64(&self) -> u64 {
-        self.0 as u64
-    }
-
-    unsafe fn handle_from_u64(meta_handle: u64) -> Self {
-        Snapshot(meta_handle as *mut SnapshotMem)
     }
 }
 
