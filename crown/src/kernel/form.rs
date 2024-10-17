@@ -307,9 +307,10 @@ impl Kernel {
         let job_input = job_data.tail();
         let wire = T(stack, &[D(0), D(tas!(b"arvo")), D(0)]);
         let crud = DirectAtom::new_panic(tas!(b"crud"));
-        let event_num = D(self.serf.event_num + 1);
+        let eve = self.serf.event_num;
+        let event_num = D(eve);
 
-        let mut ovo = T(stack, &[event_num, wire, goof, job_input]);
+        let ovo = T(stack, &[event_num, wire, goof, job_input]);
         let trace_name = if self.serf.context.trace_info.is_some() {
             Some(Self::poke_trace_name(
                 &mut self.serf.context.stack,
@@ -324,11 +325,11 @@ impl Kernel {
             Ok(res) => {
                 let cell = res.as_cell().expect("serf: poke: crud +slam returned atom");
                 let mut fec = cell.head();
-                let eve = self.serf.event_num;
 
                 unsafe {
                     self.serf.event_update(eve + 1, cell.tail());
-                    self.serf.context.stack.preserve(&mut ovo);
+                    // causes segfault - why?
+                    // self.serf.context.stack.preserve(&mut ovo);
                     self.serf.context.stack.preserve(&mut fec);
                     self.serf.preserve_event_update_leftovers();
                 }
