@@ -1,18 +1,23 @@
 use crate::noun::slab::CueError;
 use bytes::buf::BufMut;
 use crate::kernel::form::Kernel;
-use crate::{Bytes, CrownError, Noun, NounExt};
+use crate::{Bytes, CrownError, Noun, NounExt, ToBytes};
 use crate::noun::FromAtom;
+use crc32fast::Hasher;
 use futures::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
+use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 
-use sword::noun::{IndirectAtom, D, T};
+use sword::noun::{IndirectAtom, NounAllocator, D, T};
 use sword_macros::tas;
 use thiserror::Error;
 use tokio::io::{split, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::select;
+use tokio::fs;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
@@ -26,6 +31,24 @@ pub type ActionSender = mpsc::Sender<IOAction>;
 pub type ActionReceiver = mpsc::Receiver<IOAction>;
 pub type EffectSender = broadcast::Sender<NounSlab>;
 pub type EffectReceiver = broadcast::Receiver<NounSlab>;
+
+pub struct SlabPersist {
+    pub checksum: u32,
+    pub event_num: u64,
+    pub jam_len: u64,
+    pub jam: Bytes,
+}
+
+impl ToBytes for SlabPersist {
+    fn to_bytes(&self) -> Result<Vec<u8>, CrownError> {
+        let mut bytes = Vec::new();
+        bytes.extend(&self.checksum.to_le_bytes());
+        bytes.extend(&self.event_num.to_le_bytes());
+        bytes.extend(&self.jam_len.to_le_bytes());
+        bytes.extend(&self.jam);
+        Ok(bytes)
+    }
+}
 
 pub mod http_driver;
 
@@ -393,6 +416,12 @@ pub struct NockApp {
     pub action_channel_sender: mpsc::Sender<IOAction>,
     // Effect broadcast channel
     pub effect_broadcast: broadcast::Sender<NounSlab>,
+    // Save semaphore
+    pub save_sem: Arc<tokio::sync::Semaphore>,
+    // Jam dir
+    pub jam_dirs: [PathBuf; 2],
+    // Buff toggle
+    pub buff_toggle: Arc<AtomicBool>,
 }
 
 impl NockApp {
@@ -400,12 +429,24 @@ impl NockApp {
         let (action_channel_sender, action_channel) = mpsc::channel(100);
         let (effect_broadcast, _) = broadcast::channel(100);
         let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
+        let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
+        let buff_toggle = Arc::new(AtomicBool::new(false));
+
+        // TODO: clean up
+        let mut jam_dir_a = crate::default_data_dir("crown");
+        let mut jam_dir_b = crate::default_data_dir("crown");
+        jam_dir_a.push("a.jam");
+        jam_dir_b.push("b.jam");
+
         Self {
             kernel,
             tasks,
             action_channel,
             action_channel_sender,
             effect_broadcast,
+            save_sem,
+            jam_dirs: [jam_dir_a, jam_dir_b],
+            buff_toggle
         }
     }
     pub async fn add_io_driver(&mut self, driver: IODriverFn) {
@@ -425,6 +466,7 @@ impl NockApp {
             let mut joinset = self.tasks.clone().lock_owned().await;
             joinset.join_next().await
         };
+
         select!(
             res = tasks_fut => {
                 match res {
@@ -436,6 +478,43 @@ impl NockApp {
                     },
                     _ => {},
                 }
+            },
+            save = self.save_sem.clone().acquire_owned() => {
+                eprintln!("saving");
+                // TODO: update with noun serialized cold state once ready
+                let cold_noun = D(0);
+                let mut slab = NounSlab::new();
+                let cell = T(&mut slab, &[self.kernel.serf.arvo, cold_noun]);
+                slab.set_root(cell);
+
+                let event_num = self.kernel.serf.event_num;
+                let jam_dirs = self.jam_dirs.clone();
+                let toggle = self.buff_toggle.clone();
+
+                let _ = tokio::spawn(async move {
+                    let jam = slab.jam();
+                    let jam_len = jam.len() as u64;
+
+                    let mut hasher = Hasher::new();
+                    hasher.update(&event_num.to_le_bytes());
+                    hasher.update(&jam_len.to_le_bytes());
+                    hasher.update(&jam);
+
+                    let checksum = hasher.finalize();
+
+                    // TODO: better error handling
+                    let persist = SlabPersist{checksum, event_num, jam_len, jam}.to_bytes().unwrap();
+                    //  feature was stablized: https://github.com/rust-lang/rust/pull/127204
+                    let file = if toggle.fetch_not(Ordering::Relaxed) {
+                        &jam_dirs[1]
+                    } else {
+                        &jam_dirs[0]
+                    };
+
+                    // TODO: better error handling
+                    fs::write(file, persist).await.unwrap();
+                    drop(save)
+                });
             },
             action_res = self.action_channel.recv() => {
                 if let Some(action) = action_res {
