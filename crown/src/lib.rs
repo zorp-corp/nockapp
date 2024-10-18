@@ -46,5 +46,17 @@ pub fn default_data_dir(kernel_name: &str) -> PathBuf {
     PathBuf::from(format!("./.data.{}", kernel_name))
 }
 
+pub fn default_jam_paths(base_dir: &str) -> [PathBuf; 2] {
+    create_jam_paths(base_dir, ["0", "1"])
+}
+
+fn create_jam_paths(base_dir: &str, names: [&str; 2]) -> [PathBuf; 2] {
+    let base_path = crate::default_data_dir(base_dir);
+    [
+        base_path.join(format!("{}.jam", names[0])),
+        base_path.join(format!("{}.jam", names[1])),
+    ]
+}
+
 /// Default size for the Nock stack (1 GB)
 pub const DEFAULT_NOCK_STACK_SIZE: usize = 1 << 27;

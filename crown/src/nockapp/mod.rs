@@ -1,6 +1,6 @@
 use crate::kernel::form::Kernel;
 use crate::utils::bytes::BytesWrapper;
-use crate::{Bytes, CrownError, Noun, NounExt};
+use crate::{default_jam_paths, Bytes, CrownError, Noun, NounExt};
 use crate::noun::{FromAtom, slab::CueError, slab::NounSlab};
 use bincode::{config, encode_to_vec, Decode, Encode};
 use bytes::buf::BufMut;
@@ -441,7 +441,7 @@ pub struct NockApp {
     // Save semaphore
     pub save_sem: Arc<tokio::sync::Semaphore>,
     // Alternating jam dirs
-    pub jam_dirs: [PathBuf; 2],
+    pub jam_paths: [PathBuf; 2],
     // Jam buffer toggle
     pub buff_toggle: Arc<AtomicBool>,
 }
@@ -453,12 +453,7 @@ impl NockApp {
         let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
         let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
         let buff_toggle = Arc::new(AtomicBool::new(false));
-
-        // TODO: clean up
-        let mut jam_dir_a = crate::default_data_dir("crown");
-        let mut jam_dir_b = crate::default_data_dir("crown");
-        jam_dir_a.push("a.jam");
-        jam_dir_b.push("b.jam");
+        let jam_paths = default_jam_paths("crown");
 
         Self {
             kernel,
@@ -467,7 +462,7 @@ impl NockApp {
             action_channel_sender,
             effect_broadcast,
             save_sem,
-            jam_dirs: [jam_dir_a, jam_dir_b],
+            jam_paths,
             buff_toggle
         }
     }
@@ -509,7 +504,7 @@ impl NockApp {
                 slab.set_root(cell);
 
                 let event_num = self.kernel.serf.event_num;
-                let jam_dirs = self.jam_dirs.clone();
+                let jam_dirs = self.jam_paths.clone();
                 let toggle = self.buff_toggle.clone();
 
                 let _ = tokio::spawn(async move {
@@ -520,7 +515,7 @@ impl NockApp {
                     } else {
                         &jam_dirs[0]
                     };
-                    trace!("saving to {:?}", file);
+                    trace!("Saving arvo checkpoint to {:?}", file);
                     let checkpoint = jammed_state.checkpoint()?;
                     fs::write(file, checkpoint).await?;
                     toggle.store(!toggle.load(Ordering::Relaxed), Ordering::Relaxed);
