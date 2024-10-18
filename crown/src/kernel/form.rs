@@ -42,8 +42,6 @@ pub struct Kernel {
     /// Atomic flag for terminating the kernel.
     terminator: Arc<AtomicBool>,
 }
-///  If toggle is 'True', write to file A, else write to file B
-pub struct BufferToggle(pub AtomicBool);
 
 impl Kernel {
     /// Loads a kernel with a custom hot state.

@@ -440,7 +440,7 @@ pub struct NockApp {
     pub effect_broadcast: broadcast::Sender<NounSlab>,
     // Save semaphore
     pub save_sem: Arc<tokio::sync::Semaphore>,
-    // Alternating jam dirs
+    // Paths for alternating jam files
     pub jam_paths: [PathBuf; 2],
     // Jam buffer toggle
     pub buff_toggle: Arc<AtomicBool>,
@@ -504,16 +504,16 @@ impl NockApp {
                 slab.set_root(cell);
 
                 let event_num = self.kernel.serf.event_num;
-                let jam_dirs = self.jam_paths.clone();
+                let jam_paths = self.jam_paths.clone();
                 let toggle = self.buff_toggle.clone();
 
                 let _ = tokio::spawn(async move {
                     let jam = slab.jam();
                     let jammed_state = JammedState::new(event_num, jam);
                     let file = if toggle.load(Ordering::Relaxed) {
-                        &jam_dirs[1]
+                        &jam_paths[1]
                     } else {
-                        &jam_dirs[0]
+                        &jam_paths[0]
                     };
                     trace!("Saving arvo checkpoint to {:?}", file);
                     let checkpoint = jammed_state.checkpoint()?;
