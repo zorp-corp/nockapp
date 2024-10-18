@@ -1,8 +1,9 @@
-use crate::noun::slab::CueError;
-use bytes::buf::BufMut;
 use crate::kernel::form::Kernel;
-use crate::{Bytes, CrownError, Noun, NounExt, ToBytes};
-use crate::noun::FromAtom;
+use crate::utils::bytes::BytesWrapper;
+use crate::{Bytes, CrownError, Noun, NounExt};
+use crate::noun::{FromAtom, slab::CueError, slab::NounSlab};
+use bincode::{config, encode_to_vec, Decode, Encode};
+use bytes::buf::BufMut;
 use crc32fast::Hasher;
 use futures::future::Future;
 use std::path::PathBuf;
@@ -11,7 +12,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
-use sword::noun::{IndirectAtom, NounAllocator, D, T};
+use sword::noun::{IndirectAtom, D, T};
 use sword_macros::tas;
 use thiserror::Error;
 use tokio::io::{split, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
@@ -21,9 +22,8 @@ use tokio::fs;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
-use crate::noun::slab::NounSlab;
 pub type IODriverFuture = Pin<Box<dyn Future<Output = Result<(), NockAppError>> + Send>>;
 pub type IODriverFn = Box<dyn FnOnce(NockAppHandle) -> IODriverFuture>;
 pub type TaskJoinSet = JoinSet<Result<(), NockAppError>>;
@@ -32,21 +32,43 @@ pub type ActionReceiver = mpsc::Receiver<IOAction>;
 pub type EffectSender = broadcast::Sender<NounSlab>;
 pub type EffectReceiver = broadcast::Receiver<NounSlab>;
 
-pub struct SlabPersist {
-    pub checksum: u32,
+#[derive(Encode, Decode, PartialEq, Debug, Clone)]
+pub struct JammedState {
     pub event_num: u64,
-    pub jam_len: u64,
-    pub jam: Bytes,
+    pub jam_len: usize,
+    pub jam: BytesWrapper,
 }
 
-impl ToBytes for SlabPersist {
-    fn to_bytes(&self) -> Result<Vec<u8>, CrownError> {
-        let mut bytes = Vec::new();
-        bytes.extend(&self.checksum.to_le_bytes());
-        bytes.extend(&self.event_num.to_le_bytes());
-        bytes.extend(&self.jam_len.to_le_bytes());
-        bytes.extend(&self.jam);
-        Ok(bytes)
+#[derive(Encode, Decode, PartialEq, Debug)]
+pub struct SlabCheckpoint {
+    pub checksum: u32,
+    pub slab: JammedState,
+}
+
+impl JammedState {
+    pub fn new(event_num: u64, jam: Bytes) -> Self {
+        Self {
+            event_num,
+            jam_len: jam.len(),
+            jam: BytesWrapper(jam),
+        }
+    }
+
+    pub fn checkpoint(&self) -> Result<Vec<u8>, bincode::error::EncodeError> {
+        let checksum = self.calculate_checksum();
+        let checkpoint = SlabCheckpoint {
+            checksum,
+            slab: self.clone(),
+        };
+        encode_to_vec(checkpoint, config::standard())
+    }
+
+    pub fn calculate_checksum(&self) -> u32 {
+        let mut hasher = Hasher::new();
+        hasher.update(&self.event_num.to_le_bytes());
+        hasher.update(&self.jam_len.to_le_bytes());
+        hasher.update(&self.jam.0);
+        hasher.finalize()
     }
 }
 
@@ -418,9 +440,9 @@ pub struct NockApp {
     pub effect_broadcast: broadcast::Sender<NounSlab>,
     // Save semaphore
     pub save_sem: Arc<tokio::sync::Semaphore>,
-    // Jam dir
+    // Alternating jam dirs
     pub jam_dirs: [PathBuf; 2],
-    // Buff toggle
+    // Jam buffer toggle
     pub buff_toggle: Arc<AtomicBool>,
 }
 
@@ -480,7 +502,6 @@ impl NockApp {
                 }
             },
             save = self.save_sem.clone().acquire_owned() => {
-                eprintln!("saving");
                 // TODO: update with noun serialized cold state once ready
                 let cold_noun = D(0);
                 let mut slab = NounSlab::new();
@@ -493,27 +514,19 @@ impl NockApp {
 
                 let _ = tokio::spawn(async move {
                     let jam = slab.jam();
-                    let jam_len = jam.len() as u64;
-
-                    let mut hasher = Hasher::new();
-                    hasher.update(&event_num.to_le_bytes());
-                    hasher.update(&jam_len.to_le_bytes());
-                    hasher.update(&jam);
-
-                    let checksum = hasher.finalize();
-
-                    // TODO: better error handling
-                    let persist = SlabPersist{checksum, event_num, jam_len, jam}.to_bytes().unwrap();
-                    //  feature was stablized: https://github.com/rust-lang/rust/pull/127204
-                    let file = if toggle.fetch_not(Ordering::Relaxed) {
+                    let jammed_state = JammedState::new(event_num, jam);
+                    let file = if toggle.load(Ordering::Relaxed) {
                         &jam_dirs[1]
                     } else {
                         &jam_dirs[0]
                     };
+                    trace!("saving to {:?}", file);
+                    let checkpoint = jammed_state.checkpoint()?;
+                    fs::write(file, checkpoint).await?;
+                    toggle.store(!toggle.load(Ordering::Relaxed), Ordering::Relaxed);
+                    drop(save);
 
-                    // TODO: better error handling
-                    fs::write(file, persist).await.unwrap();
-                    drop(save)
+                    Ok::<(), NockAppError>(())
                 });
             },
             action_res = self.action_channel.recv() => {
@@ -563,6 +576,7 @@ impl NockApp {
         Ok(())
     }
 }
+
 
 pub struct NockAppHandle {
     io_sender: ActionSender,
@@ -665,6 +679,8 @@ pub enum NockAppError {
     UnexpectedResult,
     #[error("sword error: {0}")]
     SwordError(#[from] sword::noun::Error),
+    #[error("Save error: {0}")]
+    EncodeError(#[from] bincode::error::EncodeError),
 }
 
 pub fn make_driver<F, Fut>(f: F) -> IODriverFn
