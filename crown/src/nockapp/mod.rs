@@ -482,10 +482,10 @@ impl NockApp {
             res = tasks_fut => {
                 match res {
                     Some(Ok(Err(e))) => {
-                        eprintln!("{e:?}");
+                        eprintln!("{e:?}")
                     },
                     Some(Err(e)) => {
-                        eprintln!("{e:?}");
+                        eprintln!("{e:?}")
                     },
                     _ => {},
                 }
