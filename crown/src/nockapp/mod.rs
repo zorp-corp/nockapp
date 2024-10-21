@@ -6,6 +6,7 @@ use bincode::{config, encode_to_vec, Decode, Encode};
 use bytes::buf::BufMut;
 use crc32fast::Hasher;
 use futures::future::Future;
+use sword::jets::cold::Nounable;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::atomic::AtomicBool;
@@ -491,9 +492,8 @@ impl NockApp {
                 }
             },
             save = self.save_sem.clone().acquire_owned() => {
-                // TODO: update with noun serialized cold state once ready
-                let cold_noun = D(0);
                 let mut slab = NounSlab::new();
+                let cold_noun = self.kernel.serf.context.cold.into_noun(&mut slab);
                 let cell = T(&mut slab, &[self.kernel.serf.arvo, cold_noun]);
                 slab.set_root(cell);
 
