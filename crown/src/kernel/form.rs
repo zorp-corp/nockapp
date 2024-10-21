@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 use byteorder::{LittleEndian, WriteBytesExt};
-use tracing::trace;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -43,7 +42,6 @@ pub struct Kernel {
     /// Atomic flag for terminating the kernel.
     terminator: Arc<AtomicBool>,
 }
-
 
 impl Kernel {
     /// Loads a kernel with a custom hot state.
@@ -667,9 +665,9 @@ impl Serf {
     ///
     /// # Safety
     ///
-    /// This function is unsafe because it interacts with raw pointers and memory.
     pub unsafe fn save(&mut self) {
-        trace!("TODO serf: save: implement save with double jam buffer");
+
+
     }
 
     /// Returns a mutable reference to the Nock stack.

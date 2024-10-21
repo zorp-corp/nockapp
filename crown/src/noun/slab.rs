@@ -7,7 +7,7 @@ use intmap::IntMap;
 use std::alloc::Layout;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping;
-use sword::mem::NockStack;
+use sword::mem::{word_size_of, NockStack};
 use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
 use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
 use sword::persist::pma_contains;
@@ -77,6 +77,27 @@ impl NounAllocator for NounSlab {
         let new_cell_ptr = self.allocation_start as *mut CellMemory;
         self.allocation_start = self.allocation_start.add(CELL_MEM_WORD_SIZE);
         new_cell_ptr
+    }
+
+    unsafe fn alloc_struct<T>(&mut self, count: usize) -> *mut T {
+        let word_size = word_size_of::<T>();
+        if self.allocation_start.is_null()
+            || self.allocation_start.add(word_size * count) > self.allocation_stop
+        {
+            let next_idx = std::cmp::max(self.slabs.len(), min_idx_for_size(word_size * count));
+            self.slabs
+                .resize(next_idx + 1, (std::ptr::null_mut(), Layout::new::<u8>()));
+            let new_size = idx_to_size(next_idx);
+            let new_layout = Layout::array::<u64>(new_size).unwrap();
+            let new_slab = std::alloc::alloc(new_layout);
+            let new_slab_u64 = new_slab as *mut u64;
+            self.slabs[next_idx] = (new_slab, new_layout);
+            self.allocation_start = new_slab_u64;
+            self.allocation_stop = new_slab_u64.add(new_size);
+        }
+        let new_struct_ptr = self.allocation_start as *mut T;
+        self.allocation_start = self.allocation_start.add(word_size * count);
+        new_struct_ptr
     }
 }
 
@@ -784,7 +805,7 @@ mod tests {
     #[test]
     fn test_cyclic_structure() {
         let mut slab = NounSlab::new();
-        
+
         // Create a jammed representation of a cyclic structure
         // [0 *] where * refers back to the entire cell, i.e. 0b11110001
         let mut jammed = BitVec::<u8, Lsb0>::new();
@@ -795,9 +816,9 @@ mod tests {
         let jammed_bytes = Bytes::from(jammed.into_vec());
 
         let result = slab.cue_into(jammed_bytes);
-        
+
         assert!(result.is_err(), "Expected error due to cyclic structure, but cue_into completed successfully");
-        
+
         if let Err(e) = result {
             println!("Error type: {:?}", e);
             assert!(matches!(e, CueError::BadBackref), "Expected CueError::BadBackref, but got a different error");
@@ -807,7 +828,7 @@ mod tests {
     #[test]
     fn test_cue_simple_cell() {
         let mut slab = NounSlab::new();
-        
+
         // Create a jammed representation of [1 0] by hand
         let mut jammed = BitVec::<u8, Lsb0>::new();
         jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0, 0, 0, 1, 1, 0, 1]);  // 0b10110001
@@ -816,9 +837,9 @@ mod tests {
 
         let result = slab.cue_into(jammed_bytes);
         println!("result: {:?}", result);
-        
+
         assert!(result.is_ok(), "cue_into should succeed");
-        
+
         if let Ok(cued_noun) = result {
             let expected_noun = T(&mut slab, &[D(1), D(0)]);
             assert!(slab_equality(cued_noun, expected_noun), "Cued noun should equal [1 0]");
