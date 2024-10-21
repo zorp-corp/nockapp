@@ -1,17 +1,10 @@
 use crate::kernel::form::Kernel;
-use crate::utils::bytes::BytesWrapper;
-use crate::{default_jam_paths, Bytes, CrownError, Noun, NounExt};
+use crate::{Bytes, CrownError, Noun, NounExt};
 use crate::noun::{FromAtom, slab::CueError, slab::NounSlab};
-use bincode::{config, encode_to_vec, Decode, Encode};
 use bytes::buf::BufMut;
-use crc32fast::Hasher;
 use futures::future::Future;
-use sword::jets::cold::Nounable;
-use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 
 use sword::noun::{IndirectAtom, D, T};
 use sword_macros::tas;
@@ -20,7 +13,7 @@ use tokio::io::{split, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::{UnixListener, UnixStream};
 use tokio::select;
 use tokio::fs;
-use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
+use tokio::sync::{broadcast, mpsc, oneshot, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
 use tracing::{debug, error, info, trace};
@@ -32,46 +25,6 @@ pub type ActionSender = mpsc::Sender<IOAction>;
 pub type ActionReceiver = mpsc::Receiver<IOAction>;
 pub type EffectSender = broadcast::Sender<NounSlab>;
 pub type EffectReceiver = broadcast::Receiver<NounSlab>;
-
-#[derive(Encode, Decode, PartialEq, Debug, Clone)]
-pub struct JammedState {
-    pub event_num: u64,
-    pub jam_len: usize,
-    pub jam: BytesWrapper,
-}
-
-#[derive(Encode, Decode, PartialEq, Debug)]
-pub struct SlabCheckpoint {
-    pub checksum: u32,
-    pub slab: JammedState,
-}
-
-impl JammedState {
-    pub fn new(event_num: u64, jam: Bytes) -> Self {
-        Self {
-            event_num,
-            jam_len: jam.len(),
-            jam: BytesWrapper(jam),
-        }
-    }
-
-    pub fn checkpoint(&self) -> Result<Vec<u8>, bincode::error::EncodeError> {
-        let checksum = self.calculate_checksum();
-        let checkpoint = SlabCheckpoint {
-            checksum,
-            slab: self.clone(),
-        };
-        encode_to_vec(checkpoint, config::standard())
-    }
-
-    pub fn calculate_checksum(&self) -> u32 {
-        let mut hasher = Hasher::new();
-        hasher.update(&self.event_num.to_le_bytes());
-        hasher.update(&self.jam_len.to_le_bytes());
-        hasher.update(&self.jam.0);
-        hasher.finalize()
-    }
-}
 
 pub mod http_driver;
 
@@ -441,10 +394,6 @@ pub struct NockApp {
     pub effect_broadcast: broadcast::Sender<NounSlab>,
     // Save semaphore
     pub save_sem: Arc<tokio::sync::Semaphore>,
-    // Paths for alternating jam files
-    pub jam_paths: [PathBuf; 2],
-    // Jam buffer toggle
-    pub buff_toggle: Arc<AtomicBool>,
 }
 
 impl NockApp {
@@ -453,8 +402,6 @@ impl NockApp {
         let (effect_broadcast, _) = broadcast::channel(100);
         let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
         let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
-        let buff_toggle = Arc::new(AtomicBool::new(false));
-        let jam_paths = default_jam_paths("crown");
 
         Self {
             kernel,
@@ -463,10 +410,17 @@ impl NockApp {
             action_channel_sender,
             effect_broadcast,
             save_sem,
-            jam_paths,
-            buff_toggle
         }
     }
+
+    pub fn get_handle(&self) -> NockAppHandle {
+        NockAppHandle {
+            io_sender: self.action_channel_sender.clone(),
+            effect_sender: self.effect_broadcast.clone(),
+            effect_receiver: Mutex::new(self.effect_broadcast.subscribe()),
+        }
+    }
+
     pub async fn add_io_driver(&mut self, driver: IODriverFn) {
         let io_sender = self.action_channel_sender.clone();
         let effect_sender = self.effect_broadcast.clone();
@@ -479,6 +433,31 @@ impl NockApp {
         let _ = self.tasks.clone().lock_owned().await.spawn(fut);
     }
 
+    pub async fn save(&mut self, save: Result<OwnedSemaphorePermit, AcquireError>) -> Result<(), NockAppError> {
+        // TODO: second look
+        let checkpoint = self.kernel.serf.jam_checkpoint().encode()?;
+        let jam_paths = self.kernel.jam_paths.clone();
+
+        self.tasks.lock().await.spawn(async move {
+            let file = jam_paths.get_path_write();
+            if file.is_none() {
+                trace!("Event hasn't changed, skipping save");
+            }
+            else {
+                let file = file.unwrap();
+                trace!("Saving arvo checkpoint to {:?}", file);
+                fs::write(&file, checkpoint).await?;
+                trace!("Write to {:?} successful", file);
+            }
+            drop(save);
+            Ok::<(), NockAppError>(())
+        });
+
+        // Need to add this for ctrl-c to register
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        Ok(())
+    }
+
     pub async fn work(&mut self) -> Result<(), NockAppError> {
         let tasks_fut = async {
             let mut joinset = self.tasks.clone().lock_owned().await;
@@ -489,40 +468,16 @@ impl NockApp {
             res = tasks_fut => {
                 match res {
                     Some(Ok(Err(e))) => {
-                        error!("{e:?}")
+                        Err(e)
                     },
                     Some(Err(e)) => {
-                        error!("{e:?}")
+                        Err(e)?
                     },
-                    _ => {},
+                    _ => {Ok(())},
                 }
             },
-            save = self.save_sem.clone().acquire_owned() => {
-                let mut slab = NounSlab::new();
-                let cold_noun = self.kernel.serf.context.cold.into_noun(&mut slab);
-                let cell = T(&mut slab, &[self.kernel.serf.arvo, cold_noun]);
-                slab.set_root(cell);
-
-                let event_num = self.kernel.serf.event_num;
-                let jam_paths = self.jam_paths.clone();
-                let toggle = self.buff_toggle.clone();
-
-                let _ = tokio::spawn(async move {
-                    let jam = slab.jam();
-                    let jammed_state = JammedState::new(event_num, jam);
-                    let file = if toggle.load(Ordering::Relaxed) {
-                        &jam_paths[1]
-                    } else {
-                        &jam_paths[0]
-                    };
-                    trace!("Saving arvo checkpoint to {:?}", file);
-                    let checkpoint = jammed_state.checkpoint()?;
-                    fs::write(file, checkpoint).await?;
-                    toggle.store(!toggle.load(Ordering::Relaxed), Ordering::Relaxed);
-                    drop(save);
-
-                    Ok::<(), NockAppError>(())
-                });
+            permit = self.save_sem.clone().acquire_owned() => {
+                self.save(permit).await
             },
             action_res = self.action_channel.recv() => {
                 if let Some(action) = action_res {
@@ -566,12 +521,11 @@ impl NockApp {
                         },
                     }
                 }
+                Ok(())
             }
-        );
-        Ok(())
+        )
     }
 }
-
 
 pub struct NockAppHandle {
     io_sender: ActionSender,
@@ -676,6 +630,8 @@ pub enum NockAppError {
     SwordError(#[from] sword::noun::Error),
     #[error("Save error: {0}")]
     EncodeError(#[from] bincode::error::EncodeError),
+    #[error("Decode error: {0}")]
+    DecodeError(#[from] bincode::error::DecodeError),
 }
 
 pub fn make_driver<F, Fut>(f: F) -> IODriverFn
@@ -684,4 +640,244 @@ where
     Fut: Future<Output = Result<(), NockAppError>> + Send + 'static,
 {
     Box::new(move |handle| Box::pin(f(handle)))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::kernel::checkpoint::JamPaths;
+    use crate::noun::slab::slab_equality;
+
+    use super::*;
+    use std::fs;
+    use std::path::Path;
+    use sword::{jets::{cold::Nounable, util::slot}, serialization::{cue, jam}, unifying_equality::unifying_equality};
+    use tempfile::TempDir;
+    use tracing_test::traced_test;
+
+    fn setup_kernel(jam: &str) -> (Kernel, TempDir) {
+        let temp_dir = TempDir::new().expect("Failed to create temp directory");
+        let snap_dir = temp_dir.path().to_path_buf();
+        let jam_paths = JamPaths::new(&snap_dir);
+        let jam_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join("assets")
+            .join(jam);
+        let jam_bytes = fs::read(jam_path).expect(&format!("Failed to read {} file", jam));
+        let kernel = Kernel::load(snap_dir, jam_paths, &jam_bytes, false);
+        (kernel, temp_dir)
+    }
+
+    async fn save_nockapp(nockapp: &mut NockApp) {
+        let permit = nockapp.save_sem.clone().acquire_owned().await;
+        let _ = nockapp.save(permit).await.unwrap();
+        let _ = nockapp.tasks.lock().await.join_next().await.unwrap().unwrap();
+    }
+
+    // Test nockapp save
+    #[tokio::test]
+    #[traced_test]
+    async fn test_nockapp_save() {
+        let (kernel, _temp_dir) = setup_kernel("test.jam");
+        let mut nockapp = NockApp::new(kernel);
+        let mut arvo = nockapp.kernel.serf.arvo;
+        let jam_paths = nockapp.kernel.jam_paths.clone();
+        assert_eq!(nockapp.kernel.serf.event_num, 0);
+
+        // Save
+        save_nockapp(&mut nockapp).await;
+
+        // Permit should be dropped
+        assert_eq!(nockapp.save_sem.available_permits(), 1);
+
+        // A valid checkpoint should exist in one of the jam files
+        let checkpoint = jam_paths.get_checkpoint(nockapp.kernel.serf.stack());
+        assert!(checkpoint.is_some());
+        let mut checkpoint = checkpoint.unwrap();
+
+        // Checkpoint event number should be 0
+        assert!(checkpoint.event_num == 0);
+
+        // Checkpoint kernel should be equal to the saved kernel
+        unsafe{
+            assert!(unifying_equality(nockapp.kernel.serf.stack(), &mut checkpoint.arvo, &mut arvo));
+        }
+
+        // Checkpoint cold state should be equal to the saved cold state
+        let mut cold_chk_noun = checkpoint.cold.into_noun(nockapp.kernel.serf.stack());
+        let mut cold_noun = nockapp.kernel.serf.context.cold.into_noun(nockapp.kernel.serf.stack());
+        unsafe{
+            assert!(unifying_equality(nockapp.kernel.serf.stack(), &mut cold_chk_noun, &mut cold_noun));
+        };
+    }
+
+    // Test nockapp poke
+    #[tokio::test]
+    #[traced_test]
+    async fn test_nockapp_poke_save() {
+        let (kernel, _temp_dir) = setup_kernel("test.jam");
+        let mut nockapp = NockApp::new(kernel);
+        assert_eq!(nockapp.kernel.serf.event_num, 0);
+        let mut arvo_before_poke = nockapp.kernel.serf.arvo;
+
+        let poke = D(tas!(b"inc"));
+        let _ = nockapp.kernel.poke(poke).unwrap();
+
+        // Save
+        save_nockapp(&mut nockapp).await;
+
+        // Permit should be dropped
+        assert_eq!(nockapp.save_sem.available_permits(), 1);
+
+        // A valid checkpoint should exist in one of the jam files
+        let jam_paths = &nockapp.kernel.jam_paths;
+        let checkpoint = jam_paths.get_checkpoint(nockapp.kernel.serf.stack());
+        assert!(checkpoint.is_some());
+        let mut checkpoint = checkpoint.unwrap();
+
+        // Checkpoint event number should be 1
+        assert!(checkpoint.event_num == 1);
+        let mut arvo_after_poke = nockapp.kernel.serf.arvo;
+
+        unsafe{
+            let stack = nockapp.kernel.serf.stack();
+            // Checkpoint kernel should be equal to the saved kernel
+            assert!(unifying_equality(stack, &mut checkpoint.arvo, &mut arvo_after_poke));
+            // Checkpoint kernel should be different from the kernel before the poke
+            assert!(!unifying_equality(stack, &mut checkpoint.arvo, &mut arvo_before_poke));
+        }
+
+        // Checkpoint cold state should be equal to the saved cold state
+        let mut cold_chk_noun = checkpoint.cold.into_noun(nockapp.kernel.serf.stack());
+        let mut cold_noun = nockapp.kernel.serf.context.cold.into_noun(nockapp.kernel.serf.stack());
+        unsafe{
+            assert!(unifying_equality(nockapp.kernel.serf.stack(), &mut cold_chk_noun, &mut cold_noun));
+        };
+    }
+
+    #[tokio::test]
+    async fn test_nockapp_save_multiple() {
+        let (kernel, _temp_dir) = setup_kernel("test.jam");
+        let mut nockapp = NockApp::new(kernel);
+        assert_eq!(nockapp.kernel.serf.event_num, 0);
+        let jam_paths = nockapp.kernel.jam_paths.clone();
+
+        for i in 1..4 {
+            // Poke to increment the state
+            let poke = D(tas!(b"inc"));
+            let _ = nockapp.kernel.poke(poke).unwrap();
+
+            // Save
+            save_nockapp(&mut nockapp).await;
+
+            // Permit should be dropped
+            assert_eq!(nockapp.save_sem.available_permits(), 1);
+
+            // A valid checkpoint should exist in one of the jam files
+            let checkpoint = jam_paths.get_checkpoint(nockapp.kernel.serf.stack());
+            assert!(checkpoint.is_some());
+            let checkpoint = checkpoint.unwrap();
+
+            // Checkpoint event number should be i
+            assert!(checkpoint.event_num == i);
+
+            // Checkpointed state should have been incremented
+            let peek = T(nockapp.kernel.serf.stack(), &[D(tas!(b"state")), D(0)]);
+
+            // res should be [~ ~ val]
+            let res = nockapp.kernel.peek(peek).unwrap();
+            let val = slot(res, 7).unwrap();
+            unsafe{
+                assert!(val.raw_equals(D(i)));
+            }
+        }
+
+    }
+
+    // Tests for fallback to previous checkpoint if checkpoint is corrupt
+    // What to do if both checkpoints are corrupt?
+    #[tokio::test]
+    #[traced_test]
+    async fn test_nockapp_corrupt_check() {
+        let (kernel, _temp_dir) = setup_kernel("test.jam");
+        let mut nockapp = NockApp::new(kernel);
+        assert_eq!(nockapp.kernel.serf.event_num, 0);
+        let jam_paths = nockapp.kernel.jam_paths.clone();
+
+        // Save a valid checkpoint
+        save_nockapp(&mut nockapp).await;
+
+        // Permit should be dropped
+        assert_eq!(nockapp.save_sem.available_permits(), 1);
+
+        // Generate an invalid checkpoint by incrementing the event number
+        let mut invalid = nockapp.kernel.serf.jam_checkpoint();
+        invalid.event_num = invalid.event_num + 1;
+        assert!(!invalid.validate());
+
+        // The invalid checkpoint has a higher event number than the valid checkpoint
+        let valid = jam_paths.get_checkpoint(nockapp.kernel.serf.stack()).unwrap();
+        assert!(valid.event_num < invalid.event_num);
+
+        // Save the corrupted checkpoint
+        let jam_path = jam_paths.get_path_write();
+        let jam_bytes = invalid.encode().unwrap();
+        tokio::fs::write(jam_path.unwrap(), jam_bytes).await.unwrap();
+
+        // The loaded checkpoint will be the valid one
+        let chk = jam_paths.get_checkpoint(nockapp.kernel.serf.stack()).unwrap();
+        assert!(chk.event_num == valid.event_num);
+
+    }
+
+    #[test]
+    fn test_jam_equality_stack() {
+        let (mut kernel, _temp_dir) = setup_kernel("http.jam");
+        let mut arvo = kernel.serf.arvo.clone();
+        let stack = kernel.serf.stack();
+        let j = jam(stack, arvo);
+        let mut c = cue(stack, j).unwrap();
+        // new nockstack
+        unsafe{
+            assert!(unifying_equality(stack, &mut arvo, &mut c))
+        }
+    }
+
+    #[test]
+    fn test_jam_equality_slab() {
+        let (kernel, _temp_dir) = setup_kernel("http.jam");
+        let mut slab = NounSlab::new();
+        let arvo = kernel.serf.arvo.clone();
+        slab.copy_into(arvo);
+        let bytes = slab.jam();
+        let c = slab.cue_into(bytes).unwrap();
+        unsafe{
+            assert!(slab_equality(slab.root(), c))
+        }
+    }
+
+    #[test]
+    fn test_jam_equality_slab_stack() {
+        let (mut kernel, _temp_dir) = setup_kernel("http.jam");
+        let mut arvo = kernel.serf.arvo.clone();
+        let mut slab = NounSlab::new();
+        slab.copy_into(arvo);
+        // Use slab to jam
+        let bytes = slab.jam();
+        let stack = kernel.serf.stack();
+        // Use the stack to cue
+        let mut c = Noun::cue_bytes(stack, &bytes).unwrap();
+        unsafe{
+            // check for equality
+            assert!(unifying_equality(stack, &mut arvo, &mut c))
+        }
+    }
+
+    // To test your own kernel, place a `kernel.jam` file in the `assets` directory
+    // and uncomment the following test:
+    //
+    // #[test]
+    // fn test_custom_kernel() {
+    //     let (kernel, _temp_dir) = setup_kernel("kernel.jam");
+    //     // Add your custom assertions here to test the kernel's behavior
+    // }
 }

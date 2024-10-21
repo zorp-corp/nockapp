@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use byteorder::{LittleEndian, WriteBytesExt};
+use tracing::warn;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -22,6 +23,9 @@ use sword_macros::tas;
 use crate::utils::slogger::CrownSlogger;
 use crate::utils::{current_da, NOCK_STACK_SIZE};
 use crate::{AtomExt, CrownError, NounExt, Result, ToBytesExt};
+use crate::kernel::checkpoint::JamPaths;
+
+use super::checkpoint::JammedCheckpoint;
 
 const PEEK_AXIS: u64 = 22;
 const POKE_AXIS: u64 = 23;
@@ -37,8 +41,10 @@ enum BTMetaField {
 pub struct Kernel {
     /// The Serf managing the interface to the Sword.
     pub serf: Serf,
-    /// Directory path for storing snapshots.
-    snap_dir: PathBuf,
+    /// Directory path for storing pma snapshots.
+    pma_dir: PathBuf,
+    /// Jam persistence buffer paths.
+    pub jam_paths: JamPaths,
     /// Atomic flag for terminating the kernel.
     terminator: Arc<AtomicBool>,
 }
@@ -57,16 +63,18 @@ impl Kernel {
     ///
     /// A new `Kernel` instance.
     pub fn load_with_hot_state(
-        snap_dir: PathBuf,
+        pma_dir: PathBuf,
+        jam_paths: JamPaths,
         kernel: &[u8],
         hot_state: &[HotEntry],
         trace: bool,
     ) -> Self {
-        let serf = Serf::load(snap_dir.clone(), kernel, hot_state, trace);
+        let serf = Serf::load(pma_dir.clone(), &jam_paths, kernel, hot_state, trace);
         let terminator = Arc::new(AtomicBool::new(false));
         Self {
             serf,
-            snap_dir,
+            pma_dir,
+            jam_paths,
             terminator,
         }
     }
@@ -82,33 +90,13 @@ impl Kernel {
     /// # Returns
     ///
     /// A new `Kernel` instance.
-    pub fn load(snap_dir: PathBuf, kernel: &[u8], trace: bool) -> Self {
-        let serf = Serf::load(snap_dir.clone(), kernel, &[], trace);
+    pub fn load(pma_dir: PathBuf, jam_paths: JamPaths, kernel: &[u8], trace: bool) -> Self {
+        let serf = Serf::load(pma_dir.clone(), &jam_paths, kernel, &[], trace);
         let terminator = Arc::new(AtomicBool::new(false));
         Self {
             serf,
-            snap_dir,
-            terminator,
-        }
-    }
-
-    /// Loads a kernel from a form (compiled Nock formula).
-    ///
-    /// # Arguments
-    ///
-    /// * `snap_dir` - Directory for storing snapshots.
-    /// * `form` - Byte slice containing the compiled Nock formula.
-    /// * `trace` - Whether to enable tracing.
-    ///
-    /// # Returns
-    ///
-    /// A new `Kernel` instance.
-    pub fn load_form(snap_dir: PathBuf, form: &[u8], trace: bool) -> Self {
-        let serf = Serf::load_form(snap_dir.clone(), form, &[], trace);
-        let terminator = Arc::new(AtomicBool::new(false));
-        Self {
-            serf,
-            snap_dir,
+            pma_dir,
+            jam_paths,
             terminator,
         }
     }
@@ -435,14 +423,24 @@ impl Serf {
     ///
     /// A new `Serf` instance.
     fn new(
+        jam_paths: &JamPaths,
         kernel_bytes: &[u8],
         constant_hot_state: &[HotEntry],
         trace_info: Option<TraceInfo>,
     ) -> Self {
         let hot_state = [URBIT_HOT_STATE, constant_hot_state].concat();
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
+
+        let checkpoint = jam_paths.get_checkpoint(&mut stack);
+        if checkpoint.is_none() {
+            warn!("No valid checkpoint found, starting from scratch");
+        }
+
         let cache = Hamt::<Noun>::new(&mut stack);
-        let (mut cold, event_num) = (Cold::new(&mut stack), 0);
+        let (mut cold, event_num) = checkpoint.as_ref().map_or_else(
+                || {(Cold::new(&mut stack), 0)},
+                |snapshot| {(snapshot.cold, snapshot.event_num)}
+        );
         let hot = Hot::init(&mut stack, &hot_state);
         let warm = Warm::init(&mut stack, &mut cold, &hot);
         let slogger = std::boxed::Box::pin(CrownSlogger {});
@@ -458,7 +456,8 @@ impl Serf {
             trace_info,
         };
 
-        let arvo = {
+        let arvo = checkpoint.as_ref().map_or_else(
+            || {
             let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes).expect("invalid kernel jam");
             let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
             let arvo = if context.trace_info.is_some() {
@@ -470,70 +469,8 @@ impl Serf {
                 interpret(&mut context, kernel_trap, fol).unwrap() // TODO better error
             };
             arvo
-        };
-
-        let mut serf = Self {
-            arvo,
-            context,
-            event_num,
-        };
-
-        unsafe {
-            serf.event_update(event_num, arvo);
-            serf.preserve_event_update_leftovers();
-        }
-        serf
-    }
-
-    /// Creates a new Serf instance from a form (compiled Nock formula).
-    ///
-    /// # Arguments
-    ///
-    /// * `kernel` - Optional pre-loaded kernel noun.
-    /// * `event_num` - Starting event number.
-    /// * `form_bytes` - Byte slice containing the compiled Nock formula.
-    /// * `constant_hot_state` - Custom hot state entries.
-    /// * `trace_info` - Optional trace information.
-    ///
-    /// # Returns
-    ///
-    /// A new `Serf` instance.
-    fn new_form(
-        form_bytes: &[u8],
-        constant_hot_state: &[HotEntry],
-        trace_info: Option<TraceInfo>,
-    ) -> Self {
-        let hot_state = [URBIT_HOT_STATE, constant_hot_state].concat();
-        let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
-        let cache = Hamt::<Noun>::new(&mut stack);
-        let (mut cold, event_num) = (Cold::new(&mut stack), 0);
-        let hot = Hot::init(&mut stack, &hot_state);
-        let warm = Warm::init(&mut stack, &mut cold, &hot);
-        let slogger = std::boxed::Box::pin(CrownSlogger {});
-
-        let mut context = interpreter::Context {
-            stack,
-            slogger,
-            cold,
-            warm,
-            hot,
-            cache,
-            scry_stack: D(0),
-            trace_info,
-        };
-
-        let arvo = {
-            let kernel_form = Noun::cue_bytes_slice(&mut context.stack, form_bytes).expect("Invalid kernel jam");
-            let arvo = if context.trace_info.is_some() {
-                let start = Instant::now();
-                let arvo = interpret(&mut context, D(0), kernel_form).unwrap(); // TODO better error
-                write_serf_trace_safe(&mut context, "boot", start);
-                arvo
-            } else {
-                interpret(&mut context, D(0), kernel_form).unwrap() // TODO better error
-            };
-            arvo
-        };
+        },
+        |snapshot| snapshot.arvo);
 
         let mut serf = Self {
             arvo,
@@ -561,16 +498,19 @@ impl Serf {
     ///
     /// A new `Serf` instance.
     pub fn load(
-        snap_dir: PathBuf,
+        pma_dir: PathBuf,
+        jam_paths: &JamPaths,
         kernel_bytes: &[u8],
         constant_hot_state: &[HotEntry],
         trace: bool,
     ) -> Self {
-        let mut snap_path = snap_dir.clone();
-        snap_path.push(".crown");
-        snap_path.push("chk");
-        std::fs::create_dir_all(&snap_path).unwrap();
-        pma_open(snap_path).expect("serf: pma open failed");
+        let mut pma_path = pma_dir.clone();
+        pma_path.push(".crown");
+        pma_path.push("chk");
+        std::fs::create_dir_all(&pma_path).unwrap();
+        pma_open(pma_path).expect("serf: pma open failed");
+
+        std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
 
         let trace_info = if trace {
             let file = File::create("trace.json").expect("Cannot create trace file trace.json");
@@ -585,47 +525,14 @@ impl Serf {
             None
         };
 
-        Self::new(kernel_bytes, constant_hot_state, trace_info)
+        Self::new(jam_paths, kernel_bytes, constant_hot_state, trace_info)
     }
 
-    /// Loads a Serf instance from a form (compiled Nock formula).
-    ///
-    /// # Arguments
-    ///
-    /// * `snap_dir` - Directory for storing snapshots.
-    /// * `form_bytes` - Byte slice containing the compiled Nock formula.
-    /// * `constant_hot_state` - Custom hot state entries.
-    /// * `trace` - Whether to enable tracing.
-    ///
-    /// # Returns
-    ///
-    /// A new `Serf` instance.
-    pub fn load_form(
-        snap_dir: PathBuf,
-        form_bytes: &[u8],
-        constant_hot_state: &[HotEntry],
-        trace: bool,
-    ) -> Self {
-        let mut snap_path = snap_dir.clone();
-        snap_path.push(".crown");
-        snap_path.push("chk");
-        std::fs::create_dir_all(&snap_path).unwrap();
-        pma_open(snap_path).expect("serf: pma open failed");
-
-        let trace_info = if trace {
-            let file = File::create("trace.json").expect("Cannot create trace file trace.json");
-            let pid = std::process::id();
-            let process_start = std::time::Instant::now();
-            Some(TraceInfo {
-                file,
-                pid,
-                process_start,
-            })
-        } else {
-            None
-        };
-
-        Self::new_form(form_bytes, constant_hot_state, trace_info)
+    pub fn jam_checkpoint(&mut self) -> JammedCheckpoint {
+        let arvo = self.arvo.clone();
+        let cold = self.context.cold;
+        let event_num = self.event_num;
+        JammedCheckpoint::new(&mut self.stack(), event_num, &cold, &arvo)
     }
 
     /// Updates the Serf's state after an event.
@@ -726,12 +633,13 @@ mod tests {
     fn setup_kernel(jam: &str) -> (Kernel, TempDir) {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let snap_dir = temp_dir.path().to_path_buf();
+        let jam_paths = JamPaths::new(&snap_dir);
         let jam_path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join("assets")
             .join(jam);
         let jam_bytes = fs::read(jam_path).expect(&format!("Failed to read {} file", jam));
-        let kernel = Kernel::load(snap_dir, &jam_bytes, false);
+        let kernel = Kernel::load(snap_dir, jam_paths, &jam_bytes, false);
         (kernel, temp_dir)
     }
 

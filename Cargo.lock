@@ -127,19 +127,6 @@ checksum = "86fdf8605db99b54d3cd748a44c6d04df638eb5dafb219b135d0149bd0db01f6"
 [[package]]
 name = "assert_no_alloc"
 version = "1.1.2"
-<<<<<<< HEAD
-<<<<<<< HEAD
-source = "git+https://github.com/zorp-corp/sword.git?rev=9602e85b35641b4fc9f84097986bb6e670bd4ffb#9602e85b35641b4fc9f84097986bb6e670bd4ffb"
-||||||| parent of 03cba03 (The New [Cold] Nounable Plan)
-source = "git+https://github.com/zorp-corp/sword.git?rev=92f4f40cf7af714538b8766de6f7792eaa103cbd#92f4f40cf7af714538b8766de6f7792eaa103cbd"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
->>>>>>> 03cba03 (The New [Cold] Nounable Plan)
-||||||| parent of 24ca050 (bump sword version)
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=adfd39734487ad696211ec0ef0233802d93a0927#adfd39734487ad696211ec0ef0233802d93a0927"
->>>>>>> 24ca050 (bump sword version)
 
 [[package]]
 name = "async-trait"
@@ -632,6 +619,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "tracing-test",
  "yaque",
 ]
 
@@ -1062,19 +1050,6 @@ dependencies = [
 [[package]]
 name = "ibig"
 version = "0.3.6"
-<<<<<<< HEAD
-<<<<<<< HEAD
-source = "git+https://github.com/zorp-corp/sword.git?rev=9602e85b35641b4fc9f84097986bb6e670bd4ffb#9602e85b35641b4fc9f84097986bb6e670bd4ffb"
-||||||| parent of 03cba03 (The New [Cold] Nounable Plan)
-source = "git+https://github.com/zorp-corp/sword.git?rev=92f4f40cf7af714538b8766de6f7792eaa103cbd#92f4f40cf7af714538b8766de6f7792eaa103cbd"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
->>>>>>> 03cba03 (The New [Cold] Nounable Plan)
-||||||| parent of 24ca050 (bump sword version)
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=adfd39734487ad696211ec0ef0233802d93a0927#adfd39734487ad696211ec0ef0233802d93a0927"
->>>>>>> 24ca050 (bump sword version)
 dependencies = [
  "cfg-if",
  "num-traits",
@@ -1328,19 +1303,6 @@ dependencies = [
 [[package]]
 name = "murmur3"
 version = "0.5.2"
-<<<<<<< HEAD
-<<<<<<< HEAD
-source = "git+https://github.com/zorp-corp/sword.git?rev=9602e85b35641b4fc9f84097986bb6e670bd4ffb#9602e85b35641b4fc9f84097986bb6e670bd4ffb"
-||||||| parent of 03cba03 (The New [Cold] Nounable Plan)
-source = "git+https://github.com/zorp-corp/sword.git?rev=92f4f40cf7af714538b8766de6f7792eaa103cbd#92f4f40cf7af714538b8766de6f7792eaa103cbd"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
->>>>>>> 03cba03 (The New [Cold] Nounable Plan)
-||||||| parent of 24ca050 (bump sword version)
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=adfd39734487ad696211ec0ef0233802d93a0927#adfd39734487ad696211ec0ef0233802d93a0927"
->>>>>>> 24ca050 (bump sword version)
 
 [[package]]
 name = "nom"
@@ -1857,19 +1819,6 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sword"
 version = "0.1.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
-source = "git+https://github.com/zorp-corp/sword.git?rev=9602e85b35641b4fc9f84097986bb6e670bd4ffb#9602e85b35641b4fc9f84097986bb6e670bd4ffb"
-||||||| parent of 03cba03 (The New [Cold] Nounable Plan)
-source = "git+https://github.com/zorp-corp/sword.git?rev=92f4f40cf7af714538b8766de6f7792eaa103cbd#92f4f40cf7af714538b8766de6f7792eaa103cbd"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
->>>>>>> 03cba03 (The New [Cold] Nounable Plan)
-||||||| parent of 24ca050 (bump sword version)
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=adfd39734487ad696211ec0ef0233802d93a0927#adfd39734487ad696211ec0ef0233802d93a0927"
->>>>>>> 24ca050 (bump sword version)
 dependencies = [
  "assert_no_alloc",
  "autotools",
@@ -1899,19 +1848,6 @@ dependencies = [
 [[package]]
 name = "sword_crypto"
 version = "0.1.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
-source = "git+https://github.com/zorp-corp/sword.git?rev=9602e85b35641b4fc9f84097986bb6e670bd4ffb#9602e85b35641b4fc9f84097986bb6e670bd4ffb"
-||||||| parent of 03cba03 (The New [Cold] Nounable Plan)
-source = "git+https://github.com/zorp-corp/sword.git?rev=92f4f40cf7af714538b8766de6f7792eaa103cbd#92f4f40cf7af714538b8766de6f7792eaa103cbd"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
->>>>>>> 03cba03 (The New [Cold] Nounable Plan)
-||||||| parent of 24ca050 (bump sword version)
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=adfd39734487ad696211ec0ef0233802d93a0927#adfd39734487ad696211ec0ef0233802d93a0927"
->>>>>>> 24ca050 (bump sword version)
 dependencies = [
  "aes",
  "aes-siv",
@@ -1927,19 +1863,6 @@ dependencies = [
 [[package]]
 name = "sword_guard"
 version = "0.1.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
-source = "git+https://github.com/zorp-corp/sword.git?rev=9602e85b35641b4fc9f84097986bb6e670bd4ffb#9602e85b35641b4fc9f84097986bb6e670bd4ffb"
-||||||| parent of 03cba03 (The New [Cold] Nounable Plan)
-source = "git+https://github.com/zorp-corp/sword.git?rev=92f4f40cf7af714538b8766de6f7792eaa103cbd#92f4f40cf7af714538b8766de6f7792eaa103cbd"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
->>>>>>> 03cba03 (The New [Cold] Nounable Plan)
-||||||| parent of 24ca050 (bump sword version)
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=adfd39734487ad696211ec0ef0233802d93a0927#adfd39734487ad696211ec0ef0233802d93a0927"
->>>>>>> 24ca050 (bump sword version)
 dependencies = [
  "bindgen",
  "cc",
@@ -1948,19 +1871,6 @@ dependencies = [
 [[package]]
 name = "sword_macros"
 version = "0.1.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
-source = "git+https://github.com/zorp-corp/sword.git?rev=9602e85b35641b4fc9f84097986bb6e670bd4ffb#9602e85b35641b4fc9f84097986bb6e670bd4ffb"
-||||||| parent of 03cba03 (The New [Cold] Nounable Plan)
-source = "git+https://github.com/zorp-corp/sword.git?rev=92f4f40cf7af714538b8766de6f7792eaa103cbd#92f4f40cf7af714538b8766de6f7792eaa103cbd"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
->>>>>>> 03cba03 (The New [Cold] Nounable Plan)
-||||||| parent of 24ca050 (bump sword version)
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=adfd39734487ad696211ec0ef0233802d93a0927#adfd39734487ad696211ec0ef0233802d93a0927"
->>>>>>> 24ca050 (bump sword version)
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -1969,19 +1879,6 @@ dependencies = [
 [[package]]
 name = "sword_pma"
 version = "0.1.0"
-<<<<<<< HEAD
-<<<<<<< HEAD
-source = "git+https://github.com/zorp-corp/sword.git?rev=9602e85b35641b4fc9f84097986bb6e670bd4ffb#9602e85b35641b4fc9f84097986bb6e670bd4ffb"
-||||||| parent of 03cba03 (The New [Cold] Nounable Plan)
-source = "git+https://github.com/zorp-corp/sword.git?rev=92f4f40cf7af714538b8766de6f7792eaa103cbd#92f4f40cf7af714538b8766de6f7792eaa103cbd"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
->>>>>>> 03cba03 (The New [Cold] Nounable Plan)
-||||||| parent of 24ca050 (bump sword version)
-source = "git+https://github.com/zorp-corp/sword.git?rev=f740d85336ad091ae92b58250fb069273ee0915a#f740d85336ad091ae92b58250fb069273ee0915a"
-=======
-source = "git+https://github.com/zorp-corp/sword.git?rev=adfd39734487ad696211ec0ef0233802d93a0927#adfd39734487ad696211ec0ef0233802d93a0927"
->>>>>>> 24ca050 (bump sword version)
 dependencies = [
  "bindgen",
  "cc",
@@ -2216,6 +2113,27 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "tracing-test"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "557b891436fe0d5e0e363427fc7f217abf9ccd510d5136549847bdcbcd011d68"
+dependencies = [
+ "tracing-core",
+ "tracing-subscriber",
+ "tracing-test-macro",
+]
+
+[[package]]
+name = "tracing-test-macro"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04659ddb06c87d233c566112c1c9c5b9e98256d9af50ec3bc9c8327f873a7568"
+dependencies = [
+ "quote",
+ "syn 2.0.79",
 ]
 
 [[package]]
