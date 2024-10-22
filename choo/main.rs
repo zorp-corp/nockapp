@@ -31,7 +31,7 @@ struct ChooCli {
     arbitrary: bool,
 }
 
-fn is_hoon_or_dir(entry: &DirEntry) -> bool {
+fn is_valid_file_or_dir(entry: &DirEntry) -> bool {
     let is_dir = entry.metadata().unwrap().is_dir();
 
     let is_hoon =
@@ -39,7 +39,12 @@ fn is_hoon_or_dir(entry: &DirEntry) -> bool {
             .map(|s| s.ends_with(".hoon"))
             .unwrap_or(false);
 
-    is_dir || is_hoon
+    let is_jock =
+        entry.file_name().to_str()
+            .map(|s| s.ends_with(".jock"))
+            .unwrap_or(false);
+
+    is_dir || is_hoon || is_jock
 }
 
 #[tokio::main]
@@ -61,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let walker = WalkDir::new(cli.directory.clone()).follow_links(true).into_iter();
     for entry_result in walker
-        .filter_entry(|e| is_hoon_or_dir(e)) {
+        .filter_entry(|e| is_valid_file_or_dir(e)) {
         let entry = entry_result?;
         let is_file = entry.metadata().unwrap().is_file();
         if is_file {
