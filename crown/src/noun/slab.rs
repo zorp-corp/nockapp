@@ -80,7 +80,9 @@ impl NounAllocator for NounSlab {
     }
 
     unsafe fn alloc_struct<T>(&mut self, count: usize) -> *mut T {
-        let word_size = (std::mem::size_of::<T>() + 7) >> 3;
+        let layout = Layout::array::<T>(count).expect("Bad layout in alloc_struct");
+        let word_size = (layout.size() + 7) >> 3;
+        assert!(layout.align() <= std::mem::size_of::<u64>()); // 
         if self.allocation_start.is_null()
             || self.allocation_start.add(word_size) > self.allocation_stop
         {
