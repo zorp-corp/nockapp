@@ -227,7 +227,7 @@
   $:  sur=(list taut)  ::  /-
       lib=(list taut)  ::  /+
       raw=(list [face=term =path])
-      bar=(list [face=term mark-unsupported=@tas =path])
+      bar=(list [face=term mark=@tas =path])
       =hoon
   ==
 ::
@@ -247,13 +247,14 @@
   ::
       bar
     %+  turn  bar.pile
-    |=  [face=term mark-unsupported=@tas pax=path]
-    ?:  =(mark-unsupported %hoon)
+    |=  [face=term mark=@tas pax=path]
+    ?:  =(mark %hoon)
       =/  pax-snip  (snip pax)
       =/  pax-rear  (rear pax)
       [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' %hoon]))]
-    ~&  unsupported-mark+[mark-unsupported pax]
-    !!
+    =/  pax-snip  (snip pax)
+    =/  pax-rear  (rear pax)
+    [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' mark]))]
   ==
 --
 ::
@@ -266,16 +267,23 @@
   ^-  (trap vase)
   (swet *(trap vase) (ream hoon-txt))
 ::
++$  octs  [p=@ud q=@]
+::
++$  graph-leaf
+  $%  [%hoon =hoon]
+      [%octs =octs]
+  ==
+::
 ++  import-graph
   $+  import-graph
-  $~  [*path ~ ~ ~ ~ *(unit @tas) *hoon]  ::  not needed in the dojo but here for some reason
+  $~  [*path ~ ~ ~ ~ *(unit @tas) [%hoon *hoon]]  ::  not needed in the dojo but here for some reason
   $:  =path
       sur=(list import-graph)
       lib=(list import-graph)
       raw=(list import-graph)
       bar=(list import-graph)
       face=(unit @tas)  ::  the face that this node of the import graph has
-      =hoon
+      leaf=graph-leaf
   ==
 ::
 ++  create
@@ -311,6 +319,19 @@
   ?^  existing=(~(get by cache) suf)
     ~&  >  "reusing cached graph for {<suf>}"
     [u.existing(face face) cache]  ::  make sure to use the provided face
+  ?.  (is-hoon suf)
+    =/  file  (~(got by dir) suf)
+    =/  graph=import-graph
+      :*  suf
+          ~  ~
+          ~  ~
+          face
+          [%octs [(met 3 file) file]]
+      ==
+    =/  no-face=_graph
+      graph(face `%no-cache-entry-face)
+    :-  graph
+    (~(put by cache) suf no-face)
   =/  rile  (resolve-pile (parse-pile suf (get-hoon suf dir)) dir)
   =^  new-sur=(list import-graph)  cache
     %^  spin  sur.rile  cache
@@ -324,14 +345,18 @@
     %^  spin  raw.rile  cache
     |=  [raut cache=(map path import-graph)]
     (make-import-graph face pax +(depth) cache dir)
+  =^  new-bar=(list import-graph)  cache
+    %^  spin  bar.rile  cache
+    |=  [raut cache=(map path import-graph)]
+    (make-import-graph face pax +(depth) cache dir)
   =/  graph=import-graph
     :*  suf
         sur=new-sur
         lib=new-lib
         raw=new-raw
-        bar=~
+        bar=new-bar
         face
-        hoon.rile
+        [%hoon hoon.rile]
     ==
   =/  no-face=_graph
     graph(face `%no-cache-entry-face)
@@ -353,23 +378,28 @@
   =^  surs  cache   (spin sur.graph cache compile-graph)
   =^  libs  cache   (spin lib.graph cache compile-graph)
   =^  raws  cache   (spin raw.graph cache compile-graph)
+  =^  bars  cache   (spin bar.graph cache compile-graph)
   =/  sur-all=(trap vase)  (roll p.surs slew)
   =/  lib-all=(trap vase)  (roll p.libs slew)
   =/  raw-all=(trap vase)  (roll p.raws slew)
+  =/  bar-all=(trap vase)  (roll p.bars slew)
   =/  deps=(trap vase)
     ::  we must always make hoon.hoon available to each `hoon.graph`
     ::  in case it's not available on account of being hidden behind a face in other dependencies
     ::
     ::  TODO make sure there are no bunted vases in here
     =-  (roll - |=([v=(trap vase) a=(trap vase)] (slew a v)))
-    %+  murn  ~[lib-all sur-all raw-all honc]
+    %+  murn  ~[lib-all sur-all raw-all bar-all honc]
     |=  dep=(trap vase)
     ?:  =(*(trap vase) dep)  ~
     `dep
   ::  compile the current `hoon.graph` against its compiled dependencies
   ::
   =/  compiled=(trap vase)
-    (swet deps hoon.graph)
+    ?:  ?=(%hoon -.leaf.graph)
+      (swet deps hoon.leaf.graph)
+    =>  octs=!>(octs.leaf.graph)
+    |.  octs
   ~&  compiled+path.graph
   ::  cache the vase before adding the face so that alias can be handled jit when pulling from cache
   ::
@@ -421,6 +451,12 @@
   =>  [gun=gun tap=tap]
   |.  ~+
   [p.gun .*(q:$:tap q.gun)]
+::
+++  is-hoon
+  |=  pax=path
+  ^-  ?
+  =/  end  (rear pax)
+  !=(~ (find ".hoon" (trip end)))
 ::
 ++  get-hoon
   ::  produces the hoon source at the given path
