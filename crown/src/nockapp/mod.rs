@@ -16,7 +16,7 @@ use tokio::select;
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
-use tracing::{debug, error};
+use tracing::{debug, error, info};
 
 use crate::noun::slab::NounSlab;
 pub type IODriverFuture = Pin<Box<dyn Future<Output = Result<(), NockAppError>> + Send>>;
@@ -48,7 +48,7 @@ pub fn file() -> IODriverFn {
             let slab = match effect_res {
                 Ok(slab) => slab,
                 Err(e) => {
-                    eprintln!("Error receiving effect: {:?}", e);
+                    error!("Error receiving effect: {:?}", e);
                     continue;
                 }
             };
@@ -236,12 +236,18 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                 tas!(b"peek") => {
                                     let path = directive_cell.tail();
                                     slab.set_root(path);
-                                    if let Some(mut bind_slab) = handle.peek(slab).await? {
-                                        let peek_res = unsafe { bind_slab.root() };
-                                        let bind_noun = T(&mut bind_slab, &[D(pid), D(tas!(b"bind")), peek_res]);
-                                        bind_slab.set_root(bind_noun);
-                                        if !write_message(&mut stream_write, bind_slab).await? {
-                                            break 'driver;
+                                    let peek_res = handle.peek(slab).await?;
+                                    match peek_res {
+                                        Some(mut bind_slab) => {
+                                            let peek_res = unsafe { bind_slab.root() };
+                                            let bind_noun = T(&mut bind_slab, &[D(pid), D(tas!(b"bind")), peek_res]);
+                                            bind_slab.set_root(bind_noun);
+                                            if !write_message(&mut stream_write, bind_slab).await? {
+                                                break 'driver;
+                                            }
+                                        },
+                                        None => {
+                                            error!("npc: peek failed!");
                                         }
                                     }
                                 },
@@ -265,7 +271,7 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                     }
                                 },
                                 _ => {
-                                    println!("unexpected message: {:?}", directive_tag);
+                                    debug!("unexpected message: {:?}", directive_tag);
                                 },
                             }
                         },
@@ -273,10 +279,10 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                             break 'driver;
                         },
                         Some(Err(e)) => {
-                            eprintln!("{e:?}");
+                            error!("{e:?}");
                         },
                         Some(Ok(Err(e))) => {
-                            eprintln!("{e:?}");
+                            error!("{e:?}");
                         },
                         None => {
                             read_message_join_set.spawn(read_message(stream_read_arc.clone()));
@@ -284,7 +290,7 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                     }
                 },
                 effect_res = handle.next_effect() => {
-                    println!("effect_res: {:?}", effect_res);
+                    debug!("effect_res: {:?}", effect_res);
                     let mut slab = effect_res?; // Closed error should error driver
                     let Ok(effect_cell) = unsafe { slab.root() }.as_cell() else {
                         continue;
@@ -423,24 +429,24 @@ impl NockApp {
             res = tasks_fut => {
                 match res {
                     Some(Ok(Err(e))) => {
-                        eprintln!("{e:?}")
+                        error!("{e:?}")
                     },
                     Some(Err(e)) => {
-                        eprintln!("{e:?}")
+                        error!("{e:?}")
                     },
                     _ => {},
                 }
             },
             action_res = self.action_channel.recv() => {
                 if let Some(action) = action_res {
-                    println!("action: {:?}", action);
+                    info!("action: {:?}", action);
                     match action {
                         IOAction::Poke { poke, ack_channel } => {
-                            println!("poke slab: {:?}", poke);
+                            info!("poke slab: {:?}", poke);
                             let poke_noun = poke.copy_to_stack(self.kernel.serf.stack());
-                            println!("poke_noun: {:?}", poke_noun);
+                            info!("poke_noun: {:?}", poke_noun);
                             let effects_res = self.kernel.poke(poke_noun);
-                            println!("effects_res: {:?}", effects_res);
+                            info!("effects_res: {:?}", effects_res);
                             match effects_res {
                                 Ok(effects) => {
                                     let _ = ack_channel.send(PokeResult::Ack);
@@ -457,8 +463,9 @@ impl NockApp {
                         },
                         IOAction::Peek { path, result_channel } => {
                             let path_noun = path.copy_to_stack(self.kernel.serf.stack());
-                            println!("path_noun: {:?}", path_noun);
+                            info!("path_noun: {:?}", path_noun);
                             let peek_res = self.kernel.peek(path_noun);
+
                             match peek_res {
                                 Ok(res_noun) => {
                                     let mut res_slab = NounSlab::new();
