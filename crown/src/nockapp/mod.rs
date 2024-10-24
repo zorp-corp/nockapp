@@ -442,11 +442,11 @@ impl NockApp {
                     info!("action: {:?}", action);
                     match action {
                         IOAction::Poke { poke, ack_channel } => {
-                            info!("poke slab: {:?}", poke);
+                            debug!("poke slab: {:?}", poke);
                             let poke_noun = poke.copy_to_stack(self.kernel.serf.stack());
-                            info!("poke_noun: {:?}", poke_noun);
+                            debug!("poke_noun: {:?}", poke_noun);
                             let effects_res = self.kernel.poke(poke_noun);
-                            info!("effects_res: {:?}", effects_res);
+                            debug!("effects_res: {:?}", effects_res);
                             match effects_res {
                                 Ok(effects) => {
                                     let _ = ack_channel.send(PokeResult::Ack);
