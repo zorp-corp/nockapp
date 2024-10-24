@@ -78,6 +78,29 @@ impl NounAllocator for NounSlab {
         self.allocation_start = self.allocation_start.add(CELL_MEM_WORD_SIZE);
         new_cell_ptr
     }
+
+    unsafe fn alloc_struct<T>(&mut self, count: usize) -> *mut T {
+        let layout = Layout::array::<T>(count).expect("Bad layout in alloc_struct");
+        let word_size = (layout.size() + 7) >> 3;
+        assert!(layout.align() <= std::mem::size_of::<u64>()); // 
+        if self.allocation_start.is_null()
+            || self.allocation_start.add(word_size) > self.allocation_stop
+        {
+            let next_idx = std::cmp::max(self.slabs.len(), min_idx_for_size(word_size));
+            self.slabs
+                .resize(next_idx + 1, (std::ptr::null_mut(), Layout::new::<u8>()));
+            let new_size = idx_to_size(next_idx);
+            let new_layout = Layout::array::<u64>(new_size).unwrap();
+            let new_slab = std::alloc::alloc(new_layout);
+            let new_slab_u64 = new_slab as *mut u64;
+            self.slabs[next_idx] = (new_slab, new_layout);
+            self.allocation_start = new_slab_u64;
+            self.allocation_stop = new_slab_u64.add(new_size);
+        }
+        let new_struct_ptr = self.allocation_start as *mut T;
+        self.allocation_start = self.allocation_start.add(word_size);
+        new_struct_ptr
+    }
 }
 
 /// # Safety: no noun in this slab references a noun outside the slab, except in the PMA
