@@ -88,11 +88,7 @@ impl JamPaths {
 
         match (chk_0, chk_1) {
             (Some(a), Some(b)) => {
-                if a == b {
-                    trace!("Both jam checkpoints are identical, skipping save");
-                    None
-                }
-                else if a.event_num < b.event_num { Some(&self.1) }
+                if a.event_num < b.event_num { Some(&self.1) }
                 else { Some(&self.0) }
             },
             (Some(_), None) => Some(&self.1),
