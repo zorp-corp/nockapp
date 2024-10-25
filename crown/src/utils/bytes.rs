@@ -1,5 +1,8 @@
 use std::any;
 
+use bincode::de::read::Reader;
+use bincode::enc::write::Writer;
+use bincode::{Encode, Decode, BorrowDecode};
 use bytes::Bytes;
 
 use crate::utils::error::ConversionError;
@@ -107,5 +110,31 @@ impl ToBytes for &str {
     fn to_bytes(&self) -> Result<Vec<u8>> {
         let bytes = self.bytes();
         Ok(bytes.collect::<Vec<u8>>())
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub struct BytesWrapper(pub Bytes);
+
+impl Encode for BytesWrapper {
+    fn encode<E: bincode::enc::Encoder>(&self, encoder: &mut E) -> Result<(), bincode::error::EncodeError> {
+        self.0.len().encode(encoder)?;
+        encoder.writer().write(self.0.as_ref())?;
+        Ok(())
+    }
+}
+
+impl Decode for BytesWrapper {
+    fn decode<D: bincode::de::Decoder>(decoder: &mut D) -> Result<Self, bincode::error::DecodeError> {
+        let len = usize::decode(decoder)?;
+        let mut buf = vec![0u8; len];
+        decoder.reader().read(&mut buf)?;
+        Ok(BytesWrapper(Bytes::from(buf)))
+    }
+}
+
+impl<'de> BorrowDecode<'de> for BytesWrapper {
+    fn borrow_decode<D: bincode::de::BorrowDecoder<'de>>(decoder: &mut D) -> Result<Self, bincode::error::DecodeError> {
+        Decode::decode(decoder)
     }
 }

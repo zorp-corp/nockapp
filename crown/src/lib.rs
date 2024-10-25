@@ -40,8 +40,8 @@ use std::path::PathBuf;
 /// let dir = default_data_dir("crown");
 /// assert_eq!(dir, PathBuf::from("./.data.crown"));
 /// ```
-pub fn default_data_dir(kernel_name: &str) -> PathBuf {
-    PathBuf::from(format!("./.data.{}", kernel_name))
+pub fn default_data_dir(dir_name: &str) -> PathBuf {
+    PathBuf::from(format!("./.data.{}", dir_name))
 }
 
 /// Default size for the Nock stack (1 GB)

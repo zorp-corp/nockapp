@@ -2,8 +2,12 @@
 target
 bin/
 
+.data*
+.data.jams
+**/.data.jams
 .data.crown
 **/.data.crown
+assets/*
 
 # Dev config
 .vscode/settings.json
