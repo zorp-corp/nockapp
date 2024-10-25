@@ -88,8 +88,8 @@ impl JamPaths {
 
         match (chk_0, chk_1) {
             (Some(a), Some(b)) => {
-                if a.event_num < b.event_num { Some(&self.1) }
-                else { Some(&self.0) }
+                if a.event_num < b.event_num { Some(&self.0) }
+                else { Some(&self.1) }
             },
             (Some(_), None) => Some(&self.1),
             (None, Some(_)) => Some(&self.0),
