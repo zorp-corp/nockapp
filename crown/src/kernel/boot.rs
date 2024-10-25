@@ -48,11 +48,17 @@ pub fn setup(
         .init();
 
     let pma_dir = default_data_dir("pma");
-    let jam_paths = JamPaths::new(&default_data_dir("jams"));
+    let jams_dir = default_data_dir("jams");
+    let jam_paths = JamPaths::new(&jams_dir);
 
     if pma_dir.exists() {
         std::fs::remove_dir_all(&pma_dir)?;
-        info!("Deleted existing snap directory: {:?}", pma_dir);
+        info!("Deleted existing pma directory: {:?}", pma_dir);
+    }
+
+    if cli.new {
+        std::fs::remove_dir_all(&jams_dir)?;
+        info!("Deleted existing checkpoint directory: {:?}", jams_dir);
     }
 
     info!("kernel: starting");
