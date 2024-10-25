@@ -568,15 +568,6 @@ impl Serf {
         stack.flip_top_frame(0);
     }
 
-    /// Saves the current Serf state to persistent memory.
-    ///
-    /// # Safety
-    ///
-    pub unsafe fn save(&mut self) {
-
-
-    }
-
     /// Returns a mutable reference to the Nock stack.
     ///
     /// # Returns
