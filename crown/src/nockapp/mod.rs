@@ -17,7 +17,7 @@ use tokio::fs;
 use tokio::sync::{broadcast, mpsc, oneshot, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
-use tracing::{debug, error, info, trace};
+use tracing::{debug, error, info};
 
 pub type IODriverFuture = Pin<Box<dyn Future<Output = Result<(), NockAppError>> + Send>>;
 pub type IODriverFn = Box<dyn FnOnce(NockAppHandle) -> IODriverFuture>;
@@ -696,7 +696,7 @@ mod tests {
         assert_eq!(nockapp.save_sem.available_permits(), 1);
 
         // A valid checkpoint should exist in one of the jam files
-        let checkpoint = jam_paths.get_checkpoint(nockapp.kernel.serf.stack());
+        let checkpoint = jam_paths.load_checkpoint(nockapp.kernel.serf.stack());
         assert!(checkpoint.is_ok());
         let mut checkpoint = checkpoint.unwrap();
 
@@ -736,7 +736,7 @@ mod tests {
 
         // A valid checkpoint should exist in one of the jam files
         let jam_paths = &nockapp.kernel.jam_paths;
-        let checkpoint = jam_paths.get_checkpoint(nockapp.kernel.serf.stack());
+        let checkpoint = jam_paths.load_checkpoint(nockapp.kernel.serf.stack());
         assert!(checkpoint.is_ok());
         let mut checkpoint = checkpoint.unwrap();
 
@@ -779,7 +779,7 @@ mod tests {
             assert_eq!(nockapp.save_sem.available_permits(), 1);
 
             // A valid checkpoint should exist in one of the jam files
-            let checkpoint = jam_paths.get_checkpoint(nockapp.kernel.serf.stack());
+            let checkpoint = jam_paths.load_checkpoint(nockapp.kernel.serf.stack());
             assert!(checkpoint.is_ok());
             let checkpoint = checkpoint.unwrap();
 
@@ -824,7 +824,7 @@ mod tests {
         assert!(!invalid.validate());
 
         // The invalid checkpoint has a higher event number than the valid checkpoint
-        let valid = jam_paths.get_checkpoint(nockapp.kernel.serf.stack()).unwrap();
+        let valid = jam_paths.load_checkpoint(nockapp.kernel.serf.stack()).unwrap();
         assert!(valid.event_num < invalid.event_num);
 
         // Save the corrupted checkpoint, because of the toggle buffer, we will write to jam file 1
@@ -834,7 +834,7 @@ mod tests {
         tokio::fs::write(jam_path, jam_bytes).await.unwrap();
 
         // The loaded checkpoint will be the valid one
-        let chk = jam_paths.get_checkpoint(nockapp.kernel.serf.stack()).unwrap();
+        let chk = jam_paths.load_checkpoint(nockapp.kernel.serf.stack()).unwrap();
         assert!(chk.event_num == valid.event_num);
 
     }

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use byteorder::{LittleEndian, WriteBytesExt};
-use tracing::{info, warn};
+use tracing::info;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -433,7 +433,7 @@ impl Serf {
 
         let checkpoint = if jam_paths.checkpoint_exists() {
             info!("Checkpoint file(s) found, validating and loading from jam");
-            jam_paths.get_checkpoint(&mut stack).ok()
+            jam_paths.load_checkpoint(&mut stack).ok()
         } else {
             info!("No checkpoint file found, starting from scratch");
             None

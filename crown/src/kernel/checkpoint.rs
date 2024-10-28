@@ -72,7 +72,7 @@ pub enum CheckpointError<'a> {
     SwordNounError(#[from] sword::noun::Error),
     #[error("Sword cold error: {0}")]
     FromNounError(#[from] sword::jets::cold::FromNounError),
-    #[error("Sword interpret error")]
+    #[error("Sword interpreter error")]
     SwordInterpreterError,
 }
 
@@ -90,7 +90,7 @@ impl JamPaths {
         self.0.exists() || self.1.exists()
     }
 
-    pub fn get_checkpoint<'a>(&'a self, stack: &'a mut NockStack) -> Result<Checkpoint, CheckpointError> {
+    pub fn load_checkpoint<'a>(&'a self, stack: &'a mut NockStack) -> Result<Checkpoint, CheckpointError> {
         let (chk_0, chk_1) = [&self.0, &self.1].map(Self::decode_jam).into();
 
         match (chk_0, chk_1) {
