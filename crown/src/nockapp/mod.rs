@@ -882,12 +882,4 @@ mod tests {
         }
     }
 
-    // To test your own kernel, place a `kernel.jam` file in the `assets` directory
-    // and uncomment the following test:
-    //
-    // #[test]
-    // fn test_custom_kernel() {
-    //     let (kernel, _temp_dir) = setup_kernel("kernel.jam");
-    //     // Add your custom assertions here to test the kernel's behavior
-    // }
 }
