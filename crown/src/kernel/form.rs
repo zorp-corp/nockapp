@@ -413,8 +413,7 @@ impl Serf {
     ///
     /// # Arguments
     ///
-    /// * `kernel` - Optional pre-loaded kernel noun.
-    /// * `event_num` - Starting event number.
+    /// * `jam_paths` - Paths for alternating jam buffers.
     /// * `kernel_bytes` - Byte slice containing the kernel code.
     /// * `constant_hot_state` - Custom hot state entries.
     /// * `trace_info` - Optional trace information.
@@ -492,7 +491,8 @@ impl Serf {
     ///
     /// # Arguments
     ///
-    /// * `snap_dir` - Directory for storing snapshots.
+    /// * `pma_dir` - Directory to hold pma files. Not in use currently.
+    /// * `jam_paths` - Paths for alternating jam buffers.
     /// * `kernel_bytes` - Byte slice containing the kernel code as a jammed noun.
     /// * `constant_hot_state` - Custom hot state entries.
     /// * `trace` - Whether to enable tracing.
