@@ -10,8 +10,8 @@ trait-alias = []
 anyhow = { workspace = true }
 axum = { workspace = true }
 bitvec = { workspace = true }
+blake3 = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo", "color", "env"] }
-crc32fast = { workspace = true }
 sword = { workspace = true }
 sword_macros = { workspace = true }
 assert_no_alloc = { workspace = true }

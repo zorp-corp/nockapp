@@ -1,7 +1,7 @@
 use crate::{JammedNoun, NounExt};
 use bincode::{config::{self, Configuration}, encode_to_vec, Decode, Encode};
 use bytes::Bytes;
-use crc32fast::Hasher;
+use blake3::{Hash, Hasher};
 use sword::{jets::cold::{Cold, Nounable}, mem::NockStack, noun::{Noun, T}};
 use thiserror::Error;
 use std::path::PathBuf;
@@ -31,7 +31,8 @@ impl Checkpoint {
 
 #[derive(Encode, Decode, PartialEq, Debug)]
 pub struct JammedCheckpoint {
-    pub checksum: u32,
+    #[bincode(with_serde)]
+    pub checksum: Hash,
     pub event_num: u64,
     pub jam: JammedNoun,
 }
@@ -50,7 +51,7 @@ impl JammedCheckpoint {
     pub fn encode(&self) -> Result<Vec<u8>, bincode::error::EncodeError> {
         encode_to_vec(self, config::standard())
     }
-    pub fn checksum(event_num: u64, jam: &Bytes) -> u32 {
+    pub fn checksum(event_num: u64, jam: &Bytes) -> Hash {
         let jam_len = jam.len();
         let mut hasher = Hasher::new();
         hasher.update(&event_num.to_le_bytes());

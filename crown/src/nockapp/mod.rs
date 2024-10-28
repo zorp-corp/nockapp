@@ -443,8 +443,9 @@ impl NockApp {
         let jam_paths = self.kernel.jam_paths.clone();
         let toggle = self.buff_toggle.clone();
 
+        // TODO: strict ordering mode
         self.tasks.lock().await.spawn(async move {
-            let file = if toggle.load(Ordering::Relaxed) {
+            let file = if toggle.load(Ordering::SeqCst) {
                 &jam_paths.1
             } else {
                 &jam_paths.0
@@ -454,7 +455,7 @@ impl NockApp {
             info!("Write to {:?} successful", file);
 
             // Flip toggle after successful write
-            toggle.store(!toggle.load(Ordering::Relaxed), Ordering::Relaxed);
+            toggle.store(!toggle.load(Ordering::SeqCst), Ordering::SeqCst);
             drop(save);
             Ok::<(), NockAppError>(())
         });
