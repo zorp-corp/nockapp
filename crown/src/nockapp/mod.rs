@@ -443,7 +443,6 @@ impl NockApp {
         let jam_paths = self.kernel.jam_paths.clone();
         let toggle = self.buff_toggle.clone();
 
-        // TODO: strict ordering mode
         self.tasks.lock().await.spawn(async move {
             let file = if toggle.load(Ordering::SeqCst) {
                 &jam_paths.1
