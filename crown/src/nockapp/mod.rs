@@ -4,6 +4,7 @@ use crate::noun::{FromAtom, slab::CueError, slab::NounSlab};
 use bytes::buf::BufMut;
 use futures::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use sword::noun::{IndirectAtom, D, T};
@@ -392,6 +393,8 @@ pub struct NockApp {
     pub action_channel_sender: mpsc::Sender<IOAction>,
     // Effect broadcast channel
     pub effect_broadcast: broadcast::Sender<NounSlab>,
+    // Jam buffer toggle
+    pub buff_toggle: Arc<AtomicBool>,
     // Save semaphore
     pub save_sem: Arc<tokio::sync::Semaphore>,
 }
@@ -401,6 +404,7 @@ impl NockApp {
         let (action_channel_sender, action_channel) = mpsc::channel(100);
         let (effect_broadcast, _) = broadcast::channel(100);
         let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
+        let buff_toggle = Arc::new(AtomicBool::new(false));
         let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
 
         Self {
@@ -409,6 +413,7 @@ impl NockApp {
             action_channel,
             action_channel_sender,
             effect_broadcast,
+            buff_toggle,
             save_sem,
         }
     }
@@ -434,21 +439,22 @@ impl NockApp {
     }
 
     pub async fn save(&mut self, save: Result<OwnedSemaphorePermit, AcquireError>) -> Result<(), NockAppError> {
-        // TODO: second look
         let checkpoint = self.kernel.serf.jam_checkpoint().encode()?;
         let jam_paths = self.kernel.jam_paths.clone();
+        let toggle = self.buff_toggle.clone();
 
         self.tasks.lock().await.spawn(async move {
-            let file = jam_paths.get_path_write();
-            if file.is_none() {
-                trace!("Event hasn't changed, skipping save");
-            }
-            else {
-                let file = file.unwrap();
-                trace!("Saving arvo checkpoint to {:?}", file);
-                fs::write(&file, checkpoint).await?;
-                trace!("Write to {:?} successful", file);
-            }
+            let file = if toggle.load(Ordering::Relaxed) {
+                &jam_paths.1
+            } else {
+                &jam_paths.0
+            };
+
+            fs::write(&file, checkpoint).await?;
+            info!("Write to {:?} successful", file);
+
+            // Flip toggle after successful write
+            toggle.store(!toggle.load(Ordering::Relaxed), Ordering::Relaxed);
             drop(save);
             Ok::<(), NockAppError>(())
         });
@@ -691,7 +697,7 @@ mod tests {
 
         // A valid checkpoint should exist in one of the jam files
         let checkpoint = jam_paths.get_checkpoint(nockapp.kernel.serf.stack());
-        assert!(checkpoint.is_some());
+        assert!(checkpoint.is_ok());
         let mut checkpoint = checkpoint.unwrap();
 
         // Checkpoint event number should be 0
@@ -731,7 +737,7 @@ mod tests {
         // A valid checkpoint should exist in one of the jam files
         let jam_paths = &nockapp.kernel.jam_paths;
         let checkpoint = jam_paths.get_checkpoint(nockapp.kernel.serf.stack());
-        assert!(checkpoint.is_some());
+        assert!(checkpoint.is_ok());
         let mut checkpoint = checkpoint.unwrap();
 
         // Checkpoint event number should be 1
@@ -774,7 +780,7 @@ mod tests {
 
             // A valid checkpoint should exist in one of the jam files
             let checkpoint = jam_paths.get_checkpoint(nockapp.kernel.serf.stack());
-            assert!(checkpoint.is_some());
+            assert!(checkpoint.is_ok());
             let checkpoint = checkpoint.unwrap();
 
             // Checkpoint event number should be i
@@ -806,6 +812,9 @@ mod tests {
         // Save a valid checkpoint
         save_nockapp(&mut nockapp).await;
 
+        // Assert the checkpoint exists
+        assert!(jam_paths.0.exists());
+
         // Permit should be dropped
         assert_eq!(nockapp.save_sem.available_permits(), 1);
 
@@ -818,10 +827,11 @@ mod tests {
         let valid = jam_paths.get_checkpoint(nockapp.kernel.serf.stack()).unwrap();
         assert!(valid.event_num < invalid.event_num);
 
-        // Save the corrupted checkpoint
-        let jam_path = jam_paths.get_path_write();
+        // Save the corrupted checkpoint, because of the toggle buffer, we will write to jam file 1
+        assert!(!jam_paths.1.exists());
+        let jam_path = &jam_paths.1;
         let jam_bytes = invalid.encode().unwrap();
-        tokio::fs::write(jam_path.unwrap(), jam_bytes).await.unwrap();
+        tokio::fs::write(jam_path, jam_bytes).await.unwrap();
 
         // The loaded checkpoint will be the valid one
         let chk = jam_paths.get_checkpoint(nockapp.kernel.serf.stack()).unwrap();
