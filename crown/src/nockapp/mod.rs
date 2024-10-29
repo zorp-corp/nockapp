@@ -451,7 +451,7 @@ impl NockApp {
             };
 
             fs::write(&file, checkpoint).await?;
-            info!("Write to {:?} successful", file);
+            debug!("Write to {:?} successful", file);
 
             // Flip toggle after successful write
             toggle.store(!toggle.load(Ordering::SeqCst), Ordering::SeqCst);
@@ -800,7 +800,6 @@ mod tests {
     }
 
     // Tests for fallback to previous checkpoint if checkpoint is corrupt
-    // What to do if both checkpoints are corrupt?
     #[tokio::test]
     #[traced_test]
     async fn test_nockapp_corrupt_check() {
