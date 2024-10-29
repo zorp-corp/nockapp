@@ -807,6 +807,7 @@ mod tests {
     #[test]
     fn test_cyclic_structure() {
         let mut slab = NounSlab::new();
+
         // Create a jammed representation of a cyclic structure
         // [0 *] where * refers back to the entire cell, i.e. 0b11110001
         let mut jammed = BitVec::<u8, Lsb0>::new();
@@ -827,6 +828,7 @@ mod tests {
     #[test]
     fn test_cue_simple_cell() {
         let mut slab = NounSlab::new();
+
         // Create a jammed representation of [1 0] by hand
         let mut jammed = BitVec::<u8, Lsb0>::new();
         jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0, 0, 0, 1, 1, 0, 1]);  // 0b10110001
