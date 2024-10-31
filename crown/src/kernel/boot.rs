@@ -1,5 +1,5 @@
-use crate::kernel::checkpoint::JamPaths;
 use crate::default_data_dir;
+use crate::kernel::checkpoint::JamPaths;
 use crate::kernel::form::Kernel;
 use clap::{arg, command, ColorChoice, Parser};
 use sword::jets::hot::HotEntry;
@@ -63,7 +63,10 @@ pub fn setup(
 
     info!("kernel: starting");
     debug!("kernel: pma directory: {:?}", pma_dir);
-    debug!("kernel: jam buffer paths: {:?}, {:?}", jam_paths.0, jam_paths.1);
+    debug!(
+        "kernel: jam buffer paths: {:?}, {:?}",
+        jam_paths.0, jam_paths.1
+    );
     let kernel = Kernel::load_with_hot_state(pma_dir, jam_paths, jam, hot_state, cli.trace);
 
     Ok(kernel)

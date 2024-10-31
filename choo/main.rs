@@ -12,8 +12,10 @@ use crown::kernel::boot::Cli as BootCli;
 static KERNEL_JAM: &[u8] =
     include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/choo.jam"));
 
-static HOON_TXT: &[u8] =
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/hoon-138.hoon"));
+static HOON_TXT: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/bootstrap/hoon-138.hoon"
+));
 
 #[derive(Parser, Debug)]
 #[command(about = "Tests various poke types for the kernel", author = "zorp", version, color = ColorChoice::Auto)]
@@ -27,22 +29,28 @@ struct ChooCli {
     #[arg(help = "Path to root of dependency directory", default_value = "hoon")]
     directory: String,
 
-    #[arg(long, help = "Build raw, without file hash injection", default_value = "false")]
+    #[arg(
+        long,
+        help = "Build raw, without file hash injection",
+        default_value = "false"
+    )]
     arbitrary: bool,
 }
 
 fn is_valid_file_or_dir(entry: &DirEntry) -> bool {
     let is_dir = entry.metadata().unwrap().is_dir();
 
-    let is_hoon =
-        entry.file_name().to_str()
-            .map(|s| s.ends_with(".hoon"))
-            .unwrap_or(false);
+    let is_hoon = entry
+        .file_name()
+        .to_str()
+        .map(|s| s.ends_with(".hoon"))
+        .unwrap_or(false);
 
-    let is_jock =
-        entry.file_name().to_str()
-            .map(|s| s.ends_with(".jock"))
-            .unwrap_or(false);
+    let is_jock = entry
+        .file_name()
+        .to_str()
+        .map(|s| s.ends_with(".jock"))
+        .unwrap_or(false);
 
     is_dir || is_hoon || is_jock
 }
@@ -53,31 +61,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
 
-    let hoon_cord =
-        Atom::from_value(kernel.serf.stack(), HOON_TXT).unwrap().as_noun();
+    let hoon_cord = Atom::from_value(kernel.serf.stack(), HOON_TXT)
+        .unwrap()
+        .as_noun();
 
     let bootstrap_poke = T(kernel.serf.stack(), &[D(tas!(b"boot")), hoon_cord]);
     let _ = kernel.poke(bootstrap_poke)?;
 
     let entry_string = cli.entry.strip_prefix(&cli.directory).unwrap();
-    let entry_noun = Atom::from_value(kernel.serf.stack(), entry_string).unwrap().as_noun();
+    let entry_noun = Atom::from_value(kernel.serf.stack(), entry_string)
+        .unwrap()
+        .as_noun();
 
     let mut directory_noun = D(0);
 
-    let walker = WalkDir::new(cli.directory.clone()).follow_links(true).into_iter();
-    for entry_result in walker
-        .filter_entry(|e| is_valid_file_or_dir(e)) {
+    let walker = WalkDir::new(cli.directory.clone())
+        .follow_links(true)
+        .into_iter();
+    for entry_result in walker.filter_entry(|e| is_valid_file_or_dir(e)) {
         let entry = entry_result?;
         let is_file = entry.metadata().unwrap().is_file();
         if is_file {
-            let path_str = entry.path().to_str().unwrap().strip_prefix(&cli.directory).unwrap();
-            let path_cord = Atom::from_value(kernel.serf.stack(), path_str).unwrap().as_noun();
+            let path_str = entry
+                .path()
+                .to_str()
+                .unwrap()
+                .strip_prefix(&cli.directory)
+                .unwrap();
+            let path_cord = Atom::from_value(kernel.serf.stack(), path_str)
+                .unwrap()
+                .as_noun();
 
             let contents = {
                 let mut contents_vec: Vec<u8> = vec![];
                 let mut file = File::open(entry.path()).await?;
                 file.read_to_end(&mut contents_vec).await?;
-                Atom::from_value(kernel.serf.stack(), contents_vec).unwrap().as_noun()
+                Atom::from_value(kernel.serf.stack(), contents_vec)
+                    .unwrap()
+                    .as_noun()
             };
 
             let entry_cell = T(kernel.serf.stack(), &[path_cord, contents]);

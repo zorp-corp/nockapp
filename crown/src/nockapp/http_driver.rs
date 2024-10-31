@@ -1,7 +1,7 @@
+use super::{make_driver, IODriverFn, PokeResult};
 use crate::nockapp::NockAppError;
 use crate::noun::slab::NounSlab;
 use crate::{AtomExt, Bytes};
-use super::{make_driver, IODriverFn, PokeResult};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -35,19 +35,22 @@ struct ResponseBuilder {
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
 // wraps on overflow
-fn get_id() -> u64 { COUNTER.fetch_add(1, Ordering::Relaxed) }
+fn get_id() -> u64 {
+    COUNTER.fetch_add(1, Ordering::Relaxed)
+}
 
 /// HTTP IO driver
 pub fn http() -> IODriverFn {
     make_driver(move |handle| async move {
-
         let (tx, mut rx) = tokio::sync::mpsc::channel::<RequestMessage>(10);
         let app = any(sword_handler).with_state(tx);
 
         let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
         debug!("listening on {}", listener.local_addr().unwrap());
         tokio::spawn(async move {
-            axum::serve(listener, app.into_make_service()).await.unwrap();
+            axum::serve(listener, app.into_make_service())
+                .await
+                .unwrap();
         });
 
         let channel_map = RwLock::new(HashMap::<u64, Responder>::new());

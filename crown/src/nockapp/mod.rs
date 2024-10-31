@@ -1,6 +1,7 @@
 use crate::kernel::form::Kernel;
+use crate::noun::slab::{CueError, NounSlab};
+use crate::noun::FromAtom;
 use crate::{Bytes, CrownError, Noun, NounExt};
-use crate::noun::{FromAtom, slab::CueError, slab::NounSlab};
 use bytes::buf::BufMut;
 use futures::future::Future;
 use std::pin::Pin;
@@ -12,11 +13,10 @@ use sword_macros::tas;
 use thiserror::Error;
 use tokio::io::{split, AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 use tokio::net::{UnixListener, UnixStream};
-use tokio::select;
-use tokio::fs;
 use tokio::sync::{broadcast, mpsc, oneshot, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
+use tokio::{fs, select};
 use tracing::{debug, error, info};
 
 pub type IODriverFuture = Pin<Box<dyn Future<Output = Result<(), NockAppError>> + Send>>;
@@ -66,9 +66,7 @@ pub fn file() -> IODriverFn {
             };
 
             let (operation, path_atom) = match file_cell.head().as_direct() {
-                Ok(tag) if tag.data() == tas!(b"read") => {
-                    ("read", file_cell.tail().as_atom().ok())
-                }
+                Ok(tag) if tag.data() == tas!(b"read") => ("read", file_cell.tail().as_atom().ok()),
                 Ok(tag) if tag.data() == tas!(b"write") => {
                     let Ok(write_cell) = file_cell.tail().as_cell() else {
                         continue;
@@ -322,7 +320,7 @@ async fn read_message(
         }
         Ok(size) => {
             debug!("Read size: {:?}", size);
-        },
+        }
         Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
             debug!("Connection closed unexpectedly");
             return Ok(None);
@@ -330,19 +328,22 @@ async fn read_message(
         Err(e) => {
             debug!("Error reading size: {:?}", e);
             return Err(e.into());
-        },
+        }
     }
     let size = usize::from_le_bytes(size_bytes);
     debug!("Message size: {} bytes", size);
     let mut buf = Vec::with_capacity(size).limit(size);
     while buf.remaining_mut() > 0 {
-        debug!("Reading message content, {} bytes remaining", buf.remaining_mut());
+        debug!(
+            "Reading message content, {} bytes remaining",
+            buf.remaining_mut()
+        );
         match stream.read_buf(&mut buf).await {
             Ok(0) => {
                 debug!("Connection closed while reading message content");
                 return Ok(None);
             }
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => return Err(e.into()),
         }
     }
@@ -363,7 +364,10 @@ async fn write_message(
     let mut msg_len_bytes = &msg_len.to_le_bytes()[..];
     let mut msg_buf = &msg_bytes[..];
     while msg_len_bytes.len() > 0 {
-        debug!("Writing message length, {} bytes remaining", msg_len_bytes.len());
+        debug!(
+            "Writing message length, {} bytes remaining",
+            msg_len_bytes.len()
+        );
         let bytes = stream.write_buf(&mut msg_len_bytes).await?;
         if bytes == 0 {
             debug!("Wrote 0 bytes for message length, returning false");
@@ -438,7 +442,10 @@ impl NockApp {
         let _ = self.tasks.clone().lock_owned().await.spawn(fut);
     }
 
-    pub async fn save(&mut self, save: Result<OwnedSemaphorePermit, AcquireError>) -> Result<(), NockAppError> {
+    pub async fn save(
+        &mut self,
+        save: Result<OwnedSemaphorePermit, AcquireError>,
+    ) -> Result<(), NockAppError> {
         let checkpoint = self.kernel.serf.jam_checkpoint();
         let bytes = checkpoint.encode()?;
         let jam_paths = self.kernel.jam_paths.clone();
@@ -452,7 +459,10 @@ impl NockApp {
             };
 
             fs::write(&file, bytes).await?;
-            debug!("Write to {:?} successful, checksum: {}, event: {}", file, checkpoint.checksum, checkpoint.event_num);
+            debug!(
+                "Write to {:?} successful, checksum: {}, event: {}",
+                file, checkpoint.checksum, checkpoint.event_num
+            );
 
             // Flip toggle after successful write
             toggle.store(!toggle.load(Ordering::SeqCst), Ordering::SeqCst);
@@ -657,7 +667,10 @@ mod tests {
     use super::*;
     use std::fs;
     use std::path::Path;
-    use sword::{jets::{cold::Nounable, util::slot}, serialization::{cue, jam}, unifying_equality::unifying_equality};
+    use sword::jets::cold::Nounable;
+    use sword::jets::util::slot;
+    use sword::serialization::{cue, jam};
+    use sword::unifying_equality::unifying_equality;
     use tempfile::TempDir;
     use tracing_test::traced_test;
 
@@ -677,7 +690,14 @@ mod tests {
     async fn save_nockapp(nockapp: &mut NockApp) {
         let permit = nockapp.save_sem.clone().acquire_owned().await;
         let _ = nockapp.save(permit).await.unwrap();
-        let _ = nockapp.tasks.lock().await.join_next().await.unwrap().unwrap();
+        let _ = nockapp
+            .tasks
+            .lock()
+            .await
+            .join_next()
+            .await
+            .unwrap()
+            .unwrap();
     }
 
     // Test nockapp save
@@ -706,16 +726,28 @@ mod tests {
 
         // Checkpoint kernel should be equal to the saved kernel
         unsafe {
-            assert!(unifying_equality(nockapp.kernel.serf.stack(), &mut checkpoint.arvo, &mut arvo));
+            assert!(unifying_equality(
+                nockapp.kernel.serf.stack(),
+                &mut checkpoint.arvo,
+                &mut arvo
+            ));
         }
 
         // Checkpoint cold state should be equal to the saved cold state
         let mut cold_chk_noun = checkpoint.cold.into_noun(nockapp.kernel.serf.stack());
-        let mut cold_noun = nockapp.kernel.serf.context.cold.into_noun(nockapp.kernel.serf.stack());
+        let mut cold_noun = nockapp
+            .kernel
+            .serf
+            .context
+            .cold
+            .into_noun(nockapp.kernel.serf.stack());
         unsafe {
-            assert!(unifying_equality(nockapp.kernel.serf.stack(), &mut cold_chk_noun, &mut cold_noun));
+            assert!(unifying_equality(
+                nockapp.kernel.serf.stack(),
+                &mut cold_chk_noun,
+                &mut cold_noun
+            ));
         };
-
     }
 
     // Test nockapp poke
@@ -727,7 +759,10 @@ mod tests {
         assert_eq!(nockapp.kernel.serf.event_num, 0);
         let mut arvo_before_poke = nockapp.kernel.serf.arvo;
 
-        let poke = T(nockapp.kernel.serf.stack(), &[D(tas!(b"command")), D(tas!(b"born")), D(0)]);
+        let poke = T(
+            nockapp.kernel.serf.stack(),
+            &[D(tas!(b"command")), D(tas!(b"born")), D(0)],
+        );
         let _ = nockapp.kernel.poke(poke).unwrap();
 
         // Save
@@ -746,16 +781,29 @@ mod tests {
         unsafe {
             let stack = nockapp.kernel.serf.stack();
             // Checkpoint kernel should be equal to the saved kernel
-            assert!(unifying_equality(stack, &mut checkpoint.arvo, &mut arvo_after_poke));
+            assert!(unifying_equality(
+                stack, &mut checkpoint.arvo, &mut arvo_after_poke
+            ));
             // Checkpoint kernel should be different from the kernel before the poke
-            assert!(!unifying_equality(stack, &mut checkpoint.arvo, &mut arvo_before_poke));
+            assert!(!unifying_equality(
+                stack, &mut checkpoint.arvo, &mut arvo_before_poke
+            ));
         }
 
         // Checkpoint cold state should be equal to the saved cold state
         let mut cold_chk_noun = checkpoint.cold.into_noun(nockapp.kernel.serf.stack());
-        let mut cold_noun = nockapp.kernel.serf.context.cold.into_noun(nockapp.kernel.serf.stack());
+        let mut cold_noun = nockapp
+            .kernel
+            .serf
+            .context
+            .cold
+            .into_noun(nockapp.kernel.serf.stack());
         unsafe {
-            assert!(unifying_equality(nockapp.kernel.serf.stack(), &mut cold_chk_noun, &mut cold_noun));
+            assert!(unifying_equality(
+                nockapp.kernel.serf.stack(),
+                &mut cold_chk_noun,
+                &mut cold_noun
+            ));
         };
     }
 
@@ -791,11 +839,10 @@ mod tests {
             // res should be [~ ~ val]
             let res = nockapp.kernel.peek(peek).unwrap();
             let val = slot(res, 7).unwrap();
-            unsafe{
+            unsafe {
                 assert!(val.raw_equals(D(i)));
             }
         }
-
     }
 
     // Tests for fallback to previous checkpoint if checkpoint is corrupt
@@ -822,7 +869,9 @@ mod tests {
         assert!(!invalid.validate());
 
         // The invalid checkpoint has a higher event number than the valid checkpoint
-        let valid = jam_paths.load_checkpoint(nockapp.kernel.serf.stack()).unwrap();
+        let valid = jam_paths
+            .load_checkpoint(nockapp.kernel.serf.stack())
+            .unwrap();
         assert!(valid.event_num < invalid.event_num);
 
         // Save the corrupted checkpoint, because of the toggle buffer, we will write to jam file 1
@@ -832,9 +881,10 @@ mod tests {
         tokio::fs::write(jam_path, jam_bytes).await.unwrap();
 
         // The loaded checkpoint will be the valid one
-        let chk = jam_paths.load_checkpoint(nockapp.kernel.serf.stack()).unwrap();
+        let chk = jam_paths
+            .load_checkpoint(nockapp.kernel.serf.stack())
+            .unwrap();
         assert!(chk.event_num == valid.event_num);
-
     }
 
     #[test]
@@ -845,9 +895,7 @@ mod tests {
         let j = jam(stack, arvo);
         let mut c = cue(stack, j).unwrap();
         // new nockstack
-        unsafe{
-            assert!(unifying_equality(stack, &mut arvo, &mut c))
-        }
+        unsafe { assert!(unifying_equality(stack, &mut arvo, &mut c)) }
     }
 
     #[test]
@@ -858,9 +906,7 @@ mod tests {
         slab.copy_into(arvo);
         let bytes = slab.jam();
         let c = slab.cue_into(bytes).unwrap();
-        unsafe{
-            assert!(slab_equality(slab.root(), c))
-        }
+        unsafe { assert!(slab_equality(slab.root(), c)) }
     }
 
     #[test]
@@ -874,10 +920,9 @@ mod tests {
         let stack = kernel.serf.stack();
         // Use the stack to cue
         let mut c = Noun::cue_bytes(stack, &bytes).unwrap();
-        unsafe{
+        unsafe {
             // check for equality
             assert!(unifying_equality(stack, &mut arvo, &mut c))
         }
     }
-
 }

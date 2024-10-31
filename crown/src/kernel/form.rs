@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 use byteorder::{LittleEndian, WriteBytesExt};
-use tracing::info;
 use std::fs::File;
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -19,11 +18,12 @@ use sword::noun::{Atom, Cell, DirectAtom, IndirectAtom, Noun, Slots, D, T};
 use sword::persist::pma_open;
 use sword::trace::{path_to_cord, write_serf_trace_safe, TraceInfo};
 use sword_macros::tas;
+use tracing::info;
 
+use crate::kernel::checkpoint::JamPaths;
 use crate::utils::slogger::CrownSlogger;
 use crate::utils::{current_da, NOCK_STACK_SIZE};
 use crate::{AtomExt, CrownError, NounExt, Result, ToBytesExt};
-use crate::kernel::checkpoint::JamPaths;
 
 use super::checkpoint::JammedCheckpoint;
 
@@ -440,8 +440,8 @@ impl Serf {
 
         let cache = Hamt::<Noun>::new(&mut stack);
         let (mut cold, event_num) = checkpoint.as_ref().map_or_else(
-                || {(Cold::new(&mut stack), 0)},
-                |snapshot| {(snapshot.cold, snapshot.event_num)}
+            || (Cold::new(&mut stack), 0),
+            |snapshot| (snapshot.cold, snapshot.event_num),
         );
 
         let hot = Hot::init(&mut stack, &hot_state);
@@ -461,19 +461,21 @@ impl Serf {
 
         let arvo = checkpoint.as_ref().map_or_else(
             || {
-            let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes).expect("invalid kernel jam");
-            let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
-            let arvo = if context.trace_info.is_some() {
-                let start = Instant::now();
-                let arvo = interpret(&mut context, kernel_trap, fol).unwrap(); // TODO better error
-                write_serf_trace_safe(&mut context, "boot", start);
+                let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes)
+                    .expect("invalid kernel jam");
+                let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
+                let arvo = if context.trace_info.is_some() {
+                    let start = Instant::now();
+                    let arvo = interpret(&mut context, kernel_trap, fol).unwrap(); // TODO better error
+                    write_serf_trace_safe(&mut context, "boot", start);
+                    arvo
+                } else {
+                    interpret(&mut context, kernel_trap, fol).unwrap() // TODO better error
+                };
                 arvo
-            } else {
-                interpret(&mut context, kernel_trap, fol).unwrap() // TODO better error
-            };
-            arvo
-        },
-        |snapshot| snapshot.arvo);
+            },
+            |snapshot| snapshot.arvo,
+        );
 
         let mut serf = Self {
             arvo,

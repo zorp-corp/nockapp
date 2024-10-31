@@ -670,9 +670,9 @@ enum CueStackEntry {
 mod tests {
     use super::*;
     use crate::AtomExt;
+    use bitvec::prelude::*;
     use sword::noun::{D, T};
     use sword_macros::tas;
-    use bitvec::prelude::*;
 
     #[test]
     fn test_jam() {
@@ -785,15 +785,16 @@ mod tests {
 
     #[test]
     fn test_cue_from_file() {
+        use bytes::Bytes;
         use std::fs::File;
         use std::io::Read;
-        use bytes::Bytes;
 
         // Read the jammed data from the file. This is a jammed vase of a small
         // file with a few dependencies.
         let mut file = File::open("tests/cue-test.jam").expect("Failed to open file");
         let mut jammed_data = Vec::new();
-        file.read_to_end(&mut jammed_data).expect("Failed to read file");
+        file.read_to_end(&mut jammed_data)
+            .expect("Failed to read file");
         let jammed = Bytes::from(jammed_data);
 
         // Create a new NounSlab and attempt to cue the data
@@ -801,7 +802,11 @@ mod tests {
         let result = slab.cue_into(jammed);
 
         // Assert that cue_into does not return an error
-        assert!(result.is_ok(), "cue_into returned an error: {:?}", result.err());
+        assert!(
+            result.is_ok(),
+            "cue_into returned an error: {:?}",
+            result.err()
+        );
     }
 
     #[test]
@@ -811,17 +816,23 @@ mod tests {
         // Create a jammed representation of a cyclic structure
         // [0 *] where * refers back to the entire cell, i.e. 0b11110001
         let mut jammed = BitVec::<u8, Lsb0>::new();
-        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 1, 1]);  //Backref to the entire structure
-        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0 ,0]);  // Atom 0
-        jammed.extend_from_bitslice(bits![u8, Lsb0; 0, 1]);     // Cell
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 1, 1]); //Backref to the entire structure
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0 ,0]); // Atom 0
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 0, 1]); // Cell
 
         let jammed_bytes = Bytes::from(jammed.into_vec());
 
         let result = slab.cue_into(jammed_bytes);
-        assert!(result.is_err(), "Expected error due to cyclic structure, but cue_into completed successfully");
+        assert!(
+            result.is_err(),
+            "Expected error due to cyclic structure, but cue_into completed successfully"
+        );
         if let Err(e) = result {
             println!("Error type: {:?}", e);
-            assert!(matches!(e, CueError::BadBackref), "Expected CueError::BadBackref, but got a different error");
+            assert!(
+                matches!(e, CueError::BadBackref),
+                "Expected CueError::BadBackref, but got a different error"
+            );
         }
     }
 
@@ -831,7 +842,7 @@ mod tests {
 
         // Create a jammed representation of [1 0] by hand
         let mut jammed = BitVec::<u8, Lsb0>::new();
-        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0, 0, 0, 1, 1, 0, 1]);  // 0b10110001
+        jammed.extend_from_bitslice(bits![u8, Lsb0; 1, 0, 0, 0, 1, 1, 0, 1]); // 0b10110001
 
         let jammed_bytes = Bytes::from(jammed.into_vec());
 
@@ -840,7 +851,10 @@ mod tests {
         assert!(result.is_ok(), "cue_into should succeed");
         if let Ok(cued_noun) = result {
             let expected_noun = T(&mut slab, &[D(1), D(0)]);
-            assert!(slab_equality(cued_noun, expected_noun), "Cued noun should equal [1 0]");
+            assert!(
+                slab_equality(cued_noun, expected_noun),
+                "Cued noun should equal [1 0]"
+            );
         }
     }
 }
