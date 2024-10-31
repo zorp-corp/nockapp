@@ -19,6 +19,13 @@ assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d8
 #assert_no_alloc.path = "../sword/rust/assert_no_alloc"
 #sword.path = "../sword/rust/sword"
 #sword_macros.path = "../sword/rust/sword_macros"
+
+# Local dependencies
+crown = { path = "./crown" }
+exit-driver = { path = "./exit-driver" }
+one-punch-driver = { path = "./one-punch-driver" }
+
+# External dependencies
 anyhow = "1.0"
 async-trait = "0.1"
 axum = "0.7.5"
@@ -36,6 +43,7 @@ tempfile = "3.3"
 tracing-test = "0.2.5"
 thiserror = "1.0"
 tokio = { version = "1.32", features = ["rt", "rt-multi-thread", "net", "macros", "io-util", "fs"] }
+tokio-util = "0.7.12"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["ansi", "env-filter", "registry"] }
 yaque = "0.6.6"
