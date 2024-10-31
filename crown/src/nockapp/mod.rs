@@ -26,6 +26,10 @@ pub struct NockApp {
     pub kernel: Kernel,
     // Current join handles for IO drivers (parallel to `drivers`)
     pub tasks: Arc<Mutex<tokio::task::JoinSet<Result<(), NockAppError>>>>,
+    // Exit signal sender
+    pub exit_send: mpsc::Sender<usize>,
+    // Exit signal receiver
+    pub exit_recv: mpsc::Receiver<usize>,
     // IO action channel
     pub action_channel: mpsc::Receiver<IOAction>,
     // IO action channel sender
@@ -43,12 +47,15 @@ impl NockApp {
         let (action_channel_sender, action_channel) = mpsc::channel(100);
         let (effect_broadcast, _) = broadcast::channel(100);
         let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
+        let (exit_send, exit_recv) = mpsc::channel(1);
         let buff_toggle = Arc::new(AtomicBool::new(false));
         let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
 
         Self {
             kernel,
             tasks,
+            exit_send,
+            exit_recv,
             action_channel,
             action_channel_sender,
             effect_broadcast,
@@ -62,6 +69,7 @@ impl NockApp {
             io_sender: self.action_channel_sender.clone(),
             effect_sender: self.effect_broadcast.clone(),
             effect_receiver: Mutex::new(self.effect_broadcast.subscribe()),
+            exit: self.exit_send.clone(),
         }
     }
 
@@ -69,10 +77,12 @@ impl NockApp {
         let io_sender = self.action_channel_sender.clone();
         let effect_sender = self.effect_broadcast.clone();
         let effect_receiver = Mutex::new(self.effect_broadcast.subscribe());
+        let exit= self.exit_send.clone();
         let fut = driver(NockAppHandle {
             io_sender,
             effect_sender,
             effect_receiver,
+            exit,
         });
         let _ = self.tasks.clone().lock_owned().await.spawn(fut);
     }
@@ -138,6 +148,13 @@ impl NockApp {
                 }
                 self.save(permit).await
             },
+            exit = self.exit_recv.recv() => {
+                // TODO: handle option
+                let code = exit.unwrap();
+                info!("Exit code {} received, saving and exiting", code);
+                self.save(self.save_sem.clone().acquire_owned().await).await?;
+                std::process::exit(code as i32);
+            }
             action_res = self.action_channel.recv() => {
                 if let Some(action) = action_res {
                     info!("action: {:?}", action);
@@ -190,6 +207,7 @@ pub struct NockAppHandle {
     io_sender: ActionSender,
     pub effect_sender: EffectSender,
     effect_receiver: Mutex<EffectReceiver>,
+    pub exit: mpsc::Sender<usize>,
 }
 
 impl NockAppHandle {
@@ -221,12 +239,14 @@ impl NockAppHandle {
         let io_sender = self.io_sender.clone();
         let effect_sender = self.effect_sender.clone();
         let effect_receiver = Mutex::new(effect_sender.subscribe());
+        let exit = self.exit.clone();
         (
             self,
             NockAppHandle {
                 io_sender,
                 effect_sender,
                 effect_receiver,
+                exit,
             },
         )
     }
