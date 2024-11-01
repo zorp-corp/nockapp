@@ -20,9 +20,6 @@ assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d8
 #sword.path = "../sword/rust/sword"
 #sword_macros.path = "../sword/rust/sword_macros"
 
-# Local dependencies
-crown = { path = "./crown" }
-
 # External dependencies
 anyhow = "1.0"
 async-trait = "0.1"
