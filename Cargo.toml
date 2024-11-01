@@ -11,13 +11,19 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-sword = { git = "https://github.com/zorp-corp/sword.git", rev="9602e85b35641b4fc9f84097986bb6e670bd4ffb" }
-sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="9602e85b35641b4fc9f84097986bb6e670bd4ffb" }
-assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="9602e85b35641b4fc9f84097986bb6e670bd4ffb" }
+sword = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d897c8cb7a70e5baf52c9b83f5ef04fe509" }
+sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d897c8cb7a70e5baf52c9b83f5ef04fe509" }
+assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d897c8cb7a70e5baf52c9b83f5ef04fe509" }
+
+# Uncomment for local dev of crown/sword and comment out above
+#assert_no_alloc.path = "../sword/rust/assert_no_alloc"
+#sword.path = "../sword/rust/sword"
+#sword_macros.path = "../sword/rust/sword_macros"
 anyhow = "1.0"
 async-trait = "0.1"
 axum = "0.7.5"
 bincode = "2.0.0-rc.3"
+blake3 = { version = "1.5.1", features = ["serde"] }
 byteorder = "1.5.0"
 bytes = "1.5.0"
 clap = "4.4.4"
@@ -27,6 +33,7 @@ rand = "0.8.5"
 samply = "0.11.0"
 serde = "1.0.195"
 tempfile = "3.3"
+tracing-test = "0.2.5"
 thiserror = "1.0"
 tokio = { version = "1.32", features = ["rt", "rt-multi-thread", "net", "macros", "io-util", "fs"] }
 tracing = "0.1.40"

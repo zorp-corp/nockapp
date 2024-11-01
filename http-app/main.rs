@@ -1,8 +1,8 @@
-use crown::nockapp::http_driver::http;
+use clap::{command, ColorChoice, Parser};
 use crown::kernel::boot;
 use crown::kernel::boot::Cli as BootCli;
+use crown::nockapp::http_driver::http;
 use crown::nockapp::NockApp;
-use clap::{command, ColorChoice, Parser};
 use tokio::select;
 use tracing::debug;
 

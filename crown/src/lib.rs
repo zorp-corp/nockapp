@@ -12,13 +12,13 @@
 //!
 #![feature(trait_alias)]
 pub mod kernel;
+pub mod nockapp;
 pub mod noun;
 pub mod utils;
-pub mod nockapp;
 
 pub use bytes::*;
-pub use noun::{AtomExt, JammedNoun, NounExt};
 pub use nockapp::NockApp;
+pub use noun::{AtomExt, JammedNoun, NounExt};
 pub use sword::noun::Noun;
 pub use utils::bytes::{ToBytes, ToBytesExt};
 pub use utils::error::{CrownError, Result};
@@ -40,8 +40,8 @@ use std::path::PathBuf;
 /// let dir = default_data_dir("crown");
 /// assert_eq!(dir, PathBuf::from("./.data.crown"));
 /// ```
-pub fn default_data_dir(kernel_name: &str) -> PathBuf {
-    PathBuf::from(format!("./.data.{}", kernel_name))
+pub fn default_data_dir(dir_name: &str) -> PathBuf {
+    PathBuf::from(format!("./.data.{}", dir_name))
 }
 
 /// Default size for the Nock stack (1 GB)

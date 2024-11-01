@@ -10,6 +10,7 @@ trait-alias = []
 anyhow = { workspace = true }
 axum = { workspace = true }
 bitvec = { workspace = true }
+blake3 = { workspace = true }
 clap = { workspace = true, features = ["derive", "cargo", "color", "env"] }
 sword = { workspace = true }
 sword_macros = { workspace = true }
@@ -27,6 +28,7 @@ serde = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+tracing-test = { workspace = true }
 tracing-subscriber = { workspace = true }
 tokio = { workspace = true, features = ["time", "sync"]}
 yaque = { workspace = true }

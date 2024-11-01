@@ -1,9 +1,7 @@
-use std::any;
-
-use bytes::Bytes;
-
 use crate::utils::error::ConversionError;
 use crate::Result;
+use bytes::Bytes;
+use std::any;
 
 pub trait ToBytes {
     fn to_bytes(&self) -> Result<Vec<u8>>;

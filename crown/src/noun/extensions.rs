@@ -1,8 +1,8 @@
-use sword::mem::NockStack;
 use sword::interpreter::Error;
+use sword::mem::NockStack;
 
-use crate::{Noun, Result, ToBytes, ToBytesExt};
 use crate::noun::slab::NounSlab;
+use crate::{Noun, Result, ToBytes, ToBytesExt};
 use bincode::{Decode, Encode};
 use bytes::Bytes;
 use core::str;
@@ -19,14 +19,14 @@ pub trait NounExt {
 }
 
 impl NounExt for Noun {
-    fn cue_bytes(stack: &mut NockStack, bytes: &Bytes) -> Result<Noun,Error> {
+    fn cue_bytes(stack: &mut NockStack, bytes: &Bytes) -> Result<Noun, Error> {
         let atom = Atom::from_bytes(stack, bytes);
         cue(stack, atom)
     }
 
     // generally, we should be using `cue_bytes`, but if we're not going to be passing it around
     // its OK to just cue a byte slice to avoid copying.
-    fn cue_bytes_slice(stack: &mut NockStack, bytes: &[u8]) -> Result<Noun,Error> {
+    fn cue_bytes_slice(stack: &mut NockStack, bytes: &[u8]) -> Result<Noun, Error> {
         let atom = unsafe {
             IndirectAtom::new_raw_bytes(stack, bytes.len(), bytes.as_ptr()).normalize_as_atom()
         };
@@ -120,7 +120,7 @@ impl JammedNoun {
         JammedNoun(Bytes::copy_from_slice(jammed_atom.as_bytes()))
     }
 
-    pub fn cue_self(&self, stack: &mut NockStack) -> Result<Noun,Error> {
+    pub fn cue_self(&self, stack: &mut NockStack) -> Result<Noun, Error> {
         let atom = unsafe {
             IndirectAtom::new_raw_bytes(stack, self.0.len(), self.0.as_ptr()).normalize_as_atom()
         };
@@ -205,8 +205,7 @@ impl IntoNoun for &str {
         let mut slab = NounSlab::new();
         let contents_atom = unsafe {
             let bytes = self.to_bytes().unwrap();
-            IndirectAtom::new_raw_bytes_ref(&mut slab, bytes.as_slice())
-                .normalize_as_atom()
+            IndirectAtom::new_raw_bytes_ref(&mut slab, bytes.as_slice()).normalize_as_atom()
         };
         Noun::from_atom(contents_atom)
     }
@@ -233,4 +232,3 @@ impl IntoSlab for &str {
         slab
     }
 }
-
