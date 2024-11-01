@@ -57,7 +57,9 @@ pub fn setup(
     }
 
     if cli.new {
-        std::fs::remove_dir_all(&jams_dir)?;
+        if jams_dir.exists() {
+            std::fs::remove_dir_all(&jams_dir)?;
+        }
         info!("Deleted existing checkpoint directory: {:?}", jams_dir);
     }
 
