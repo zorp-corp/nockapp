@@ -1,7 +1,6 @@
 use clap::{command, ColorChoice, Parser};
 use crown::kernel::boot;
 use crown::kernel::boot::Cli as BootCli;
-use crown::nockapp::http_driver::http;
 use crown::nockapp::NockApp;
 use tokio::select;
 use tracing::debug;
@@ -20,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("KERNEL_JAM len: {:?}", KERNEL_JAM.to_vec().len());
     let kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
     let mut http_app = NockApp::new(kernel);
-    http_app.add_io_driver(http()).await;
+    http_app.add_io_driver(crown::http_driver()).await;
 
     loop {
         select! {
