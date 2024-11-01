@@ -15,15 +15,13 @@ sword = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d897c8cb7a70
 sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d897c8cb7a70e5baf52c9b83f5ef04fe509" }
 assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d897c8cb7a70e5baf52c9b83f5ef04fe509" }
 
-# Uncomment for local dev of crown/sword and comment out above
+# Uncomment for local dev of sword and comment out above
 #assert_no_alloc.path = "../sword/rust/assert_no_alloc"
 #sword.path = "../sword/rust/sword"
 #sword_macros.path = "../sword/rust/sword_macros"
 
 # Local dependencies
 crown = { path = "./crown" }
-exit-driver = { path = "./exit-driver" }
-one-punch-driver = { path = "./one-punch-driver" }
 
 # External dependencies
 anyhow = "1.0"
