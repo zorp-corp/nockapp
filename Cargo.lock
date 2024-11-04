@@ -1984,6 +1984,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-app"
+version = "0.1.0"
+dependencies = [
+ "clap 4.5.20",
+ "crown",
+ "sword",
+ "sword_macros",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

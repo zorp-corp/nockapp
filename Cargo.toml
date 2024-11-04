@@ -3,6 +3,7 @@ members = [
     "crown",
     "choo",
     "http-app",
+    "test-app",
 ]
 resolver = "2"
 
