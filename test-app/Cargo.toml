@@ -1,0 +1,16 @@
+[package]
+name = "test-app"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+crown  = { path = "../crown" }
+sword = { workspace = true }
+sword_macros = { workspace = true }
+clap = { workspace = true, features = ["derive", "cargo", "color", "env"]}
+tokio = { workspace = true, features = ["signal"] }
+tracing = { workspace = true }
+
+[[bin]]
+name = "test"
+path = "main.rs"

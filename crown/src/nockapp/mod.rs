@@ -85,7 +85,6 @@ impl NockApp {
         let bytes = checkpoint.encode()?;
         let jam_paths = self.kernel.jam_paths.clone();
         let toggle = self.buff_toggle.clone();
-
         self.tasks.lock().await.spawn(async move {
             let file = if toggle.load(Ordering::SeqCst) {
                 &jam_paths.1
@@ -129,6 +128,14 @@ impl NockApp {
                 }
             },
             permit = self.save_sem.clone().acquire_owned() => {
+                //  Check if we should write in the first place
+                let curr_event = self.kernel.serf.event_num;
+
+                if !self.kernel.jam_paths.can_write(curr_event) {
+                    debug!("Skipping save, event number has not changed from: {}", curr_event);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    return Ok(());
+                }
                 self.save(permit).await
             },
             action_res = self.action_channel.recv() => {
