@@ -97,15 +97,6 @@ impl JamPaths {
         Self(path_0, path_1)
     }
 
-    pub async fn most_recent_chk(&self) -> Option<u64> {
-        let (chk_0, chk_1) = [&self.0, &self.1].map(Self::decode_jam).into();
-        match (chk_0, chk_1) {
-            (Ok(a), Ok(b)) => Some(max(a.event_num, b.event_num)),
-            (Ok(c), Err(_)) | (Err(_), Ok(c)) => Some(c.event_num),
-            _ => None,
-        }
-    }
-
     pub fn can_write(&self, curr: u64) -> bool {
         let (chk_0, chk_1) = [&self.0, &self.1].map(Self::decode_jam).into();
 

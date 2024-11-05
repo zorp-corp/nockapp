@@ -22,7 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     debug!("KERNEL_JAM len: {:?}", KERNEL_JAM.to_vec().len());
     let kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
     let mut test_app = NockApp::new(kernel);
-    let inc = D(tas!(b"inc"));
+    let inc = D(tas!(b"inc-exit"));
     let mut slab = NounSlab::new();
     slab.set_root(inc);
     test_app
@@ -31,6 +31,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             crown::nockapp::Operation::Poke,
         ))
         .await;
+
+    test_app.add_io_driver(crown::exit_driver()).await;
 
     loop {
         select! {

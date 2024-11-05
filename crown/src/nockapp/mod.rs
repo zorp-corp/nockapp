@@ -26,14 +26,12 @@ pub struct NockApp {
     pub kernel: Kernel,
     // Current join handles for IO drivers (parallel to `drivers`)
     pub tasks: Arc<Mutex<tokio::task::JoinSet<Result<(), NockAppError>>>>,
-    // Current join handles for save task
-    pub save_tasks: Arc<Mutex<tokio::task::JoinSet<Result<u64, NockAppError>>>>,
     // Exit signal sender
     pub exit_send: mpsc::Sender<usize>,
     // Exit signal receiver
     pub exit_recv: mpsc::Receiver<usize>,
     // Save event num sender
-    pub watch_send: tokio::sync::watch::Sender<u64>,
+    pub watch_send: Arc<Mutex<tokio::sync::watch::Sender<u64>>>,
     // Save event num receiver
     pub watch_recv: tokio::sync::watch::Receiver<u64>,
     // IO action channel
@@ -57,12 +55,11 @@ impl NockApp {
         let buff_toggle = Arc::new(AtomicBool::new(false));
         let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
         let (watch_send, watch_recv) = tokio::sync::watch::channel(kernel.serf.event_num);
-        let save_tasks = Arc::new(Mutex::new(JoinSet::new()));
+        let watch_send = Arc::new(Mutex::new(watch_send.clone()));
 
         Self {
             kernel,
             tasks,
-            save_tasks,
             exit_send,
             exit_recv,
             watch_send,
@@ -88,7 +85,7 @@ impl NockApp {
         let io_sender = self.action_channel_sender.clone();
         let effect_sender = self.effect_broadcast.clone();
         let effect_receiver = Mutex::new(self.effect_broadcast.subscribe());
-        let exit= self.exit_send.clone();
+        let exit = self.exit_send.clone();
         let fut = driver(NockAppHandle {
             io_sender,
             effect_sender,
@@ -106,7 +103,8 @@ impl NockApp {
         let bytes = checkpoint.encode()?;
         let jam_paths = self.kernel.jam_paths.clone();
         let toggle = self.buff_toggle.clone();
-        self.save_tasks.lock().await.spawn(async move {
+        let send_lock = self.watch_send.clone();
+        self.tasks.lock().await.spawn(async move {
             let file = if toggle.load(Ordering::SeqCst) {
                 &jam_paths.1
             } else {
@@ -121,9 +119,10 @@ impl NockApp {
 
             // Flip toggle after successful write
             toggle.store(!toggle.load(Ordering::SeqCst), Ordering::SeqCst);
-
+            let send = send_lock.lock().await;
+            send.send(checkpoint.event_num)?;
             drop(save);
-            Ok(checkpoint.event_num)
+            Ok(())
         });
 
         // Need to add this for ctrl-c to register
@@ -134,10 +133,6 @@ impl NockApp {
     pub async fn work(&mut self) -> Result<(), NockAppError> {
         let tasks_fut = async {
             let mut joinset = self.tasks.clone().lock_owned().await;
-            joinset.join_next().await
-        };
-        let tasks_save= async {
-            let mut joinset = self.save_tasks.clone().lock_owned().await;
             joinset.join_next().await
         };
 
@@ -153,22 +148,10 @@ impl NockApp {
                     _ => {Ok(())},
                 }
             },
-            res = tasks_save => {
-                match res {
-                    Some(Ok(Err(e))) => {
-                        Err(e)
-                    },
-                    Some(Err(e)) => {
-                        Err(e)?
-                    },
-                    Some(Ok(Ok(event_num))) => {self.watch_send.send(event_num)?; Ok(())},
-                    _ => {Ok(())},
-                }
-            },
             permit = self.save_sem.clone().acquire_owned() => {
-                //  Check if we should write in the first place
                 let curr_event = self.kernel.serf.event_num;
 
+                //  Check if we should write in the first place
                 if !self.kernel.jam_paths.can_write(curr_event) {
                     debug!("Skipping save, event number has not changed from: {}", curr_event);
                     tokio::time::sleep(Duration::from_secs(1)).await;
@@ -177,24 +160,29 @@ impl NockApp {
                 self.save(permit).await
             },
             exit = self.exit_recv.recv() => {
-                // TODO: handle option
-                let code = exit.unwrap();
-                let exit_event_num = self.kernel.serf.event_num;
-                info!("Exit request received, waiting for save for event_num {}", exit_event_num);
-                // TODO: actually prevent new pokes from coming in
+                if let Some(code) = exit {
+                    self.action_channel.close();
+                    let exit_event_num = self.kernel.serf.event_num;
+                    info!("Exit request received, waiting for save checkpoint with event_num {}", exit_event_num);
 
-                let recv = self.watch_recv.clone();
-                tokio::task::spawn(async move {
-                    loop {
-                        let new = *(recv.borrow());
-                        if new == exit_event_num {
-                            info!("Save event_num reached, exiting with code {}", code);
-                            std::process::exit(code as i32);
+                    let mut recv = self.watch_recv.clone();
+                    tokio::task::spawn(async move {
+                        loop {
+                            let _ = recv.changed().await;
+                            let new = *(recv.borrow());
+                            assert!(new <= exit_event_num);
+                            if new == exit_event_num {
+                                info!("Save event_num reached, exiting with code {}", code);
+                                std::process::exit(code as i32);
+                            }
                         }
-                    }
-
-                });
-                Ok(())
+                    });
+                    Ok(())
+                }
+                else {
+                    error!("Exit signal channel closed prematurely");
+                    Err(NockAppError::ChannelClosedError)
+                }
             }
             action_res = self.action_channel.recv() => {
                 if let Some(action) = action_res {
@@ -343,6 +331,8 @@ pub enum NockAppError {
     FromUtf8Error(#[from] std::string::FromUtf8Error),
     #[error("Crown error: {0}")]
     CrownError(#[from] CrownError),
+    #[error("Channel closed error")]
+    ChannelClosedError,
     #[error("Other error")]
     OtherError,
     #[error("Peek failed")]
@@ -391,8 +381,7 @@ mod tests {
         let snap_dir = temp_dir.path().to_path_buf();
         let jam_paths = JamPaths::new(&snap_dir);
         let jam_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("assets")
+            .join("tests")
             .join(jam);
         let jam_bytes = fs::read(jam_path).expect(&format!("Failed to read {} file", jam));
         let kernel = Kernel::load(snap_dir, jam_paths, &jam_bytes, false);
@@ -416,7 +405,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_nockapp_save() {
-        let (kernel, _temp_dir) = setup_kernel("dumb.jam");
+        let (kernel, _temp_dir) = setup_kernel("test-ker.jam");
         let mut nockapp = NockApp::new(kernel);
         let mut arvo = nockapp.kernel.serf.arvo;
         let jam_paths = nockapp.kernel.jam_paths.clone();
@@ -466,15 +455,13 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_nockapp_poke_save() {
-        let (kernel, _temp_dir) = setup_kernel("dumb.jam");
+        let (kernel, _temp_dir) = setup_kernel("test-ker.jam");
         let mut nockapp = NockApp::new(kernel);
         assert_eq!(nockapp.kernel.serf.event_num, 0);
         let mut arvo_before_poke = nockapp.kernel.serf.arvo;
 
-        let poke = T(
-            nockapp.kernel.serf.stack(),
-            &[D(tas!(b"command")), D(tas!(b"born")), D(0)],
-        );
+        let poke = D(tas!(b"inc"));
+
         let _ = nockapp.kernel.poke(poke).unwrap();
 
         // Save
@@ -521,7 +508,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_nockapp_save_multiple() {
-        let (kernel, _temp_dir) = setup_kernel("test.jam");
+        let (kernel, _temp_dir) = setup_kernel("test-ker.jam");
         let mut nockapp = NockApp::new(kernel);
         assert_eq!(nockapp.kernel.serf.event_num, 0);
         let jam_paths = nockapp.kernel.jam_paths.clone();
@@ -561,7 +548,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_nockapp_corrupt_check() {
-        let (kernel, _temp_dir) = setup_kernel("test.jam");
+        let (kernel, _temp_dir) = setup_kernel("test-ker.jam");
         let mut nockapp = NockApp::new(kernel);
         assert_eq!(nockapp.kernel.serf.event_num, 0);
         let jam_paths = nockapp.kernel.jam_paths.clone();
@@ -601,7 +588,7 @@ mod tests {
 
     #[test]
     fn test_jam_equality_stack() {
-        let (mut kernel, _temp_dir) = setup_kernel("http.jam");
+        let (mut kernel, _temp_dir) = setup_kernel("test-ker.jam");
         let mut arvo = kernel.serf.arvo.clone();
         let stack = kernel.serf.stack();
         let j = jam(stack, arvo);
@@ -612,7 +599,7 @@ mod tests {
 
     #[test]
     fn test_jam_equality_slab() {
-        let (kernel, _temp_dir) = setup_kernel("http.jam");
+        let (kernel, _temp_dir) = setup_kernel("test-ker.jam");
         let mut slab = NounSlab::new();
         let arvo = kernel.serf.arvo.clone();
         slab.copy_into(arvo);
@@ -623,7 +610,7 @@ mod tests {
 
     #[test]
     fn test_jam_equality_slab_stack() {
-        let (mut kernel, _temp_dir) = setup_kernel("http.jam");
+        let (mut kernel, _temp_dir) = setup_kernel("test-ker.jam");
         let mut arvo = kernel.serf.arvo.clone();
         let mut slab = NounSlab::new();
         slab.copy_into(arvo);
