@@ -26,10 +26,16 @@ pub struct NockApp {
     pub kernel: Kernel,
     // Current join handles for IO drivers (parallel to `drivers`)
     pub tasks: Arc<Mutex<tokio::task::JoinSet<Result<(), NockAppError>>>>,
+    // Current join handles for save task
+    pub save_tasks: Arc<Mutex<tokio::task::JoinSet<Result<u64, NockAppError>>>>,
     // Exit signal sender
     pub exit_send: mpsc::Sender<usize>,
     // Exit signal receiver
     pub exit_recv: mpsc::Receiver<usize>,
+    // Save event num sender
+    pub watch_send: tokio::sync::watch::Sender<u64>,
+    // Save event num receiver
+    pub watch_recv: tokio::sync::watch::Receiver<u64>,
     // IO action channel
     pub action_channel: mpsc::Receiver<IOAction>,
     // IO action channel sender
@@ -50,12 +56,17 @@ impl NockApp {
         let (exit_send, exit_recv) = mpsc::channel(1);
         let buff_toggle = Arc::new(AtomicBool::new(false));
         let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
+        let (watch_send, watch_recv) = tokio::sync::watch::channel(kernel.serf.event_num);
+        let save_tasks = Arc::new(Mutex::new(JoinSet::new()));
 
         Self {
             kernel,
             tasks,
+            save_tasks,
             exit_send,
             exit_recv,
+            watch_send,
+            watch_recv,
             action_channel,
             action_channel_sender,
             effect_broadcast,
@@ -95,7 +106,7 @@ impl NockApp {
         let bytes = checkpoint.encode()?;
         let jam_paths = self.kernel.jam_paths.clone();
         let toggle = self.buff_toggle.clone();
-        self.tasks.lock().await.spawn(async move {
+        self.save_tasks.lock().await.spawn(async move {
             let file = if toggle.load(Ordering::SeqCst) {
                 &jam_paths.1
             } else {
@@ -110,8 +121,9 @@ impl NockApp {
 
             // Flip toggle after successful write
             toggle.store(!toggle.load(Ordering::SeqCst), Ordering::SeqCst);
+
             drop(save);
-            Ok::<(), NockAppError>(())
+            Ok(checkpoint.event_num)
         });
 
         // Need to add this for ctrl-c to register
@@ -124,6 +136,10 @@ impl NockApp {
             let mut joinset = self.tasks.clone().lock_owned().await;
             joinset.join_next().await
         };
+        let tasks_save= async {
+            let mut joinset = self.save_tasks.clone().lock_owned().await;
+            joinset.join_next().await
+        };
 
         select!(
             res = tasks_fut => {
@@ -134,6 +150,18 @@ impl NockApp {
                     Some(Err(e)) => {
                         Err(e)?
                     },
+                    _ => {Ok(())},
+                }
+            },
+            res = tasks_save => {
+                match res {
+                    Some(Ok(Err(e))) => {
+                        Err(e)
+                    },
+                    Some(Err(e)) => {
+                        Err(e)?
+                    },
+                    Some(Ok(Ok(event_num))) => {self.watch_send.send(event_num)?; Ok(())},
                     _ => {Ok(())},
                 }
             },
@@ -151,9 +179,22 @@ impl NockApp {
             exit = self.exit_recv.recv() => {
                 // TODO: handle option
                 let code = exit.unwrap();
-                info!("Exit code {} received, saving and exiting", code);
-                self.save(self.save_sem.clone().acquire_owned().await).await?;
-                std::process::exit(code as i32);
+                let exit_event_num = self.kernel.serf.event_num;
+                info!("Exit request received, waiting for save for event_num {}", exit_event_num);
+                // TODO: actually prevent new pokes from coming in
+
+                let recv = self.watch_recv.clone();
+                tokio::task::spawn(async move {
+                    loop {
+                        let new = *(recv.borrow());
+                        if new == exit_event_num {
+                            info!("Save event_num reached, exiting with code {}", code);
+                            std::process::exit(code as i32);
+                        }
+                    }
+
+                });
+                Ok(())
             }
             action_res = self.action_channel.recv() => {
                 if let Some(action) = action_res {
@@ -316,6 +357,8 @@ pub enum NockAppError {
     EncodeError(#[from] bincode::error::EncodeError),
     #[error("Decode error: {0}")]
     DecodeError(#[from] bincode::error::DecodeError),
+    #[error("Send error: {0}")]
+    SendError(#[from] tokio::sync::watch::error::SendError<u64>),
 }
 
 pub fn make_driver<F, Fut>(f: F) -> IODriverFn
