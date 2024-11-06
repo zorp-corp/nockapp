@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use blake3::{Hash, Hasher};
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::fs::File;
 use std::path::PathBuf;
@@ -400,6 +401,10 @@ impl Kernel {
 /// Represents the Serf, which maintains context and provides an interface to
 /// the Sword.
 pub struct Serf {
+    /// Version number of arvo
+    pub version: u32,
+    /// Hash of boot kernel
+    pub ker_hash: Hash,
     /// The current Arvo state.
     pub arvo: Noun,
     /// The interpreter context.
@@ -477,7 +482,24 @@ impl Serf {
             |snapshot| snapshot.arvo,
         );
 
+        let version = checkpoint
+            .as_ref()
+            .map_or_else(|| 0, |snapshot| snapshot.version);
+
+        let mut hasher = Hasher::new();
+        hasher.update(kernel_bytes);
+        let mut ker_hash = hasher.finalize();
+
+        if let Some(checkpoint) = checkpoint {
+            if ker_hash != checkpoint.ker_hash {
+                info!("TODO: Kernel hash mismatch, upgrade necessary");
+                ker_hash = checkpoint.ker_hash;
+            }
+        }
+
         let mut serf = Self {
+            version,
+            ker_hash,
             arvo,
             context,
             event_num,
@@ -538,7 +560,16 @@ impl Serf {
         let arvo = self.arvo.clone();
         let cold = self.context.cold;
         let event_num = self.event_num;
-        JammedCheckpoint::new(&mut self.stack(), event_num, &cold, &arvo)
+        let version = self.version;
+        let ker_hash = self.ker_hash;
+        JammedCheckpoint::new(
+            &mut self.stack(),
+            version,
+            ker_hash,
+            event_num,
+            &cold,
+            &arvo,
+        )
     }
 
     /// Updates the Serf's state after an event.
