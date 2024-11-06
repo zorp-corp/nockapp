@@ -8,11 +8,15 @@ use std::path::PathBuf;
 use sword::jets::cold::{Cold, Nounable};
 use sword::mem::NockStack;
 use sword::noun::{Noun, T};
+use sword_macros::tas;
 use thiserror::Error;
 use tracing::{debug, error, info, warn};
 
 #[derive(Clone)]
 pub struct Checkpoint {
+    pub magic_bytes: u64,
+    pub version: u32,
+    pub ker_hash: Hash,
     pub event_num: u64,
     pub arvo: Noun,
     pub cold: Cold,
@@ -28,6 +32,9 @@ impl Checkpoint {
         let cold = Cold::from_vecs(stack, cold_mem.0, cold_mem.1, cold_mem.2);
 
         Ok(Self {
+            magic_bytes: jam.magic_bytes,
+            version: jam.version,
+            ker_hash: jam.ker_hash,
             event_num: jam.event_num,
             arvo: cell.head(),
             cold,
@@ -37,6 +44,10 @@ impl Checkpoint {
 
 #[derive(Encode, Decode, PartialEq, Debug)]
 pub struct JammedCheckpoint {
+    pub magic_bytes: u64,
+    pub version: u32,
+    #[bincode(with_serde)]
+    pub ker_hash: Hash,
     #[bincode(with_serde)]
     pub checksum: Hash,
     pub event_num: u64,
@@ -44,12 +55,22 @@ pub struct JammedCheckpoint {
 }
 
 impl JammedCheckpoint {
-    pub fn new(stack: &mut NockStack, event_num: u64, cold: &Cold, arvo: &Noun) -> Self {
+    pub fn new(
+        stack: &mut NockStack,
+        version: u32,
+        ker_hash: Hash,
+        event_num: u64,
+        cold: &Cold,
+        arvo: &Noun,
+    ) -> Self {
         let cold_noun = (*cold).into_noun(stack);
         let cell = T(stack, &[*arvo, cold_noun]);
         let jam = JammedNoun::from_noun(stack, cell);
         let checksum = Self::checksum(event_num, &jam.0);
         Self {
+            magic_bytes: tas!(b"JAM"),
+            version,
+            ker_hash,
             checksum,
             event_num,
             jam,
@@ -61,7 +82,7 @@ impl JammedCheckpoint {
     pub fn encode(&self) -> Result<Vec<u8>, bincode::error::EncodeError> {
         encode_to_vec(self, config::standard())
     }
-    pub fn checksum(event_num: u64, jam: &Bytes) -> Hash {
+    fn checksum(event_num: u64, jam: &Bytes) -> Hash {
         let jam_len = jam.len();
         let mut hasher = Hasher::new();
         hasher.update(&event_num.to_le_bytes());
