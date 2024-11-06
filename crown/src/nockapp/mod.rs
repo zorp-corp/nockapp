@@ -30,6 +30,8 @@ pub struct NockApp {
     pub exit_send: mpsc::Sender<usize>,
     // Exit signal receiver
     pub exit_recv: mpsc::Receiver<usize>,
+    // Exit status
+    pub exit_status: AtomicBool,
     // Save event num sender
     pub watch_send: Arc<Mutex<tokio::sync::watch::Sender<u64>>>,
     // Save event num receiver
@@ -44,10 +46,12 @@ pub struct NockApp {
     pub buff_toggle: Arc<AtomicBool>,
     // Save semaphore
     pub save_sem: Arc<tokio::sync::Semaphore>,
+    // Save interval
+    pub save_interval: Duration,
 }
 
 impl NockApp {
-    pub fn new(kernel: Kernel) -> Self {
+    pub fn new(kernel: Kernel, save_interval: Duration) -> Self {
         let (action_channel_sender, action_channel) = mpsc::channel(100);
         let (effect_broadcast, _) = broadcast::channel(100);
         let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
@@ -56,12 +60,14 @@ impl NockApp {
         let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
         let (watch_send, watch_recv) = tokio::sync::watch::channel(kernel.serf.event_num);
         let watch_send = Arc::new(Mutex::new(watch_send.clone()));
+        let exit_status = AtomicBool::new(false);
 
         Self {
             kernel,
             tasks,
             exit_send,
             exit_recv,
+            exit_status,
             watch_send,
             watch_recv,
             action_channel,
@@ -69,6 +75,7 @@ impl NockApp {
             effect_broadcast,
             buff_toggle,
             save_sem,
+            save_interval,
         }
     }
 
@@ -126,6 +133,7 @@ impl NockApp {
         });
 
         // Need to add this for ctrl-c to register
+        // TODO: Prioritize ctrl_c signal handler
         tokio::time::sleep(Duration::from_secs(1)).await;
         Ok(())
     }
@@ -149,19 +157,30 @@ impl NockApp {
                 }
             },
             permit = self.save_sem.clone().acquire_owned() => {
-                let curr_event = self.kernel.serf.event_num;
-
                 //  Check if we should write in the first place
-                if !self.kernel.jam_paths.can_write(curr_event) {
-                    debug!("Skipping save, event number has not changed from: {}", curr_event);
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-                    return Ok(());
+                let curr_event_num = self.kernel.serf.event_num;
+                let saved_event_num = self.watch_recv.borrow();
+                if curr_event_num <= *saved_event_num {
+                    debug!("Skipping save, event number has not changed from: {}", curr_event_num);
+                    return Ok(())
                 }
-                self.save(permit).await
+                drop(saved_event_num);
+
+                // Get the current time so we can lower bound elapsed time of save
+                // If we are currently exiting, do not enforce the lower bound.
+                let now = std::time::Instant::now();
+                let res = self.save(permit).await;
+                let elapsed = now.elapsed();
+
+                if elapsed < self.save_interval && !self.exit_status.load(Ordering::SeqCst) {
+                    tokio::time::sleep(self.save_interval - elapsed).await;
+                }
+                return res
             },
             exit = self.exit_recv.recv() => {
                 if let Some(code) = exit {
                     self.action_channel.close();
+                    self.exit_status.store(true, Ordering::SeqCst);
                     let exit_event_num = self.kernel.serf.event_num;
                     info!("Exit request received, waiting for save checkpoint with event_num {}", exit_event_num);
 
@@ -376,7 +395,7 @@ mod tests {
     use tempfile::TempDir;
     use tracing_test::traced_test;
 
-    fn setup_kernel(jam: &str) -> (Kernel, TempDir) {
+    fn setup_nockapp(jam: &str) -> NockApp {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let snap_dir = temp_dir.path().to_path_buf();
         let jam_paths = JamPaths::new(&snap_dir);
@@ -385,7 +404,7 @@ mod tests {
             .join(jam);
         let jam_bytes = fs::read(jam_path).expect(&format!("Failed to read {} file", jam));
         let kernel = Kernel::load(snap_dir, jam_paths, &jam_bytes, false);
-        (kernel, temp_dir)
+        NockApp::new(kernel, Duration::from_secs(1))
     }
 
     async fn save_nockapp(nockapp: &mut NockApp) {
@@ -405,8 +424,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_nockapp_save() {
-        let (kernel, _temp_dir) = setup_kernel("test-ker.jam");
-        let mut nockapp = NockApp::new(kernel);
+        let mut nockapp = setup_nockapp("test-ker.jam");
         let mut arvo = nockapp.kernel.serf.arvo;
         let jam_paths = nockapp.kernel.jam_paths.clone();
         assert_eq!(nockapp.kernel.serf.event_num, 0);
@@ -455,8 +473,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_nockapp_poke_save() {
-        let (kernel, _temp_dir) = setup_kernel("test-ker.jam");
-        let mut nockapp = NockApp::new(kernel);
+        let mut nockapp = setup_nockapp("test-ker.jam");
         assert_eq!(nockapp.kernel.serf.event_num, 0);
         let mut arvo_before_poke = nockapp.kernel.serf.arvo;
 
@@ -508,8 +525,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_nockapp_save_multiple() {
-        let (kernel, _temp_dir) = setup_kernel("test-ker.jam");
-        let mut nockapp = NockApp::new(kernel);
+        let mut nockapp = setup_nockapp("test-ker.jam");
         assert_eq!(nockapp.kernel.serf.event_num, 0);
         let jam_paths = nockapp.kernel.jam_paths.clone();
 
@@ -548,8 +564,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     async fn test_nockapp_corrupt_check() {
-        let (kernel, _temp_dir) = setup_kernel("test-ker.jam");
-        let mut nockapp = NockApp::new(kernel);
+        let mut nockapp = setup_nockapp("test-ker.jam");
         assert_eq!(nockapp.kernel.serf.event_num, 0);
         let jam_paths = nockapp.kernel.jam_paths.clone();
 
@@ -588,7 +603,8 @@ mod tests {
 
     #[test]
     fn test_jam_equality_stack() {
-        let (mut kernel, _temp_dir) = setup_kernel("test-ker.jam");
+        let nockapp = setup_nockapp("test-ker.jam");
+        let mut kernel = nockapp.kernel;
         let mut arvo = kernel.serf.arvo.clone();
         let stack = kernel.serf.stack();
         let j = jam(stack, arvo);
@@ -599,7 +615,8 @@ mod tests {
 
     #[test]
     fn test_jam_equality_slab() {
-        let (kernel, _temp_dir) = setup_kernel("test-ker.jam");
+        let nockapp = setup_nockapp("test-ker.jam");
+        let kernel = nockapp.kernel;
         let mut slab = NounSlab::new();
         let arvo = kernel.serf.arvo.clone();
         slab.copy_into(arvo);
@@ -610,7 +627,8 @@ mod tests {
 
     #[test]
     fn test_jam_equality_slab_stack() {
-        let (mut kernel, _temp_dir) = setup_kernel("test-ker.jam");
+        let nockapp = setup_nockapp("test-ker.jam");
+        let mut kernel = nockapp.kernel;
         let mut arvo = kernel.serf.arvo.clone();
         let mut slab = NounSlab::new();
         slab.copy_into(arvo);

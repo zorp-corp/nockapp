@@ -59,7 +59,8 @@ fn is_valid_file_or_dir(entry: &DirEntry) -> bool {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = ChooCli::parse();
 
-    let mut kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
+    let nockapp = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
+    let mut kernel = nockapp.kernel;
 
     let hoon_cord = Atom::from_value(kernel.serf.stack(), HOON_TXT)
         .unwrap()

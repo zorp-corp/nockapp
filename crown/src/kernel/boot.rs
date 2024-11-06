@@ -1,6 +1,6 @@
-use crate::default_data_dir;
 use crate::kernel::checkpoint::JamPaths;
 use crate::kernel::form::Kernel;
+use crate::{default_data_dir, NockApp};
 use clap::{arg, command, ColorChoice, Parser};
 use sword::jets::hot::HotEntry;
 use tracing::{debug, info};
@@ -22,6 +22,13 @@ pub struct Cli {
 
     #[arg(
         long,
+        default_value = "1000",
+        help = "Set the save interval for checkpoints (in ms)"
+    )]
+    save_interval: u64,
+
+    #[arg(
+        long,
         env = "RUST_LOG",
         default_value = "info",
         help = "Set the log level"
@@ -36,7 +43,7 @@ pub fn setup(
     jam: &[u8],
     cli: Option<Cli>,
     hot_state: &[HotEntry],
-) -> Result<Kernel, Box<dyn std::error::Error>> {
+) -> Result<NockApp, Box<dyn std::error::Error>> {
     let cli = cli.unwrap_or_else(|| Cli::parse());
 
     tracing_subscriber::registry()
@@ -71,5 +78,7 @@ pub fn setup(
     );
     let kernel = Kernel::load_with_hot_state(pma_dir, jam_paths, jam, hot_state, cli.trace);
 
-    Ok(kernel)
+    let save_interval = std::time::Duration::from_millis(cli.save_interval);
+
+    Ok(NockApp::new(kernel, save_interval))
 }
