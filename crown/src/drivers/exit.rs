@@ -1,6 +1,5 @@
 use crate::nockapp::{make_driver, IODriverFn};
 use crate::NounExt;
-use std::process;
 use tracing::{error, info};
 /// Creates an IO driver function for handling exit signals.
 ///
@@ -24,10 +23,10 @@ pub fn exit() -> IODriverFn {
                                     if cell.head().eq_bytes(b"exit") && cell.tail().is_atom() {
                                         // Exit with the code provided in the tail
                                         if let Ok(exit_code) = cell.tail().as_atom().and_then(|atom| atom.as_u64()) {
-                                            process::exit(exit_code as i32);
+                                            handle.exit.send(exit_code as usize).await.unwrap();
                                         } else {
                                             // Default to error code 1 if we can't get a valid exit code
-                                            process::exit(1);
+                                            handle.exit.send(1).await.unwrap();
                                         }
                                     }
                                 }

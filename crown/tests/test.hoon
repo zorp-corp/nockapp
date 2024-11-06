@@ -3,11 +3,11 @@
 |%
 +$  server-state  @
 ++  moat  (keep server-state)
-+$  cause  %inc
++$  cause  ?(%inc %inc-exit)
 ::
 +$  effect
-  $:  %state
-      val=@
+  $%  [%state val=@]
+      [%exit id=@]
   ==
 --
 ::
@@ -46,12 +46,19 @@
     ~&  "cause incorrectly formatted!"
     ~&  dat
     !!
-  =.  k  +(k)
-  :_  k
-  :_  ~
-  ^-  effect
-  =-  ~&  effect+-
+  ?+    `@tas`u.sof-cau  !!
+      %inc
+    =.  k  +(k)
+    :_  k
+    =-  ~&  effect+-
       -
-  ?>  ?=(%inc u.sof-cau)
-  [%state val=k]
+    ~[[%state val=k]]
+  ::
+     %inc-exit
+    =.  k  +(k)
+    :_  k
+    =-  ~&  effect+-
+      -
+    ~[[%exit 0] [%state val=k]]
+  ==
 --
