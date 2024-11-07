@@ -3,7 +3,7 @@ use blake3::{Hash, Hasher};
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::fs::File;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use sword::hamt::Hamt;
@@ -150,6 +150,26 @@ impl Kernel {
             terminator,
             buffer_toggle,
         }
+    }
+
+    /// Produces a checkpoint of the kernel state.
+    pub fn checkpoint(&mut self) -> JammedCheckpoint {
+        let serf = &self.serf;
+        let version = serf.version;
+        let ker_hash = serf.ker_hash;
+        let event_num = serf.event_num;
+        let arvo = serf.arvo.clone();
+        let cold = serf.context.cold;
+        let buff_index = self.buffer_toggle.load(Ordering::SeqCst);
+        JammedCheckpoint::new(
+            &mut self.serf.stack(),
+            version,
+            buff_index,
+            ker_hash,
+            event_num,
+            &cold,
+            &arvo,
+        )
     }
 
     /// Performs a peek operation on the Arvo state.
@@ -565,23 +585,6 @@ impl Serf {
             serf.preserve_event_update_leftovers();
         }
         serf
-    }
-
-    pub fn jam_checkpoint(&mut self, buff_index: bool) -> JammedCheckpoint {
-        let version = self.version;
-        let ker_hash = self.ker_hash;
-        let event_num = self.event_num;
-        let arvo = self.arvo.clone();
-        let cold = self.context.cold;
-        JammedCheckpoint::new(
-            &mut self.stack(),
-            version,
-            buff_index,
-            ker_hash,
-            event_num,
-            &cold,
-            &arvo,
-        )
     }
 
     /// Updates the Serf's state after an event.

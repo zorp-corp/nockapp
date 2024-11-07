@@ -104,15 +104,15 @@ impl NockApp {
     ) -> Result<(), NockAppError> {
         let toggle = self.kernel.buffer_toggle.clone();
         let jam_paths = self.kernel.jam_paths.clone();
-        let (file, buff_index) = if toggle.load(Ordering::SeqCst) {
-            (jam_paths.1, true)
-        } else {
-            (jam_paths.0, false)
-        };
-        let checkpoint = self.kernel.serf.jam_checkpoint(buff_index);
+        let checkpoint = self.kernel.checkpoint();
         let bytes = checkpoint.encode()?;
         let send_lock = self.watch_send.clone();
         self.tasks.lock().await.spawn(async move {
+            let file = if toggle.load(Ordering::SeqCst) {
+                jam_paths.1
+            } else {
+                jam_paths.0
+            };
             fs::write(&file, bytes).await?;
             debug!(
                 "Write to {:?} successful, checksum: {}, event: {}",
