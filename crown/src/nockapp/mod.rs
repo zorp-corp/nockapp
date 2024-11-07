@@ -106,18 +106,17 @@ impl NockApp {
         &mut self,
         save: Result<OwnedSemaphorePermit, AcquireError>,
     ) -> Result<(), NockAppError> {
-        let checkpoint = self.kernel.serf.jam_checkpoint();
-        let bytes = checkpoint.encode()?;
-        let jam_paths = self.kernel.jam_paths.clone();
         let toggle = self.buff_toggle.clone();
+        let jam_paths = self.kernel.jam_paths.clone();
+        let (file, buff_index) = if toggle.load(Ordering::SeqCst) {
+            (jam_paths.1, true)
+        } else {
+            (jam_paths.0, false)
+        };
+        let checkpoint = self.kernel.serf.jam_checkpoint(buff_index);
+        let bytes = checkpoint.encode()?;
         let send_lock = self.watch_send.clone();
         self.tasks.lock().await.spawn(async move {
-            let file = if toggle.load(Ordering::SeqCst) {
-                &jam_paths.1
-            } else {
-                &jam_paths.0
-            };
-
             fs::write(&file, bytes).await?;
             debug!(
                 "Write to {:?} successful, checksum: {}, event: {}",
@@ -156,6 +155,7 @@ impl NockApp {
                     _ => {Ok(())},
                 }
             },
+            // Edward: look here
             permit = self.save_sem.clone().acquire_owned() => {
                 //  Check if we should write in the first place
                 let curr_event_num = self.kernel.serf.event_num;
@@ -578,7 +578,7 @@ mod tests {
         assert_eq!(nockapp.save_sem.available_permits(), 1);
 
         // Generate an invalid checkpoint by incrementing the event number
-        let mut invalid = nockapp.kernel.serf.jam_checkpoint();
+        let mut invalid = nockapp.kernel.serf.jam_checkpoint(false);
         invalid.event_num = invalid.event_num + 1;
         assert!(!invalid.validate());
 

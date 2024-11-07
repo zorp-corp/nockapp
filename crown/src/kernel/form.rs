@@ -26,7 +26,7 @@ use crate::utils::slogger::CrownSlogger;
 use crate::utils::{current_da, NOCK_STACK_SIZE};
 use crate::{AtomExt, CrownError, NounExt, Result, ToBytesExt};
 
-use super::checkpoint::JammedCheckpoint;
+use super::checkpoint::{Checkpoint, JammedCheckpoint};
 
 const PEEK_AXIS: u64 = 22;
 const POKE_AXIS: u64 = 23;
@@ -70,7 +70,25 @@ impl Kernel {
         hot_state: &[HotEntry],
         trace: bool,
     ) -> Self {
-        let serf = Serf::load(pma_dir.clone(), &jam_paths, kernel, hot_state, trace);
+        let mut pma_path = pma_dir.clone();
+        pma_path.push(".crown");
+        pma_path.push("chk");
+        std::fs::create_dir_all(&pma_path).unwrap();
+        pma_open(pma_path).expect("serf: pma open failed");
+
+        std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
+
+        let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
+
+        let checkpoint = if jam_paths.checkpoint_exists() {
+            info!("Checkpoint file(s) found, validating and loading from jam");
+            jam_paths.load_checkpoint(&mut stack).ok()
+        } else {
+            info!("No checkpoint file found, starting from scratch");
+            None
+        };
+
+        let serf = Serf::new(stack, checkpoint, kernel, hot_state, trace);
         let terminator = Arc::new(AtomicBool::new(false));
         Self {
             serf,
@@ -92,7 +110,25 @@ impl Kernel {
     ///
     /// A new `Kernel` instance.
     pub fn load(pma_dir: PathBuf, jam_paths: JamPaths, kernel: &[u8], trace: bool) -> Self {
-        let serf = Serf::load(pma_dir.clone(), &jam_paths, kernel, &[], trace);
+        let mut pma_path = pma_dir.clone();
+        pma_path.push(".crown");
+        pma_path.push("chk");
+        std::fs::create_dir_all(&pma_path).unwrap();
+        pma_open(pma_path).expect("serf: pma open failed");
+
+        std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
+
+        let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
+
+        let checkpoint = if jam_paths.checkpoint_exists() {
+            info!("Checkpoint file(s) found, validating and loading from jam");
+            jam_paths.load_checkpoint(&mut stack).ok()
+        } else {
+            info!("No checkpoint file found, starting from scratch");
+            None
+        };
+
+        let serf = Serf::new(stack, checkpoint, kernel, &[], trace);
         let terminator = Arc::new(AtomicBool::new(false));
         Self {
             serf,
@@ -418,31 +454,23 @@ impl Serf {
     ///
     /// # Arguments
     ///
-    /// * `jam_paths` - Paths for alternating jam buffers.
+    /// * `stack` - The Nock stack.
+    /// * `checkpoint` - Optional checkpoint to restore from.
     /// * `kernel_bytes` - Byte slice containing the kernel code.
     /// * `constant_hot_state` - Custom hot state entries.
-    /// * `trace_info` - Optional trace information.
+    /// * `trace` - Bool indicating whether to enable sword tracing.
     ///
     /// # Returns
     ///
     /// A new `Serf` instance.
     fn new(
-        jam_paths: &JamPaths,
+        mut stack: NockStack,
+        checkpoint: Option<Checkpoint>,
         kernel_bytes: &[u8],
         constant_hot_state: &[HotEntry],
-        trace_info: Option<TraceInfo>,
+        trace: bool,
     ) -> Self {
         let hot_state = [URBIT_HOT_STATE, constant_hot_state].concat();
-        let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
-
-        let checkpoint = if jam_paths.checkpoint_exists() {
-            info!("Checkpoint file(s) found, validating and loading from jam");
-            jam_paths.load_checkpoint(&mut stack).ok()
-        } else {
-            info!("No checkpoint file found, starting from scratch");
-            None
-        };
-
         let cache = Hamt::<Noun>::new(&mut stack);
         let (mut cold, event_num) = checkpoint.as_ref().map_or_else(
             || (Cold::new(&mut stack), 0),
@@ -452,6 +480,19 @@ impl Serf {
         let hot = Hot::init(&mut stack, &hot_state);
         let warm = Warm::init(&mut stack, &mut cold, &hot);
         let slogger = std::boxed::Box::pin(CrownSlogger {});
+
+        let trace_info = if trace {
+            let file = File::create("trace.json").expect("Cannot create trace file trace.json");
+            let pid = std::process::id();
+            let process_start = std::time::Instant::now();
+            Some(TraceInfo {
+                file,
+                pid,
+                process_start,
+            })
+        } else {
+            None
+        };
 
         let mut context = interpreter::Context {
             stack,
@@ -512,59 +553,16 @@ impl Serf {
         serf
     }
 
-    /// Loads a Serf instance from a snapshot or creates a new one.
-    ///
-    /// # Arguments
-    ///
-    /// * `pma_dir` - Directory to hold pma files. Not in use currently.
-    /// * `jam_paths` - Paths for alternating jam buffers.
-    /// * `kernel_bytes` - Byte slice containing the kernel code as a jammed noun.
-    /// * `constant_hot_state` - Custom hot state entries.
-    /// * `trace` - Whether to enable tracing.
-    ///
-    /// # Returns
-    ///
-    /// A new `Serf` instance.
-    pub fn load(
-        pma_dir: PathBuf,
-        jam_paths: &JamPaths,
-        kernel_bytes: &[u8],
-        constant_hot_state: &[HotEntry],
-        trace: bool,
-    ) -> Self {
-        let mut pma_path = pma_dir.clone();
-        pma_path.push(".crown");
-        pma_path.push("chk");
-        std::fs::create_dir_all(&pma_path).unwrap();
-        pma_open(pma_path).expect("serf: pma open failed");
-
-        std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
-
-        let trace_info = if trace {
-            let file = File::create("trace.json").expect("Cannot create trace file trace.json");
-            let pid = std::process::id();
-            let process_start = std::time::Instant::now();
-            Some(TraceInfo {
-                file,
-                pid,
-                process_start,
-            })
-        } else {
-            None
-        };
-
-        Self::new(jam_paths, kernel_bytes, constant_hot_state, trace_info)
-    }
-
-    pub fn jam_checkpoint(&mut self) -> JammedCheckpoint {
-        let arvo = self.arvo.clone();
-        let cold = self.context.cold;
-        let event_num = self.event_num;
+    pub fn jam_checkpoint(&mut self, buff_index: bool) -> JammedCheckpoint {
         let version = self.version;
         let ker_hash = self.ker_hash;
+        let event_num = self.event_num;
+        let arvo = self.arvo.clone();
+        let cold = self.context.cold;
         JammedCheckpoint::new(
             &mut self.stack(),
             version,
+            buff_index,
             ker_hash,
             event_num,
             &cold,
