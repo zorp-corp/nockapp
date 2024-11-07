@@ -46,6 +46,8 @@ pub struct Kernel {
     pma_dir: PathBuf,
     /// Jam persistence buffer paths.
     pub jam_paths: JamPaths,
+    /// Buffer toggle for writing to the jam buffer.
+    pub buffer_toggle: Arc<AtomicBool>,
     /// Atomic flag for terminating the kernel.
     terminator: Arc<AtomicBool>,
 }
@@ -88,6 +90,11 @@ impl Kernel {
             None
         };
 
+        let buffer_toggle = checkpoint.as_ref().map_or_else(
+            || Arc::new(AtomicBool::new(false)),
+            |snapshot| Arc::new(AtomicBool::new(!snapshot.buff_index)),
+        );
+
         let serf = Serf::new(stack, checkpoint, kernel, hot_state, trace);
         let terminator = Arc::new(AtomicBool::new(false));
         Self {
@@ -95,6 +102,7 @@ impl Kernel {
             pma_dir,
             jam_paths,
             terminator,
+            buffer_toggle,
         }
     }
 
@@ -128,6 +136,11 @@ impl Kernel {
             None
         };
 
+        let buffer_toggle = checkpoint.as_ref().map_or_else(
+            || Arc::new(AtomicBool::new(false)),
+            |snapshot| Arc::new(AtomicBool::new(!snapshot.buff_index)),
+        );
+
         let serf = Serf::new(stack, checkpoint, kernel, &[], trace);
         let terminator = Arc::new(AtomicBool::new(false));
         Self {
@@ -135,6 +148,7 @@ impl Kernel {
             pma_dir,
             jam_paths,
             terminator,
+            buffer_toggle,
         }
     }
 

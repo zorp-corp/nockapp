@@ -42,8 +42,6 @@ pub struct NockApp {
     pub action_channel_sender: mpsc::Sender<IOAction>,
     // Effect broadcast channel
     pub effect_broadcast: broadcast::Sender<NounSlab>,
-    // Jam buffer toggle
-    pub buff_toggle: Arc<AtomicBool>,
     // Save semaphore
     pub save_sem: Arc<tokio::sync::Semaphore>,
     // Save interval
@@ -56,7 +54,6 @@ impl NockApp {
         let (effect_broadcast, _) = broadcast::channel(100);
         let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
         let (exit_send, exit_recv) = mpsc::channel(1);
-        let buff_toggle = Arc::new(AtomicBool::new(false));
         let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
         let (watch_send, watch_recv) = tokio::sync::watch::channel(kernel.serf.event_num);
         let watch_send = Arc::new(Mutex::new(watch_send.clone()));
@@ -73,7 +70,6 @@ impl NockApp {
             action_channel,
             action_channel_sender,
             effect_broadcast,
-            buff_toggle,
             save_sem,
             save_interval,
         }
@@ -106,7 +102,7 @@ impl NockApp {
         &mut self,
         save: Result<OwnedSemaphorePermit, AcquireError>,
     ) -> Result<(), NockAppError> {
-        let toggle = self.buff_toggle.clone();
+        let toggle = self.kernel.buffer_toggle.clone();
         let jam_paths = self.kernel.jam_paths.clone();
         let (file, buff_index) = if toggle.load(Ordering::SeqCst) {
             (jam_paths.1, true)
@@ -155,7 +151,6 @@ impl NockApp {
                     _ => {Ok(())},
                 }
             },
-            // Edward: look here
             permit = self.save_sem.clone().acquire_owned() => {
                 //  Check if we should write in the first place
                 let curr_event_num = self.kernel.serf.event_num;
