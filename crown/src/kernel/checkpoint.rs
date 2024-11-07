@@ -3,7 +3,6 @@ use bincode::config::{self, Configuration};
 use bincode::{encode_to_vec, Decode, Encode};
 use blake3::{Hash, Hasher};
 use bytes::Bytes;
-use std::cmp::max;
 use std::path::PathBuf;
 use sword::jets::cold::{Cold, Nounable};
 use sword::mem::NockStack;
@@ -118,20 +117,11 @@ impl JamPaths {
         Self(path_0, path_1)
     }
 
-    pub fn can_write(&self, curr: u64) -> bool {
-        let (chk_0, chk_1) = [&self.0, &self.1].map(Self::decode_jam).into();
-
-        match (chk_0, chk_1) {
-            (Ok(a), Ok(b)) => max(a.event_num, b.event_num) < curr,
-            (Ok(c), Err(_)) | (Err(_), Ok(c)) => c.event_num < curr,
-            _ => true,
-        }
-    }
-
     pub fn checkpoint_exists(&self) -> bool {
         self.0.exists() || self.1.exists()
     }
 
+    // TODO return checkpoint and which buffer is being loaded so we can set the buffer toggle
     pub fn load_checkpoint<'a>(
         &'a self,
         stack: &'a mut NockStack,

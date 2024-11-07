@@ -1,7 +1,6 @@
 use clap::{command, ColorChoice, Parser};
 use crown::kernel::boot;
 use crown::kernel::boot::Cli as BootCli;
-use crown::nockapp::NockApp;
 use crown::noun::slab::NounSlab;
 use sword::noun::D;
 use sword_macros::tas;
@@ -20,8 +19,7 @@ struct TestCli {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = TestCli::parse();
     debug!("KERNEL_JAM len: {:?}", KERNEL_JAM.to_vec().len());
-    let kernel = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
-    let mut test_app = NockApp::new(kernel);
+    let mut test_app = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
     let inc = D(tas!(b"inc-exit"));
     let mut slab = NounSlab::new();
     slab.set_root(inc);
