@@ -118,7 +118,6 @@ impl NockApp {
 
             file.write_all(&bytes).await?;
             file.sync_all().await?;
-            file.flush().await?;
 
             debug!(
                 "Write to {:?} successful, checksum: {}, event: {}",
