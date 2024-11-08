@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use thiserror::Error;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, oneshot, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::task::JoinSet;
 use tokio::time::Duration;
@@ -108,15 +109,22 @@ impl NockApp {
         let bytes = checkpoint.encode()?;
         let send_lock = self.watch_send.clone();
         self.tasks.lock().await.spawn(async move {
-            let file = if toggle.load(Ordering::SeqCst) {
+            let path = if toggle.load(Ordering::SeqCst) {
                 jam_paths.1
             } else {
                 jam_paths.0
             };
-            fs::write(&file, bytes).await?;
+            let mut file = fs::File::create(&path).await?;
+
+            file.write_all(&bytes).await?;
+            file.sync_all().await?;
+            file.flush().await?;
+
             debug!(
                 "Write to {:?} successful, checksum: {}, event: {}",
-                file, checkpoint.checksum, checkpoint.event_num
+                path.display(),
+                checkpoint.checksum,
+                checkpoint.event_num
             );
 
             // Flip toggle after successful write
