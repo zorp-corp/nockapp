@@ -12,9 +12,13 @@
 +$  knob  [t=type f=nock]
 +$  cause
   $%  [%build entry=cord directory=(list [cord cord]) arbitrary=?]
+      [%file %write path=@t contents=@ success=?]
       [%boot hoon-txt=cord]
   ==
-+$  effect  [%jam p=*]
++$  effect
+  $%  [%file %write path=@t contents=@]
+      [%exit id=@]
+  ==
 --
 ::
 =<
@@ -43,30 +47,43 @@
 ++  poke
   |=  [eny=@ our=@ux now=@da dat=*]
   ^-  [(list effect) choo-state]
-  =/  sof-cau=(unit cause)  ((soft cause) dat)
-  ?~  sof-cau
-    ~&  "cause incorrectly formatted!"
-    ~&  dat
+  =/  cause=(unit cause)  ((soft cause) dat)
+  ?~  cause
+    ~&  >>  "input is not a proper cause {<dat>}"
     !!
-  =/  =cause  u.sof-cau
-  ~&  hoon-version+hoon-version
-  ?:  ?=(%boot -.cause)
+  =/  cause  u.cause
+  ?-    -.cause
+      %file
+    [~ k]
+  ::
+      %boot
+    ~&  hoon-version+hoon-version
     ?:  ?=(^ cached-hoon.k)
       [~ k]
-    [~ k(cached-hoon `(build-honc hoon-txt.cause))]
-  =/  entry  (stab entry.cause)
-  =/  dir
-    %-  ~(gas by *(map path cord))
-    (turn directory.cause |=((pair @t @t) [(stab p) q]))
-  ?>  ?=(^ cached-hoon.k)
-  :_  k
-  :_  ~
-  :-  %jam
-  ?:  arbitrary.cause
-    %-  ~(create-arbitrary builder u.cached-hoon.k)
-    [entry dir]
-  %-  ~(create builder u.cached-hoon.k)
-  [entry dir]
+   [~ k(cached-hoon `(build-honc hoon-txt.cause))]
+  ::
+      %build
+    =/  entry  (stab entry.cause)
+    =/  dir
+      %-  ~(gas by *(map path cord))
+      (turn directory.cause |=((pair @t @t) [(stab p) q]))
+    ?>  ?=(^ cached-hoon.k)
+    =/  contents=@
+      %-  jam
+      ?:  arbitrary.cause
+        %-  ~(create-arbitrary builder u.cached-hoon.k)
+        [entry dir]
+      %-  ~(create builder u.cached-hoon.k)
+      [entry dir]
+    :_  k
+    :~  :*  %file
+            %write
+            path=(crip "out.jam")
+            contents=contents
+        ==
+        [%exit 0]
+    ==
+  ==
 --
 ::
 ::  build system

@@ -1,6 +1,7 @@
 use crate::nockapp::{make_driver, IODriverFn};
 use crate::noun::slab::NounSlab;
 use crate::noun::FromAtom;
+use crate::AtomExt;
 use sword::noun::{IndirectAtom, Noun, D, T};
 use sword_macros::tas;
 use tracing::error;
@@ -86,7 +87,7 @@ pub fn file() -> IODriverFn {
                     let Ok(contents_atom) = write_cell.tail().as_atom() else {
                         continue;
                     };
-                    let path = String::from_utf8(Vec::from(path_atom.as_bytes()))?;
+                    let path = path_atom.as_string()?;
                     let contents = contents_atom.as_bytes();
                     match tokio::fs::write(&path, contents).await {
                         Ok(_) => {
@@ -104,7 +105,8 @@ pub fn file() -> IODriverFn {
                             poke_slab.set_root(poke_noun);
                             handle.poke(poke_slab).await?;
                         }
-                        Err(_) => {
+                        Err(e) => {
+                            error!("file driver: error writing to path: {}", e);
                             let mut poke_slab = NounSlab::new();
                             let poke_noun = T(
                                 &mut poke_slab,

@@ -1,9 +1,12 @@
 use crown::kernel::boot;
-use crown::{AtomExt, NounExt};
+use crown::nockapp::Operation;
+use crown::noun::slab::NounSlab;
+use crown::AtomExt;
 use sword::noun::{Atom, D, T};
 use sword_macros::tas;
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncReadExt;
+use tracing::error;
 use walkdir::{DirEntry, WalkDir};
 
 use clap::{arg, command, ColorChoice, Parser};
@@ -59,20 +62,20 @@ fn is_valid_file_or_dir(entry: &DirEntry) -> bool {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = ChooCli::parse();
 
-    let nockapp = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
-    let mut kernel = nockapp.kernel;
+    let mut nockapp = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
 
-    let hoon_cord = Atom::from_value(kernel.serf.stack(), HOON_TXT)
-        .unwrap()
-        .as_noun();
+    let mut slab = NounSlab::new();
+    let hoon_cord = Atom::from_value(&mut slab, HOON_TXT).unwrap().as_noun();
+    let bootstrap_poke = T(&mut slab, &[D(tas!(b"boot")), hoon_cord]);
+    slab.set_root(bootstrap_poke);
 
-    let bootstrap_poke = T(kernel.serf.stack(), &[D(tas!(b"boot")), hoon_cord]);
-    let _ = kernel.poke(bootstrap_poke)?;
+    nockapp
+        .add_io_driver(crown::one_punch_driver(slab, Operation::Poke))
+        .await;
 
+    let mut slab = NounSlab::new();
     let entry_string = cli.entry.strip_prefix(&cli.directory).unwrap();
-    let entry_noun = Atom::from_value(kernel.serf.stack(), entry_string)
-        .unwrap()
-        .as_noun();
+    let entry_noun = Atom::from_value(&mut slab, entry_string).unwrap().as_noun();
 
     let mut directory_noun = D(0);
 
@@ -89,48 +92,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap()
                 .strip_prefix(&cli.directory)
                 .unwrap();
-            let path_cord = Atom::from_value(kernel.serf.stack(), path_str)
-                .unwrap()
-                .as_noun();
+            let path_cord = Atom::from_value(&mut slab, path_str).unwrap().as_noun();
 
             let contents = {
                 let mut contents_vec: Vec<u8> = vec![];
                 let mut file = File::open(entry.path()).await?;
                 file.read_to_end(&mut contents_vec).await?;
-                Atom::from_value(kernel.serf.stack(), contents_vec)
-                    .unwrap()
-                    .as_noun()
+                Atom::from_value(&mut slab, contents_vec).unwrap().as_noun()
             };
 
-            let entry_cell = T(kernel.serf.stack(), &[path_cord, contents]);
-            directory_noun = T(kernel.serf.stack(), &[entry_cell, directory_noun]);
-            println!("{}", path_str);
+            let entry_cell = T(&mut slab, &[path_cord, contents]);
+            directory_noun = T(&mut slab, &[entry_cell, directory_noun]);
         }
     }
     let arbitrary_noun = if cli.arbitrary { D(0) } else { D(1) };
     let poke = T(
-        kernel.serf.stack(),
+        &mut slab,
         &[D(tas!(b"build")), entry_noun, directory_noun, arbitrary_noun],
     );
+    slab.copy_into(poke);
 
-    let mut poke_result = kernel.poke(poke)?;
-    //println!("result: {}", poke_result);
+    nockapp
+        .add_io_driver(crown::one_punch_driver(slab, Operation::Poke))
+        .await;
+    nockapp.add_io_driver(crown::file_driver()).await;
+    nockapp.add_io_driver(crown::exit_driver()).await;
 
     loop {
-        if let Ok(fec_it) = poke_result.as_cell() {
-            poke_result = fec_it.tail();
-            if let Ok(fec) = fec_it.head().as_cell() {
-                if fec.head().eq_bytes(b"jam") {
-                    let mut fil = File::create("out.jam").await?;
-                    fil.write_all(fec.tail().jam_self(kernel.serf.stack()).as_ref())
-                        .await?;
-                } else {
-                    //debug!("Unknown effect {:?}", fec_it.head());
-                }
-            }
-        } else {
+        let work_res = nockapp.work().await;
+        if let Err(e) = work_res {
+            error!("work error: {:?}", e);
             break;
         }
     }
+
     Ok(())
 }

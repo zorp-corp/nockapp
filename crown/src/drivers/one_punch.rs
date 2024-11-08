@@ -3,17 +3,17 @@ use crate::noun::slab::NounSlab;
 use either::Either::{self, Left, Right};
 use sword::noun::D;
 use sword_macros::tas;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 pub fn one_punch_man(data: NounSlab, op: Operation) -> IODriverFn {
     make_driver(|handle| async move {
         let result = match op {
             Operation::Poke => {
-                info!("poke_once_driver: poking with {:?}", data);
+                debug!("poke_once_driver: poking with {:?}", data);
                 Left(handle.poke(data).await?)
             }
             Operation::Peek => {
-                info!("poke_once_driver: peeking with {:?}", data);
+                debug!("poke_once_driver: peeking with {:?}", data);
                 Right(handle.peek(data).await?)
             }
         };
