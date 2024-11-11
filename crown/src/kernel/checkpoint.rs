@@ -15,6 +15,7 @@ use tracing::{debug, error, info, warn};
 pub struct Checkpoint {
     pub magic_bytes: u64,
     pub version: u32,
+    pub buff_index: bool,
     pub ker_hash: Hash,
     pub event_num: u64,
     pub arvo: Noun,
@@ -33,6 +34,7 @@ impl Checkpoint {
         Ok(Self {
             magic_bytes: jam.magic_bytes,
             version: jam.version,
+            buff_index: jam.buff_index,
             ker_hash: jam.ker_hash,
             event_num: jam.event_num,
             arvo: cell.head(),
@@ -45,6 +47,7 @@ impl Checkpoint {
 pub struct JammedCheckpoint {
     pub magic_bytes: u64,
     pub version: u32,
+    pub buff_index: bool,
     #[bincode(with_serde)]
     pub ker_hash: Hash,
     #[bincode(with_serde)]
@@ -57,6 +60,7 @@ impl JammedCheckpoint {
     pub fn new(
         stack: &mut NockStack,
         version: u32,
+        buff_index: bool,
         ker_hash: Hash,
         event_num: u64,
         cold: &Cold,
@@ -69,6 +73,7 @@ impl JammedCheckpoint {
         Self {
             magic_bytes: tas!(b"JAM"),
             version,
+            buff_index,
             ker_hash,
             checksum,
             event_num,

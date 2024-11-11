@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use thiserror::Error;
+use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, oneshot, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::task::JoinSet;
 use tokio::time::Duration;
@@ -42,8 +43,6 @@ pub struct NockApp {
     pub action_channel_sender: mpsc::Sender<IOAction>,
     // Effect broadcast channel
     pub effect_broadcast: broadcast::Sender<NounSlab>,
-    // Jam buffer toggle
-    pub buff_toggle: Arc<AtomicBool>,
     // Save semaphore
     pub save_sem: Arc<tokio::sync::Semaphore>,
     // Save interval
@@ -56,7 +55,6 @@ impl NockApp {
         let (effect_broadcast, _) = broadcast::channel(100);
         let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
         let (exit_send, exit_recv) = mpsc::channel(1);
-        let buff_toggle = Arc::new(AtomicBool::new(false));
         let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
         let (watch_send, watch_recv) = tokio::sync::watch::channel(kernel.serf.event_num);
         let watch_send = Arc::new(Mutex::new(watch_send.clone()));
@@ -73,7 +71,6 @@ impl NockApp {
             action_channel,
             action_channel_sender,
             effect_broadcast,
-            buff_toggle,
             save_sem,
             save_interval,
         }
@@ -106,22 +103,27 @@ impl NockApp {
         &mut self,
         save: Result<OwnedSemaphorePermit, AcquireError>,
     ) -> Result<(), NockAppError> {
-        let checkpoint = self.kernel.serf.jam_checkpoint();
-        let bytes = checkpoint.encode()?;
+        let toggle = self.kernel.buffer_toggle.clone();
         let jam_paths = self.kernel.jam_paths.clone();
-        let toggle = self.buff_toggle.clone();
+        let checkpoint = self.kernel.checkpoint();
+        let bytes = checkpoint.encode()?;
         let send_lock = self.watch_send.clone();
         self.tasks.lock().await.spawn(async move {
-            let file = if toggle.load(Ordering::SeqCst) {
-                &jam_paths.1
+            let path = if toggle.load(Ordering::SeqCst) {
+                jam_paths.1
             } else {
-                &jam_paths.0
+                jam_paths.0
             };
+            let mut file = fs::File::create(&path).await?;
 
-            fs::write(&file, bytes).await?;
+            file.write_all(&bytes).await?;
+            file.sync_all().await?;
+
             debug!(
                 "Write to {:?} successful, checksum: {}, event: {}",
-                file, checkpoint.checksum, checkpoint.event_num
+                path.display(),
+                checkpoint.checksum,
+                checkpoint.event_num
             );
 
             // Flip toggle after successful write
@@ -578,7 +580,7 @@ mod tests {
         assert_eq!(nockapp.save_sem.available_permits(), 1);
 
         // Generate an invalid checkpoint by incrementing the event number
-        let mut invalid = nockapp.kernel.serf.jam_checkpoint();
+        let mut invalid = nockapp.kernel.serf.jam_checkpoint(false);
         invalid.event_num = invalid.event_num + 1;
         assert!(!invalid.validate());
 
