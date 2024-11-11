@@ -1,4 +1,5 @@
-use crate::nockapp::{make_driver, IODriverFn, NockAppError, PokeResult, TaskJoinSet};
+use crate::nockapp::driver::{make_driver, IODriverFn, PokeResult, TaskJoinSet};
+use crate::nockapp::NockAppError;
 use crate::noun::slab::NounSlab;
 use crate::Bytes;
 use bytes::buf::BufMut;

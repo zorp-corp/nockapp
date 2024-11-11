@@ -1,4 +1,5 @@
-use crate::nockapp::{make_driver, IODriverFn, NockAppError, PokeResult};
+use crate::nockapp::driver::{make_driver, IODriverFn, PokeResult};
+use crate::nockapp::NockAppError;
 use crate::noun::slab::NounSlab;
 use crate::{AtomExt, Bytes};
 use std::collections::HashMap;

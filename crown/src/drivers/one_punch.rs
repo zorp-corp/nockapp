@@ -1,4 +1,5 @@
-use crate::nockapp::{make_driver, IODriverFn, NockAppError, NockAppHandle, Operation, PokeResult};
+use crate::nockapp::driver::*;
+use crate::nockapp::NockAppError;
 use crate::noun::slab::NounSlab;
 use either::Either::{self, Left, Right};
 use sword::noun::D;
