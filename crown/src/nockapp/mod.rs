@@ -47,6 +47,8 @@ pub struct NockApp {
     pub save_sem: Arc<tokio::sync::Semaphore>,
     // Save interval
     pub save_interval: Duration,
+    // Cancel token
+    pub cancel_token: tokio_util::sync::CancellationToken,
 }
 
 impl NockApp {
@@ -59,6 +61,16 @@ impl NockApp {
         let (watch_send, watch_recv) = tokio::sync::watch::channel(kernel.serf.event_num);
         let watch_send = Arc::new(Mutex::new(watch_send.clone()));
         let exit_status = AtomicBool::new(false);
+
+        let ctrl_c = tokio::signal::ctrl_c();
+        let cancel_token = tokio_util::sync::CancellationToken::new();
+
+        let token = cancel_token.clone();
+        tokio::task::spawn(async move {
+            let _ = ctrl_c.await;
+            token.cancel();
+            info!("ctrl_c registered");
+        });
 
         Self {
             kernel,
@@ -73,6 +85,7 @@ impl NockApp {
             effect_broadcast,
             save_sem,
             save_interval,
+            cancel_token,
         }
     }
 
@@ -134,9 +147,6 @@ impl NockApp {
             Ok(())
         });
 
-        // Need to add this for ctrl-c to register
-        // TODO: Prioritize ctrl_c signal handler
-        tokio::time::sleep(Duration::from_secs(1)).await;
         Ok(())
     }
 
@@ -145,6 +155,11 @@ impl NockApp {
             let mut joinset = self.tasks.clone().lock_owned().await;
             joinset.join_next().await
         };
+
+        if self.cancel_token.is_cancelled() {
+            info!("Cancel token received, exiting");
+            std::process::exit(0);
+        }
 
         select!(
             res = tasks_fut => {

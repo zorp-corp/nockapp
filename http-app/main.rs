@@ -1,7 +1,6 @@
 use clap::{command, ColorChoice, Parser};
 use crown::kernel::boot;
 use crown::kernel::boot::Cli as BootCli;
-use tokio::select;
 use tracing::debug;
 
 static KERNEL_JAM: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/http.jam"));
@@ -20,17 +19,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     http_app.add_io_driver(crown::http_driver()).await;
 
     loop {
-        select! {
-            work_res = http_app.work() => {
-                if let Err(e) = work_res {
-                    debug!("work error: {:?}", e);
-                    break
-                }
-            }
-            _ = tokio::signal::ctrl_c() => {
-                debug!("ctrl_c registered");
-                break;
-            }
+        let work_res = http_app.work().await;
+        if let Err(e) = work_res {
+            debug!("work error: {:?}", e);
+            break;
         }
     }
 

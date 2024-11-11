@@ -4,8 +4,7 @@ use crown::kernel::boot::Cli as BootCli;
 use crown::noun::slab::NounSlab;
 use sword::noun::D;
 use sword_macros::tas;
-use tokio::select;
-use tracing::debug;
+use tracing::{debug, error};
 
 static KERNEL_JAM: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/test-ker.jam"));
 #[derive(Parser, Debug)]
@@ -13,6 +12,8 @@ static KERNEL_JAM: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/
 struct TestCli {
     #[command(flatten)]
     boot: BootCli,
+    #[arg(long, help = "Exit after poke")]
+    exit: bool,
 }
 
 #[tokio::main]
@@ -20,9 +21,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = TestCli::parse();
     debug!("KERNEL_JAM len: {:?}", KERNEL_JAM.to_vec().len());
     let mut test_app = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
-    let inc = D(tas!(b"inc-exit"));
+    let poke = if cli.exit {
+        D(tas!(b"inc-exit"))
+    } else {
+        D(tas!(b"inc"))
+    };
     let mut slab = NounSlab::new();
-    slab.set_root(inc);
+    slab.set_root(poke);
     test_app
         .add_io_driver(crown::one_punch_driver(
             slab,
@@ -33,17 +38,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     test_app.add_io_driver(crown::exit_driver()).await;
 
     loop {
-        select! {
-            work_res = test_app.work() => {
-                if let Err(e) = work_res {
-                    debug!("work error: {:?}", e);
-                    break
-                }
-            }
-            _ = tokio::signal::ctrl_c() => {
-                debug!("ctrl_c registered");
-                break;
-            }
+        let work_res = test_app.work().await;
+        if let Err(e) = work_res {
+            error!("work error: {:?}", e);
+            break;
         }
     }
 
