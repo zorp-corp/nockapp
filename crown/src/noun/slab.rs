@@ -847,7 +847,6 @@ mod tests {
         let jammed_bytes = Bytes::from(jammed.into_vec());
 
         let result = slab.cue_into(jammed_bytes);
-        println!("result: {:?}", result);
         assert!(result.is_ok(), "cue_into should succeed");
         if let Ok(cued_noun) = result {
             let expected_noun = T(&mut slab, &[D(1), D(0)]);

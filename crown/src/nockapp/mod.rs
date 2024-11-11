@@ -207,7 +207,7 @@ impl NockApp {
             }
             action_res = self.action_channel.recv() => {
                 if let Some(action) = action_res {
-                    info!("action: {:?}", action);
+                    debug!("action: {:?}", action);
                     match action {
                         IOAction::Poke { poke, ack_channel } => {
                             debug!("poke slab: {:?}", poke);
@@ -580,7 +580,7 @@ mod tests {
         assert_eq!(nockapp.save_sem.available_permits(), 1);
 
         // Generate an invalid checkpoint by incrementing the event number
-        let mut invalid = nockapp.kernel.serf.jam_checkpoint(false);
+        let mut invalid = nockapp.kernel.checkpoint();
         invalid.event_num = invalid.event_num + 1;
         assert!(!invalid.validate());
 
