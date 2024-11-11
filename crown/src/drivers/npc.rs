@@ -191,7 +191,7 @@ async fn read_message(
         }
         Err(e) => {
             debug!("Error reading size: {:?}", e);
-            return Err(e.into());
+            return Err(NockAppError::IoError(e));
         }
     }
     let size = usize::from_le_bytes(size_bytes);
@@ -208,7 +208,7 @@ async fn read_message(
                 return Ok(None);
             }
             Ok(_) => {}
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(NockAppError::IoError(e)),
         }
     }
     debug!("Successfully read entire message");
@@ -232,7 +232,10 @@ async fn write_message(
             "Writing message length, {} bytes remaining",
             msg_len_bytes.len()
         );
-        let bytes = stream.write_buf(&mut msg_len_bytes).await?;
+        let bytes = stream
+            .write_buf(&mut msg_len_bytes)
+            .await
+            .map_err(NockAppError::IoError)?;
         if bytes == 0 {
             debug!("Wrote 0 bytes for message length, returning false");
             return Ok(false);
@@ -240,7 +243,10 @@ async fn write_message(
     }
     while msg_buf.len() > 0 {
         debug!("Writing message content, {} bytes remaining", msg_buf.len());
-        let bytes = stream.write_buf(&mut msg_buf).await?;
+        let bytes = stream
+            .write_buf(&mut msg_buf)
+            .await
+            .map_err(NockAppError::IoError)?;
         if bytes == 0 {
             debug!("Wrote 0 bytes for message content, returning false");
             return Ok(false);
