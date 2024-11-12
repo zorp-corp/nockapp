@@ -1,9 +1,9 @@
 [workspace]
 members = [
     "crown",
-    "choo",
-    "http-app",
-    "test-app",
+    "apps/choo",
+    "apps/http-app",
+    "apps/test-app",
 ]
 resolver = "2"
 
