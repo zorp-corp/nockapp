@@ -27,6 +27,7 @@ pub use utils::error::{CrownError, Result};
 pub use drivers::exit::exit as exit_driver;
 pub use drivers::file::file as file_driver;
 pub use drivers::http::http as http_driver;
+pub use drivers::markdown::markdown as markdown_driver;
 pub use drivers::npc::{npc_client as npc_client_driver, npc_listener as npc_listener_driver};
 pub use drivers::one_punch::one_punch_man as one_punch_driver;
 

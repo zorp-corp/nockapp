@@ -1,11 +1,12 @@
-use crate::{nockapp::driver::{make_driver, IODriverFn}, AtomExt};
-use sword_macros::tas;
+use crate::nockapp::driver::{make_driver, IODriverFn};
+use crate::AtomExt;
 use sword::noun::D;
+use sword_macros::tas;
 
-use tracing::error;
 use termimad::MadSkin;
+use tracing::error;
 
-pub fn markdown_driver() -> IODriverFn {
+pub fn markdown() -> IODriverFn {
     make_driver(|handle| async move {
         let skin = MadSkin::default_dark();
 
