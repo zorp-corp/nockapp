@@ -26,6 +26,7 @@ intmap = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }
+termimad = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-test = { workspace = true }
