@@ -117,11 +117,16 @@ impl NockApp {
             } else {
                 jam_paths.0
             };
-            eprintln!("Writing to {:?}", path);
-            let mut file = fs::File::create(&path).await?;
+            let mut file = fs::File::create(&path)
+                .await
+                .map_err(|e| NockAppError::SaveError(e))?;
 
-            file.write_all(&bytes).await?;
-            file.sync_all().await?;
+            file.write_all(&bytes)
+                .await
+                .map_err(|e| NockAppError::SaveError(e))?;
+            file.sync_all()
+                .await
+                .map_err(|e| NockAppError::SaveError(e))?;
 
             debug!(
                 "Write to {:?} successful, checksum: {}, event: {}",
@@ -156,6 +161,10 @@ impl NockApp {
             res = tasks_fut => {
                 match res {
                     Some(Ok(Err(e))) => {
+                        if let NockAppError::SaveError(_) = e {
+                            error!("{}", e);
+                            self.cancel_token.cancel();
+                        }
                         Err(e)
                     },
                     Some(Err(e)) => {

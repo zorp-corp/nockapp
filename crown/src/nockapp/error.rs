@@ -11,7 +11,9 @@ pub enum NockAppError {
     #[error("Timeout")]
     Timeout,
     #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
+    IoError(#[source] std::io::Error),
+    #[error("Save error: {0}")]
+    SaveError(#[source] std::io::Error),
     #[error("MPSC send error (probably trying to send a poke): {0}")]
     MPSCSendError(#[from] tokio::sync::mpsc::error::SendError<IOAction>),
     #[error("Oneshot receive error (sender dropped): {0}")]
