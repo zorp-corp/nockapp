@@ -10,9 +10,15 @@ use std::ptr::copy_nonoverlapping;
 use sword::mem::NockStack;
 use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
 use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
+use sword::jets::hot::URBIT_HOT_STATE;
 use sword::persist::pma_contains;
 use sword::serialization::{met0_u64_to_usize, met0_usize};
 use thiserror::Error;
+use sword::interpreter::{Context, interpret};
+use sword::jets::{cold::Cold, warm::Warm, hot::Hot};
+use sword::hamt::Hamt;
+use std::pin::Pin;
+use crate::utils::slogger::CrownSlogger;
 
 const CELL_MEM_WORD_SIZE: usize = (size_of::<CellMemory>() + 7) >> 3;
 
@@ -856,5 +862,86 @@ mod tests {
                 "Cued noun should equal [1 0]"
             );
         }
+    }
+
+    #[test]
+    fn test_nockstack_slab_equality() {
+        // Create initial NockStack with the test noun
+        let mut stack = NockStack::new(1000, 0);
+        let a_values = [
+            0xea31bc2f1dcd1ff1u64,
+            0x0dd3c7e3b75f3abbu64,
+            0x8f9ff1e4b2ca417fu64,
+            0x3bc6aedea88fed36u64,
+            0x9d68355b4a0a18d0u64,
+        ];
+        // DIRECT_MAX is u64::MAX >> 1 = 0x7FFF_FFFF_FFFF_FFFF
+        // Compare each value against DIRECT_MAX to determine if it needs to be indirect
+        println!("DIRECT_MAX = 0x7FFF_FFFF_FFFF_FFFF");
+        for (i, &val) in a_values.iter().enumerate() {
+            println!("a_values[{}] = 0x{:016x} {}", i, val,
+                if val <= 0x7FFF_FFFF_FFFF_FFFF {
+                    "(direct)"
+                } else {
+                    "(indirect)" 
+                }
+            );
+        }
+        // Convert each value to an Atom using from_bytes
+        let atoms: Vec<_> = a_values.iter()
+            .map(|&x| {
+                let bytes = Bytes::copy_from_slice(&x.to_le_bytes());
+                Atom::from_bytes(&mut stack, &bytes).as_noun()
+            })
+            .collect();
+        
+        // Create 'a' as a cell containing these atoms
+        let a = T(&mut stack, &atoms);
+        
+        // Create cell X = [a a]
+        let x = T(&mut stack, &[a, a]);
+        
+        println!("Original X in NockStack:");
+        println!("{:?}", x);
+
+        // Copy to NounSlab
+        let mut slab = NounSlab::new();
+        slab.copy_into(x);
+        let slab_x = unsafe { slab.root() };
+        
+        println!("X in NounSlab:");
+        println!("{:?}", slab_x);
+
+        // Copy back to new NockStack
+        let mut new_stack = NockStack::new(1000, 0);
+        let copied_x = slab.copy_to_stack(&mut new_stack);
+        
+        println!("Copied X back to NockStack:");
+        println!("{:?}", copied_x);
+
+        // Create interpreter context
+        let mut cold = Cold::new(&mut new_stack);
+        let hot = Hot::init(&mut new_stack, &URBIT_HOT_STATE);
+        let warm = Warm::init(&mut new_stack, &mut cold, &hot);
+        let cache = Hamt::new(&mut new_stack);
+        let mut context = Context {
+            stack: new_stack,
+            slogger: std::boxed::Box::pin(CrownSlogger {}),
+            cold,
+            warm,
+            hot,
+            cache,
+            scry_stack: D(0),
+            trace_info: None,
+        };
+
+        // Test equality using interpret
+        let tail = T(&mut context.stack, &[D(0), D(2)]);
+        let formula = T(&mut context.stack, &[D(5), tail, D(0), D(3)]);
+        let result = interpret(&mut context, copied_x, formula);
+        
+        println!("Interpret result: {:?}", result);
+        assert!(unsafe { result.unwrap().raw_equals(D(0)) },
+            "Result should be 0 (true) since head and tail are equal");
     }
 }
