@@ -923,10 +923,11 @@ mod tests {
         let mut cold = Cold::new(&mut new_stack);
         let hot = Hot::init(&mut new_stack, &URBIT_HOT_STATE);
         let warm = Warm::init(&mut new_stack, &mut cold, &hot);
-        let cache = Hamt::new(&mut new_stack);
+        let cache = Hamt::<Noun>::new(&mut new_stack);
+        let slogger = std::boxed::Box::pin(CrownSlogger {});
         let mut context = Context {
             stack: new_stack,
-            slogger: std::boxed::Box::pin(CrownSlogger {}),
+            slogger,
             cold,
             warm,
             hot,
@@ -935,9 +936,11 @@ mod tests {
             trace_info: None,
         };
 
-        // Test equality using interpret
-        let tail = T(&mut context.stack, &[D(0), D(2)]);
-        let formula = T(&mut context.stack, &[D(5), tail, D(0), D(3)]);
+        // Get the head and tail of X to compare them
+        let head = T(&mut context.stack, &[D(0), D(2)]);  // [0 2] gets head
+        let tail = T(&mut context.stack, &[D(0), D(3)]);  // [0 3] gets tail
+        let formula = T(&mut context.stack, &[D(5), head, tail]);  // [5 head tail]
+        
         let result = interpret(&mut context, copied_x, formula);
         
         println!("Interpret result: {:?}", result);
