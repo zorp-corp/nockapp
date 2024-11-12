@@ -1,4 +1,4 @@
-use crate::nockapp::{make_driver, IODriverFn};
+use crate::nockapp::driver::{make_driver, IODriverFn};
 use crate::noun::slab::NounSlab;
 use crate::noun::FromAtom;
 use crate::AtomExt;

@@ -43,6 +43,7 @@ pub fn setup(
     jam: &[u8],
     cli: Option<Cli>,
     hot_state: &[HotEntry],
+    name: &str,
 ) -> Result<NockApp, Box<dyn std::error::Error>> {
     let cli = cli.unwrap_or_else(|| Cli::parse());
 
@@ -54,8 +55,9 @@ pub fn setup(
         .with(EnvFilter::new(&cli.log_level))
         .init();
 
-    let pma_dir = default_data_dir("pma");
-    let jams_dir = default_data_dir("jams");
+    let data_dir = default_data_dir(name);
+    let pma_dir = data_dir.join("pma");
+    let jams_dir = data_dir.join("jams");
     let jam_paths = JamPaths::new(&jams_dir);
 
     if pma_dir.exists() {

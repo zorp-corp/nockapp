@@ -1,5 +1,5 @@
 use crown::kernel::boot;
-use crown::nockapp::Operation;
+use crown::nockapp::driver::Operation;
 use crown::noun::slab::NounSlab;
 use crown::AtomExt;
 use sword::noun::{Atom, D, T};
@@ -62,7 +62,7 @@ fn is_valid_file_or_dir(entry: &DirEntry) -> bool {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = ChooCli::parse();
 
-    let mut nockapp = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
+    let mut nockapp = boot::setup(KERNEL_JAM, Some(cli.boot), &[], "choo")?;
 
     let mut slab = NounSlab::new();
     let hoon_cord = Atom::from_value(&mut slab, HOON_TXT).unwrap().as_noun();

@@ -20,7 +20,7 @@ struct TestCli {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = TestCli::parse();
     debug!("KERNEL_JAM len: {:?}", KERNEL_JAM.to_vec().len());
-    let mut test_app = boot::setup(KERNEL_JAM, Some(cli.boot), &[])?;
+    let mut test_app = boot::setup(KERNEL_JAM, Some(cli.boot), &[], "test")?;
     let poke = if cli.exit {
         D(tas!(b"inc-exit"))
     } else {
@@ -31,7 +31,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     test_app
         .add_io_driver(crown::one_punch_driver(
             slab,
-            crown::nockapp::Operation::Poke,
+            crown::nockapp::driver::Operation::Poke,
         ))
         .await;
 

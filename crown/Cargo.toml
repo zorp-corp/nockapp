@@ -30,7 +30,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-test = { workspace = true }
 tracing-subscriber = { workspace = true }
-tokio = { workspace = true, features = ["time", "sync"]}
+tokio = { workspace = true, features = ["time", "sync", "signal"]}
 tokio-util = { workspace = true }
 yaque = { workspace = true }
 
