@@ -262,7 +262,64 @@ impl NounSlab {
                 break;
             }
         }
+
+        // Verify that the copied noun is fully in the stack or PMA
+        self.verify_copied_noun(res).expect("Noun was not fully copied to stack");
+        
         res
+    }
+
+    /// Verifies that a noun does not contain any references to memory in this slab
+    fn verify_copied_noun(&self, noun: Noun) -> Result<(), String> {
+        let mut stack = vec![noun];
+        let mut visited = std::collections::HashSet::new();
+
+        while let Some(noun) = stack.pop() {
+            if let Ok(allocated) = noun.as_allocated() {
+                let ptr = unsafe { allocated.to_raw_pointer() };
+                
+                // Skip if we've seen this pointer before
+                if !visited.insert(ptr as u64) {
+                    continue;
+                }
+
+                // Check if pointer is in PMA
+                if unsafe { pma_contains(ptr, 1) } {
+                    return Err(format!(
+                        "Found noun allocated in PMA at {:p}",
+                        ptr
+                    ));
+                }
+
+                // Check if pointer is in any of the slabs (this would be bad)
+                for (slab_ptr, layout) in &self.slabs {
+                    if !slab_ptr.is_null() {
+                        let slab_start = *slab_ptr as *mut u64;
+                        let slab_size = layout.size() / std::mem::size_of::<u64>();
+                        let slab_end = unsafe { slab_start.add(slab_size) };
+                        
+                        if (ptr as *mut u64) >= slab_start && (ptr as *mut u64) < slab_end {
+                            return Err(format!(
+                                "Found noun still allocated in slab at {:p}", 
+                                ptr
+                            ));
+                        }
+                    }
+                }
+
+                // If we get here, the pointer is neither in PMA nor in slabs
+                // This is expected as it should be in the NockStack
+
+                match allocated.as_either() {
+                    Either::Left(_) => (), // No need to traverse indirect atoms
+                    Either::Right(cell) => {
+                        stack.push(cell.head());
+                        stack.push(cell.tail());
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Set the root of the noun slab.
