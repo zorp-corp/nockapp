@@ -411,17 +411,16 @@ impl NounSlab {
     /// allocated memory regions or the PMA
     pub fn validate_root(&self) -> Result<(), String> {
         let mut stack = vec![self.root];
-        let mut visited = IntMap::new();
+        let mut visited = std::collections::HashSet::new();
 
         while let Some(noun) = stack.pop() {
             if let Ok(allocated) = noun.as_allocated() {
                 let ptr = unsafe { allocated.to_raw_pointer() };
                 
                 // Skip if we've seen this pointer before
-                if visited.contains_key(ptr as u64) {
+                if !visited.insert(ptr as u64) {
                     continue;
                 }
-                visited.insert(ptr as u64, ());
 
                 // Check if pointer is in any of the slabs
                 let mut found_in_slab = false;
