@@ -235,6 +235,7 @@ impl NounSlab {
                                 }
                                 unsafe {
                                     let cell_mem = stack.alloc_cell();
+                                    copy_nonoverlapping(raw_pointer, cell_mem, 1);
                                     copy_stack
                                         .push((cell.tail(), &mut (*cell_mem).tail as *mut Noun));
                                     copy_stack
