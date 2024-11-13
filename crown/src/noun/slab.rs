@@ -867,7 +867,7 @@ mod tests {
     #[test]
     fn test_nockstack_slab_equality() {
         // Create initial NockStack with the test noun
-        let mut stack = NockStack::new(1000, 0);
+        let mut stack = NockStack::new(10000, 0);
         let a_values = [
             0xea31bc2f1dcd1ff1u64,
             0x0dd3c7e3b75f3abbu64,
@@ -913,7 +913,7 @@ mod tests {
         println!("{:?}", slab_x);
 
         // Copy back to new NockStack
-        let mut new_stack = NockStack::new(1000, 0);
+        let mut new_stack = NockStack::new(10000, 0);
         let copied_x = slab.copy_to_stack(&mut new_stack);
         
         println!("Copied X back to NockStack:");
