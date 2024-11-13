@@ -460,6 +460,69 @@ impl NounSlab {
         }
         Ok(())
     }
+
+    /// Validates that all allocated nouns in the tree are contained within one of this slab's
+    /// allocated memory regions or the PMA
+    pub fn validate_root_all_slabs(&self) -> Result<(), String> {
+        let mut stack = vec![self.root];
+        let mut visited = IntMap::new();
+
+        while let Some(noun) = stack.pop() {
+            if let Ok(allocated) = noun.as_allocated() {
+                let ptr = unsafe { allocated.to_raw_pointer() };
+                
+                // Skip if we've seen this pointer before
+                if visited.contains_key(ptr as u64) {
+                    continue;
+                }
+                visited.insert(ptr as u64, ());
+
+                // Check if pointer is in any of the slabs
+                let mut found_in_slab = false;
+                for (slab_ptr, layout) in &self.slabs {
+                    if !slab_ptr.is_null() {
+                        let slab_start = *slab_ptr as *mut u64;
+                        let slab_size = layout.size() / std::mem::size_of::<u64>();
+                        let slab_end = unsafe { slab_start.add(slab_size) };
+                        
+                        if (ptr as *mut u64) >= slab_start && (ptr as *mut u64) < slab_end {
+                            found_in_slab = true;
+                            break;
+                        }
+                    }
+                }
+
+                let is_in_pma = unsafe { pma_contains(ptr, 1) };
+                
+                if !found_in_slab && !is_in_pma {
+                    return Err(format!(
+                        "Found noun allocated outside of all slabs and PMA at {:p}", 
+                        ptr
+                    ));
+                }
+
+                match allocated.as_either() {
+                    Either::Left(indirect) => {
+                        // Check normalization of indirect atoms
+                        let slice = indirect.as_slice();
+                        if !slice.is_empty() && slice.last().unwrap() == &0 {
+                            return Err(format!(
+                                "Found non-normalized indirect atom at {:p} with value {:?}",
+                                ptr,
+                                slice
+                            ));
+                        }
+                    }
+                    Either::Right(cell) => {
+                        // Add cell's head and tail to stack for processing
+                        stack.push(cell.head());
+                        stack.push(cell.tail());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Drop for NounSlab {
@@ -967,7 +1030,16 @@ mod tests {
         println!("X in NounSlab:");
         println!("{:?}", slab_x);
 
-        // Validate that slab_x is properly allocated and normalized
+        // Validate across all slabs in the slab
+        match slab.validate_root_all_slabs() {
+            Ok(_) => println!("All slabs validation passed"),
+            Err(e) => {
+                println!("All slabs validation failed: {}", e);
+                panic!("All slabs validation failed");
+            }
+        }
+
+        // Validate that nouns are in the allocation range
         match slab.validate_root() {
             Ok(_) => println!("Slab validation passed"),
             Err(e) => {
@@ -975,6 +1047,7 @@ mod tests {
                 panic!("Validation failed");
             }
         }
+
 
         // Copy back to new NockStack
         let mut new_stack = NockStack::new(10000, 0);
