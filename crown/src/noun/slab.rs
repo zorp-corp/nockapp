@@ -11,6 +11,7 @@ use sword::mem::NockStack;
 use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
 use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
 use sword::jets::hot::URBIT_HOT_STATE;
+use sword::jets::bits::util::met;
 use sword::persist::pma_contains;
 use sword::serialization::{met0_u64_to_usize, met0_usize};
 use thiserror::Error;
@@ -455,6 +456,29 @@ impl NounSlab {
                                 "Found non-normalized indirect atom at {:p} with value {:?}",
                                 ptr,
                                 slice
+                            ));
+                        }
+
+                        // Check that indirect atom size is correct
+                        let atom = indirect.as_atom();
+                        let actual_size = slice.len();
+                        let expected_size = met(6, atom);
+                        if actual_size != expected_size {
+                            return Err(format!(
+                                "Found indirect atom with incorrect size at {:p} - expected {} words but got {}",
+                                ptr,
+                                expected_size,
+                                actual_size
+                            ));
+                        }
+
+                        // Check that it shouldn't be a direct atom
+                        let bit_size = met(0, atom);
+                        if bit_size <= 63 {
+                            return Err(format!(
+                                "Found indirect atom that should be direct at {:p} - only {} bits",
+                                ptr,
+                                bit_size
                             ));
                         }
                     }
