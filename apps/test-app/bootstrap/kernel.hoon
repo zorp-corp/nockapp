@@ -1,26 +1,25 @@
 /+  *wrapper
 =>
 |%
-+$  server-state  @
-++  moat  (keep server-state)
++$  test-state  [%0 val=@]
+++  moat  (keep test-state)
 +$  cause  ?(%inc %inc-exit)
 ::
 +$  effect
-  $%  [%state val=@]
+  $%  [%state test-state]
       [%exit id=@]
   ==
 --
 ::
 %-  moat
 ^-  fort:moat
-|_  k=server-state
+|_  k=test-state
 ::
 ::  +load: upgrade from previous state
 ::
 ++  load
-  |=  arg=*
-  ^-  [(list *) *]
-  !!
+  |=  arg=test-state
+  arg
 ::
 ::  +peek: external inspect
 ::
@@ -40,7 +39,7 @@
 ::
 ++  poke
   |=  [eny=@ our=@ux now=@da dat=*]
-  ^-  [(list effect) server-state]
+  ^-  [(list effect) test-state]
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
@@ -48,17 +47,17 @@
     !!
   ?+    `@tas`u.sof-cau  !!
       %inc
-    =.  k  +(k)
+    =.  val.k  +(val.k)
     :_  k
     =-  ~&  effect+-
       -
-    ~[[%state val=k]]
+    ~[[%state k]]
   ::
      %inc-exit
-    =.  k  +(k)
+    =.  val.k  +(val.k)
     :_  k
     =-  ~&  effect+-
       -
-    ~[[%exit 0] [%state val=k]]
+    ~[[%exit 0] [%state k]]
   ==
 --
