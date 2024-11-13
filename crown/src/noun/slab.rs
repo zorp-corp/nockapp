@@ -405,6 +405,61 @@ impl NounSlab {
     pub unsafe fn root(&self) -> Noun {
         self.root
     }
+
+    /// Validates that:
+    /// 1. All allocated nouns in the tree are contained within this slab or the PMA
+    /// 2. All indirect atoms are normalized (no leading zeros)
+    /// 
+    /// Returns Ok(()) if valid, or Err with a description of the first validation failure found
+    pub fn validate_root(&self) -> Result<(), String> {
+        let mut stack = vec![self.root];
+        let mut visited = IntMap::new();
+
+        while let Some(noun) = stack.pop() {
+            if let Ok(allocated) = noun.as_allocated() {
+                let ptr = unsafe { allocated.to_raw_pointer() };
+                
+                // Skip if we've seen this pointer before
+                if visited.contains_key(ptr as u64) {
+                    continue;
+                }
+                visited.insert(ptr as u64, ());
+
+                // Check if pointer is in slab or PMA
+                let is_in_slab = !self.allocation_start.is_null() && unsafe {
+                    ptr >= self.allocation_start && ptr < self.allocation_stop
+                };
+                let is_in_pma = unsafe { pma_contains(ptr, 1) };
+                
+                if !is_in_slab && !is_in_pma {
+                    return Err(format!(
+                        "Found noun allocated outside of slab and PMA at {:p}", 
+                        ptr
+                    ));
+                }
+
+                match allocated.as_either() {
+                    Either::Left(indirect) => {
+                        // Check normalization of indirect atoms
+                        let slice = indirect.as_slice();
+                        if !slice.is_empty() && slice.last().unwrap() == &0 {
+                            return Err(format!(
+                                "Found non-normalized indirect atom at {:p} with value {:?}",
+                                ptr,
+                                slice
+                            ));
+                        }
+                    }
+                    Either::Right(cell) => {
+                        // Add cell's head and tail to stack for processing
+                        stack.push(cell.head());
+                        stack.push(cell.tail());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl Drop for NounSlab {
@@ -912,6 +967,15 @@ mod tests {
         println!("X in NounSlab:");
         println!("{:?}", slab_x);
 
+        // Validate that slab_x is properly allocated and normalized
+        match slab.validate_root() {
+            Ok(_) => println!("Slab validation passed"),
+            Err(e) => {
+                println!("Slab validation failed: {}", e);
+                panic!("Validation failed");
+            }
+        }
+
         // Copy back to new NockStack
         let mut new_stack = NockStack::new(10000, 0);
         let copied_x = slab.copy_to_stack(&mut new_stack);
@@ -946,5 +1010,26 @@ mod tests {
         println!("Interpret result: {:?}", result);
         assert!(unsafe { result.unwrap().raw_equals(D(0)) },
             "Result should be 0 (true) since head and tail are equal");
+    }
+
+    #[test]
+    fn test_validate_root() {
+        let mut slab = NounSlab::new();
+        
+        // Valid case - simple cell
+        let noun = T(&mut slab, &[D(1), D(2)]);
+        slab.set_root(noun);
+        assert!(slab.validate_root().is_ok(), "Valid noun should pass validation");
+
+        // Valid case - indirect atom
+        let large_number = u64::MAX as u128 + 1;
+        let large_number_bytes = Bytes::from(large_number.to_le_bytes().to_vec());
+        let indirect_atom = Atom::from_bytes(&mut slab, &large_number_bytes);
+        slab.set_root(indirect_atom.as_noun());
+        assert!(slab.validate_root().is_ok(), "Valid indirect atom should pass validation");
+
+        // Invalid case - non-normalized indirect atom
+        // This would require creating a non-normalized atom directly, which isn't 
+        // possible through normal APIs. You might need unsafe code to test this.
     }
 }
