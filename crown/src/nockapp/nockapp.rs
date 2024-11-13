@@ -153,7 +153,7 @@ impl NockApp {
 
         if self.cancel_token.is_cancelled() {
             info!("Cancel token received, exiting");
-            std::process::exit(0);
+            std::process::exit(1);
         }
 
         select!(
