@@ -311,7 +311,40 @@ impl NounSlab {
                 // This is expected as it should be in the NockStack
 
                 match allocated.as_either() {
-                    Either::Left(_) => (), // No need to traverse indirect atoms
+                    Either::Left(indirect) => {
+                        // Check normalization of indirect atoms
+                        let slice = indirect.as_slice();
+                        if !slice.is_empty() && slice.last().unwrap() == &0 {
+                            return Err(format!(
+                                "Found non-normalized indirect atom at {:p} with value {:?}",
+                                ptr,
+                                slice
+                            ));
+                        }
+
+                        // Check that indirect atom size is correct
+                        let atom = indirect.as_atom();
+                        let actual_size = slice.len();
+                        let expected_size = met(6, atom);
+                        if actual_size != expected_size {
+                            return Err(format!(
+                                "Found indirect atom with incorrect size at {:p} - expected {} words but got {}",
+                                ptr,
+                                expected_size,
+                                actual_size
+                            ));
+                        }
+
+                        // Check that it shouldn't be a direct atom
+                        let bit_size = met(0, atom);
+                        if bit_size <= 63 {
+                            return Err(format!(
+                                "Found indirect atom that should be direct at {:p} - only {} bits",
+                                ptr,
+                                bit_size
+                            ));
+                        }
+                    },
                     Either::Right(cell) => {
                         stack.push(cell.head());
                         stack.push(cell.tail());
