@@ -10,7 +10,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::time::Duration;
 use tokio::{fs, select};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, trace};
 
 pub struct NockApp {
     // Nock kernel
@@ -55,11 +55,10 @@ impl NockApp {
         let ctrl_c = tokio::signal::ctrl_c();
         let cancel_token = tokio_util::sync::CancellationToken::new();
 
-        let token = cancel_token.clone();
         tokio::task::spawn(async move {
             let _ = ctrl_c.await;
-            token.cancel();
             info!("ctrl_c registered");
+            std::process::exit(0);
         });
 
         Self {
@@ -154,7 +153,7 @@ impl NockApp {
 
         if self.cancel_token.is_cancelled() {
             info!("Cancel token received, exiting");
-            std::process::exit(0);
+            std::process::exit(1);
         }
 
         select!(
@@ -178,7 +177,7 @@ impl NockApp {
                 let curr_event_num = self.kernel.serf.event_num;
                 let saved_event_num = self.watch_recv.borrow();
                 if curr_event_num <= *saved_event_num {
-                    debug!("Skipping save, event number has not changed from: {}", curr_event_num);
+                    trace!("Skipping save, event number has not changed from: {}", curr_event_num);
                     return Ok(())
                 }
                 drop(saved_event_num);

@@ -223,8 +223,8 @@ mod tests {
         assert!(chk.event_num == valid.event_num);
     }
 
-    #[test]
-    fn test_jam_equality_stack() {
+    #[tokio::test]
+    async fn test_jam_equality_stack() {
         let (_temp, nockapp) = setup_nockapp("test-ker.jam");
         let mut kernel = nockapp.kernel;
         let mut arvo = kernel.serf.arvo.clone();
@@ -235,8 +235,8 @@ mod tests {
         unsafe { assert!(unifying_equality(stack, &mut arvo, &mut c)) }
     }
 
-    #[test]
-    fn test_jam_equality_slab() {
+    #[tokio::test]
+    async fn test_jam_equality_slab() {
         let (_temp, nockapp) = setup_nockapp("test-ker.jam");
         let kernel = nockapp.kernel;
         let mut slab = NounSlab::new();
@@ -247,8 +247,8 @@ mod tests {
         unsafe { assert!(slab_equality(slab.root(), c)) }
     }
 
-    #[test]
-    fn test_jam_equality_slab_stack() {
+    #[tokio::test]
+    async fn test_jam_equality_slab_stack() {
         let (_temp, nockapp) = setup_nockapp("test-ker.jam");
         let mut kernel = nockapp.kernel;
         let mut arvo = kernel.serf.arvo.clone();
