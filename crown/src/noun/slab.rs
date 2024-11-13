@@ -406,64 +406,9 @@ impl NounSlab {
         self.root
     }
 
-    /// Validates that:
-    /// 1. All allocated nouns in the tree are contained within this slab or the PMA
-    /// 2. All indirect atoms are normalized (no leading zeros)
-    /// 
-    /// Returns Ok(()) if valid, or Err with a description of the first validation failure found
-    pub fn validate_root(&self) -> Result<(), String> {
-        let mut stack = vec![self.root];
-        let mut visited = IntMap::new();
-
-        while let Some(noun) = stack.pop() {
-            if let Ok(allocated) = noun.as_allocated() {
-                let ptr = unsafe { allocated.to_raw_pointer() };
-                
-                // Skip if we've seen this pointer before
-                if visited.contains_key(ptr as u64) {
-                    continue;
-                }
-                visited.insert(ptr as u64, ());
-
-                // Check if pointer is in slab or PMA
-                let is_in_slab = !self.allocation_start.is_null() && unsafe {
-                    ptr >= self.allocation_start && ptr < self.allocation_stop
-                };
-                let is_in_pma = unsafe { pma_contains(ptr, 1) };
-                
-                if !is_in_slab && !is_in_pma {
-                    return Err(format!(
-                        "Found noun allocated outside of slab and PMA at {:p}", 
-                        ptr
-                    ));
-                }
-
-                match allocated.as_either() {
-                    Either::Left(indirect) => {
-                        // Check normalization of indirect atoms
-                        let slice = indirect.as_slice();
-                        if !slice.is_empty() && slice.last().unwrap() == &0 {
-                            return Err(format!(
-                                "Found non-normalized indirect atom at {:p} with value {:?}",
-                                ptr,
-                                slice
-                            ));
-                        }
-                    }
-                    Either::Right(cell) => {
-                        // Add cell's head and tail to stack for processing
-                        stack.push(cell.head());
-                        stack.push(cell.tail());
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-
     /// Validates that all allocated nouns in the tree are contained within one of this slab's
     /// allocated memory regions or the PMA
-    pub fn validate_root_all_slabs(&self) -> Result<(), String> {
+    pub fn validate_root(&self) -> Result<(), String> {
         let mut stack = vec![self.root];
         let mut visited = IntMap::new();
 
@@ -985,7 +930,7 @@ mod tests {
     #[test]
     fn test_nockstack_slab_equality() {
         // Create initial NockStack with the test noun
-        let mut stack = NockStack::new(10000, 0);
+        let mut stack = NockStack::new(100000, 0);
         let a_values = [
             0xea31bc2f1dcd1ff1u64,
             0x0dd3c7e3b75f3abbu64,
@@ -1030,15 +975,6 @@ mod tests {
         println!("X in NounSlab:");
         println!("{:?}", slab_x);
 
-        // Validate across all slabs in the slab
-        match slab.validate_root_all_slabs() {
-            Ok(_) => println!("All slabs validation passed"),
-            Err(e) => {
-                println!("All slabs validation failed: {}", e);
-                panic!("All slabs validation failed");
-            }
-        }
-
         // Validate that nouns are in the allocation range
         match slab.validate_root() {
             Ok(_) => println!("Slab validation passed"),
@@ -1048,9 +984,8 @@ mod tests {
             }
         }
 
-
         // Copy back to new NockStack
-        let mut new_stack = NockStack::new(10000, 0);
+        let mut new_stack = NockStack::new(100000, 0);
         let copied_x = slab.copy_to_stack(&mut new_stack);
         
         println!("Copied X back to NockStack:");
