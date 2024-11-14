@@ -1,8 +1,8 @@
 use crown::kernel::boot;
 use crown::nockapp::driver::Operation;
 use crown::noun::slab::NounSlab;
-use crown::{AtomExt, Noun};
-use sword::noun::{Atom, NounAllocator, D, T};
+use crown::AtomExt;
+use sword::noun::{Atom, D, T};
 use sword_macros::tas;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -58,10 +58,6 @@ fn is_valid_file_or_dir(entry: &DirEntry) -> bool {
     is_dir || is_hoon || is_jock
 }
 
-fn unitize<A: NounAllocator>(noun: Noun, alloc: &mut A) -> Noun {
-    T(alloc, &[D(0), noun])
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = ChooCli::parse();
@@ -81,10 +77,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut contents_vec: Vec<u8> = vec![];
         let mut file = File::open(&cli.entry).await?;
         file.read_to_end(&mut contents_vec).await?;
-        let atom = Atom::from_value(nockapp.kernel.serf.stack(), contents_vec)
+        Atom::from_value(nockapp.kernel.serf.stack(), contents_vec)
             .unwrap()
-            .as_noun();
-        unitize(atom, nockapp.kernel.serf.stack())
+            .as_noun()
     };
 
     let mut entry = cli.entry.clone();

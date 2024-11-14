@@ -7,7 +7,7 @@
   ==
 ++  moat  (keep choo-state)
 +$  cause
-  $%  [%build pat=cord tex=(unit cord) directory=(list [cord cord]) arbitrary=?]
+  $%  [%build pat=cord tex=cord directory=(list [cord cord]) arbitrary=?]
       [%file %write path=@t contents=@ success=?]
       [%boot hoon-txt=cord]
   ==
@@ -65,7 +65,7 @@
    [~ k(cached-hoon `(build-honc hoon-txt.cause))]
   ::
       %build
-    =/  =entry  [(stab pat.cause) tex.cause]
+    =/  =entry  [(stab pat.cause) `tex.cause]
     =/  dir
       %-  ~(gas by *(map path cord))
       (turn directory.cause |=((pair @t @t) [(stab p) q]))
