@@ -8,6 +8,7 @@ bin/
 .data.crown
 **/.data.crown
 assets/*
+out.jam
 
 # Dev config
 .vscode/settings.json
