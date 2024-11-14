@@ -3,7 +3,8 @@ use crown::kernel::boot;
 use crown::kernel::boot::Cli as BootCli;
 use tracing::debug;
 
-static KERNEL_JAM: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/http.jam"));
+static KERNEL_JAM: &[u8] =
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/http.jam"));
 #[derive(Parser, Debug)]
 #[command(about = "Tests various poke types for the kernel", author = "zorp", version, color = ColorChoice::Auto)]
 struct TestCli {

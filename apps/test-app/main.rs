@@ -6,7 +6,10 @@ use sword::noun::D;
 use sword_macros::tas;
 use tracing::{debug, error};
 
-static KERNEL_JAM: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/test-ker.jam"));
+static KERNEL_JAM: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/bootstrap/test-ker.jam"
+));
 #[derive(Parser, Debug)]
 #[command(about = "Tests various poke types for the kernel", author = "zorp", version, color = ColorChoice::Auto)]
 struct TestCli {

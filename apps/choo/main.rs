@@ -17,7 +17,7 @@ static KERNEL_JAM: &[u8] =
 
 static HOON_TXT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/bootstrap/hoon-138.hoon"
+    "/../hoon-deps/lib/hoon-138.hoon"
 ));
 
 #[derive(Parser, Debug)]
@@ -74,8 +74,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await;
 
     let mut slab = NounSlab::new();
-    let entry_string = cli.entry.strip_prefix(&cli.directory).unwrap();
-    let entry_noun = Atom::from_value(&mut slab, entry_string).unwrap().as_noun();
+    let entry_contents = {
+        let mut contents_vec: Vec<u8> = vec![];
+        let mut file = File::open(&cli.entry).await?;
+        file.read_to_end(&mut contents_vec).await?;
+        Atom::from_value(&mut slab, contents_vec).unwrap().as_noun()
+    };
+
+    let mut entry = cli.entry.clone();
+
+    //  Insert a leading slash if it is not present
+    //  Needed to make the entry path an actual hoon $path type
+    if !entry.starts_with('/') {
+        entry.insert(0, '/');
+    }
+
+    let entry_path = Atom::from_value(&mut slab, entry).unwrap().as_noun();
 
     let mut directory_noun = D(0);
 
@@ -108,9 +122,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let arbitrary_noun = if cli.arbitrary { D(0) } else { D(1) };
     let poke = T(
         &mut slab,
-        &[D(tas!(b"build")), entry_noun, directory_noun, arbitrary_noun],
+        &[D(tas!(b"build")), entry_path, entry_contents, directory_noun, arbitrary_noun],
     );
-    slab.copy_into(poke);
+    slab.set_root(poke);
 
     nockapp
         .add_io_driver(crown::one_punch_driver(slab, Operation::Poke))

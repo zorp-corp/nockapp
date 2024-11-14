@@ -6,12 +6,8 @@
       ~
   ==
 ++  moat  (keep choo-state)
-::
-::  nock compiled from hoon, along with type. form is independent of
-::  subject, usually expected to be 0
-+$  knob  [t=type f=nock]
 +$  cause
-  $%  [%build entry=cord directory=(list [cord cord]) arbitrary=?]
+  $%  [%build pat=cord tex=cord directory=(list [cord cord]) arbitrary=?]
       [%file %write path=@t contents=@ success=?]
       [%boot hoon-txt=cord]
   ==
@@ -19,6 +15,12 @@
   $%  [%file %write path=@t contents=@]
       [%exit id=@]
   ==
+::
+::  $entry: path of a file along with unit of its contents.
+::
+::    If unit is null, the path must exist inside of the dir map.
+::
++$  entry  [pat=path tex=(unit cord)]
 --
 ::
 =<
@@ -63,7 +65,7 @@
    [~ k(cached-hoon `(build-honc hoon-txt.cause))]
   ::
       %build
-    =/  entry  (stab entry.cause)
+    =/  =entry  [(stab pat.cause) `tex.cause]
     =/  dir
       %-  ~(gas by *(map path cord))
       (turn directory.cause |=((pair @t @t) [(stab p) q]))
@@ -304,7 +306,7 @@
   ==
 ::
 ++  create
-  |=  [entry=path dir=(map path cord)]
+  |=  [=entry dir=(map path cord)]
   ^-  (trap)
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
@@ -318,7 +320,7 @@
   %-  head
   (compile-graph (head graph) ~)
 ++  create-arbitrary
-  |=  [entry=path dir=(map path cord)]
+  |=  [=entry dir=(map path cord)]
   ^-  (trap)
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
@@ -329,17 +331,24 @@
   =>  tase
   |.(+:^$)
 ::
+++  get-file
+  |=  [suf=entry dir=(map path cord)]
+  ^-  cord
+  ?~  tex.suf
+    (~(got by dir) pat.suf)
+  u.tex.suf
+::
 ++  make-import-graph
-  |=  [face=(unit @tas) suf=path depth=@ cache=(map path import-graph) dir=(map path cord)]
+  |=  [face=(unit @tas) suf=entry depth=@ cache=(map path import-graph) dir=(map path cord)]
   ^-  [import-graph (map path import-graph)]
-  ~&  building-graph-for+[depth=depth suf]
-  ?^  existing=(~(get by cache) suf)
-    ~&  >  "reusing cached graph for {<suf>}"
+  ~&  building-graph-for+[depth=depth pat.suf]
+  ?^  existing=(~(get by cache) pat.suf)
+    ~&  >  "reusing cached graph for {<pat.suf>}"
     [u.existing(face face) cache]  ::  make sure to use the provided face
-  ?.  (is-hoon suf)
-    =/  file  (~(got by dir) suf)
+  =/  file=cord  (get-file suf dir)
+  ?.  (is-hoon pat.suf)
     =/  graph=import-graph
-      :*  suf
+      :*  pat.suf
           ~  ~
           ~  ~
           face
@@ -348,26 +357,29 @@
     =/  no-face=_graph
       graph(face `%no-cache-entry-face)
     :-  graph
-    (~(put by cache) suf no-face)
-  =/  rile  (resolve-pile (parse-pile suf (get-hoon suf dir)) dir)
+    (~(put by cache) pat.suf no-face)
+  =/  rile  (resolve-pile (parse-pile pat.suf (trip file)) dir)
   =^  new-sur=(list import-graph)  cache
     %^  spin  sur.rile  cache
     |=  [raut cache=(map path import-graph)]
-    (make-import-graph face pax +(depth) cache dir)
+    (make-import-graph face [pax ~] +(depth) cache dir)
   =^  new-lib=(list import-graph)  cache
     %^  spin  lib.rile  cache
     |=  [raut cache=(map path import-graph)]
-    (make-import-graph face pax +(depth) cache dir)
+    =/  c  (~(got by dir) pax)
+    (make-import-graph face [pax ~] +(depth) cache dir)
   =^  new-raw=(list import-graph)  cache
     %^  spin  raw.rile  cache
     |=  [raut cache=(map path import-graph)]
-    (make-import-graph face pax +(depth) cache dir)
+    =/  c  (~(got by dir) pax)
+    (make-import-graph face [pax ~] +(depth) cache dir)
   =^  new-bar=(list import-graph)  cache
     %^  spin  bar.rile  cache
     |=  [raut cache=(map path import-graph)]
-    (make-import-graph face pax +(depth) cache dir)
+    =/  c  (~(got by dir) pax)
+    (make-import-graph face [pax ~] +(depth) cache dir)
   =/  graph=import-graph
-    :*  suf
+    :*  pat.suf
         sur=new-sur
         lib=new-lib
         raw=new-raw
@@ -378,7 +390,7 @@
   =/  no-face=_graph
     graph(face `%no-cache-entry-face)
   :-  graph
-  (~(put by cache) suf no-face)
+  (~(put by cache) pat.suf no-face)
 ::
 ++  compile-graph
   ::  accepts an import-graph and compiles it down to a vase
