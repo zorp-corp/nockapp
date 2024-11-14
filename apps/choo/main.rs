@@ -73,13 +73,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_io_driver(crown::one_punch_driver(slab, Operation::Poke))
         .await;
 
+    let mut slab = NounSlab::new();
     let entry_contents = {
         let mut contents_vec: Vec<u8> = vec![];
         let mut file = File::open(&cli.entry).await?;
         file.read_to_end(&mut contents_vec).await?;
-        Atom::from_value(nockapp.kernel.serf.stack(), contents_vec)
-            .unwrap()
-            .as_noun()
+        Atom::from_value(&mut slab, contents_vec).unwrap().as_noun()
     };
 
     let mut entry = cli.entry.clone();
@@ -90,9 +89,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         entry.insert(0, '/');
     }
 
-    let entry_path = Atom::from_value(nockapp.kernel.serf.stack(), entry)
-        .unwrap()
-        .as_noun();
+    let entry_path = Atom::from_value(&mut slab, entry).unwrap().as_noun();
 
     let mut directory_noun = D(0);
 
@@ -109,30 +106,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .unwrap()
                 .strip_prefix(&cli.directory)
                 .unwrap();
-            let path_cord = Atom::from_value(nockapp.kernel.serf.stack(), path_str)
-                .unwrap()
-                .as_noun();
+            let path_cord = Atom::from_value(&mut slab, path_str).unwrap().as_noun();
 
             let contents = {
                 let mut contents_vec: Vec<u8> = vec![];
                 let mut file = File::open(entry.path()).await?;
                 file.read_to_end(&mut contents_vec).await?;
-                Atom::from_value(nockapp.kernel.serf.stack(), contents_vec)
-                    .unwrap()
-                    .as_noun()
+                Atom::from_value(&mut slab, contents_vec).unwrap().as_noun()
             };
 
-            let entry_cell = T(nockapp.kernel.serf.stack(), &[path_cord, contents]);
-            directory_noun = T(nockapp.kernel.serf.stack(), &[entry_cell, directory_noun]);
+            let entry_cell = T(&mut slab, &[path_cord, contents]);
+            directory_noun = T(&mut slab, &[entry_cell, directory_noun]);
         }
     }
     let arbitrary_noun = if cli.arbitrary { D(0) } else { D(1) };
     let poke = T(
-        nockapp.kernel.serf.stack(),
+        &mut slab,
         &[D(tas!(b"build")), entry_path, entry_contents, directory_noun, arbitrary_noun],
     );
-    let mut slab = NounSlab::new();
-    slab.copy_into(poke);
+    slab.set_root(poke);
 
     nockapp
         .add_io_driver(crown::one_punch_driver(slab, Operation::Poke))
