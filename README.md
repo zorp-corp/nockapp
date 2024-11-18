@@ -17,7 +17,7 @@ The NockApp framework provides two modules, Crown and Sword:
 To test compiling a Nock kernel using the `choo` command-line Hoon compiler, run the following commands:
 
 ```
-cd choo
+cd apps/choo
 cargo run --release hoon/lib/kernel.hoon
 ```
 
