@@ -18,7 +18,7 @@ pub struct Checkpoint {
     pub buff_index: bool,
     pub ker_hash: Hash,
     pub event_num: u64,
-    pub arvo: Noun,
+    pub ker_state: Noun,
     pub cold: Cold,
 }
 
@@ -37,7 +37,7 @@ impl Checkpoint {
             buff_index: jam.buff_index,
             ker_hash: jam.ker_hash,
             event_num: jam.event_num,
-            arvo: cell.head(),
+            ker_state: cell.head(),
             cold,
         })
     }
@@ -64,10 +64,10 @@ impl JammedCheckpoint {
         ker_hash: Hash,
         event_num: u64,
         cold: &Cold,
-        arvo: &Noun,
+        ker_state: &Noun,
     ) -> Self {
         let cold_noun = (*cold).into_noun(stack);
-        let cell = T(stack, &[*arvo, cold_noun]);
+        let cell = T(stack, &[*ker_state, cold_noun]);
         let jam = JammedNoun::from_noun(stack, cell);
         let checksum = Self::checksum(event_num, &jam.0);
         Self {

@@ -50,9 +50,8 @@
 ::  +load: upgrade from previous state
 ::
 ++  load
-  |=  arg=*
-  ^-  [(list *) *]
-  !!
+  |=  arg=server-state
+  arg
 ::
 ::  +peek: external inspect
 ::

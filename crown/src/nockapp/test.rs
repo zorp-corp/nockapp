@@ -69,7 +69,7 @@ mod tests {
         unsafe {
             assert!(unifying_equality(
                 nockapp.kernel.serf.stack(),
-                &mut checkpoint.arvo,
+                &mut checkpoint.ker_state,
                 &mut arvo
             ));
         }
@@ -120,11 +120,11 @@ mod tests {
             let stack = nockapp.kernel.serf.stack();
             // Checkpoint kernel should be equal to the saved kernel
             assert!(unifying_equality(
-                stack, &mut checkpoint.arvo, &mut arvo_after_poke
+                stack, &mut checkpoint.ker_state, &mut arvo_after_poke
             ));
             // Checkpoint kernel should be different from the kernel before the poke
             assert!(!unifying_equality(
-                stack, &mut checkpoint.arvo, &mut arvo_before_poke
+                stack, &mut checkpoint.ker_state, &mut arvo_before_poke
             ));
         }
 

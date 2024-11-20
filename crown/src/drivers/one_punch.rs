@@ -101,7 +101,7 @@ async fn handle_effect(
     _handle: &NockAppHandle,
 ) -> Result<(), NockAppError> {
     let eff = eff?;
-    info!("poke_once_driver: effect received: {:?}", eff);
+    debug!("poke_once_driver: effect received: {:?}", eff);
 
     let effect_cell = unsafe { eff.root() }.as_cell().unwrap();
     if unsafe { effect_cell.head().raw_equals(D(tas!(b"npc"))) } {

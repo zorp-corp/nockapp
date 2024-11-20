@@ -1,10 +1,8 @@
 /+  *wrapper
 =>
 |%
-+$  choo-state
-  $:  cached-hoon=(unit (trap vase))
-      ~
-  ==
++$  choo-state  [%0 cached-hoon=(unit (trap vase)) ~]
+::
 ++  moat  (keep choo-state)
 +$  cause
   $%  [%build pat=cord tex=cord directory=(list [cord cord]) arbitrary=?]
@@ -33,9 +31,8 @@
 ::  +load: upgrade from previous state
 ::
 ++  load
-  |=  arg=*
-  ^-  [(list *) *]
-  !!
+  |=  arg=choo-state
+  arg
 ::
 ::  +peek: external inspect
 ::
@@ -51,7 +48,7 @@
   ^-  [(list effect) choo-state]
   =/  cause=(unit cause)  ((soft cause) dat)
   ?~  cause
-    ~&  >>  "input is not a proper cause {<dat>}"
+    ~&  >>  "input is not a proper cause"
     !!
   =/  cause  u.cause
   ?-    -.cause
