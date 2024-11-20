@@ -1,7 +1,18 @@
 /+  *wrapper
 =>
 |%
+<<<<<<< Updated upstream
 +$  choo-state  [%0 cached-hoon=(unit (trap vase)) ~]
+=======
++$  choo-state
+  $%  [%0 cached-hoon=(unit (trap vase)) ~]
+      $:  %1
+          cached-hoon=(unit (trap vase))
+          graph-cache=(map path import-graph)
+          vase-cache=(map path (trap vase))
+      ==
+  ==
+>>>>>>> Stashed changes
 ::
 ++  moat  (keep choo-state)
 +$  cause
@@ -32,7 +43,14 @@
 ::
 ++  load
   |=  arg=choo-state
+<<<<<<< Updated upstream
   arg
+=======
+  ?.  ?=(-.arg %0)
+    ?>  ?=(-.arg %1)
+    arg
+  [%1 cached-hoon.arg ~ ~]
+>>>>>>> Stashed changes
 ::
 ::  +peek: external inspect
 ::
@@ -300,6 +318,7 @@
       bar=(list import-graph)
       face=(unit @tas)  ::  the face that this node of the import graph has
       leaf=graph-leaf
+      hash=@            ::  shax hash of file cord
   ==
 ::
 ++  create
@@ -350,6 +369,7 @@
           ~  ~
           face
           [%octs [(met 3 file) file]]
+          (shax file)
       ==
     =/  no-face=_graph
       graph(face `%no-cache-entry-face)
@@ -383,6 +403,7 @@
         bar=new-bar
         face
         [%hoon hoon.rile]
+        (shax file)
     ==
   =/  no-face=_graph
     graph(face `%no-cache-entry-face)
