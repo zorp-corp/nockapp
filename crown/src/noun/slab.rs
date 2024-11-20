@@ -9,7 +9,7 @@ use std::mem::size_of;
 use std::ptr::copy_nonoverlapping;
 use sword::jets::bits::util::met;
 use sword::mem::NockStack;
-use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, mug_u32, set_mug};
+use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
 use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
 use sword::persist::pma_contains;
 use sword::serialization::{met0_u64_to_usize, met0_usize};
@@ -194,6 +194,7 @@ impl NounSlab {
                 break;
             }
         }
+        #[cfg(feature = "validate-nouns")]
         self.validate_root()
             .expect("Noun not properly copied into slab");
     }
@@ -260,6 +261,7 @@ impl NounSlab {
         }
 
         // Verify that the copied noun is fully in the stack or PMA
+        #[cfg(feature = "validate-nouns")]
         self.verify_copied_noun(res)
             .expect("Noun was not properly copied to stack");
         res
@@ -489,6 +491,7 @@ impl NounSlab {
                 }
             }
         }
+        #[cfg(feature = "validate-nouns")]
         self.validate_root()
             .expect("Noun was not fully cued into slab");
         Ok(res)
@@ -860,14 +863,10 @@ fn slab_mug(a: Noun) -> u32 {
 /// Calculate the mug of a noun without using the cache.
 fn slab_mug_no_cache(a: Noun) -> u32 {
     match a.as_either_direct_allocated() {
-        Either::Left(direct) => {
-            calc_atom_mug_u32(direct.as_atom())
-        }
+        Either::Left(direct) => calc_atom_mug_u32(direct.as_atom()),
         Either::Right(allocated) => {
             match allocated.as_either() {
-                Either::Left(indirect) => {
-                    calc_atom_mug_u32(indirect.as_atom())
-                }
+                Either::Left(indirect) => calc_atom_mug_u32(indirect.as_atom()),
                 Either::Right(cell) => {
                     // Recursively calculate mugs for head and tail
                     let head_mug = slab_mug_no_cache(cell.head());
@@ -1102,13 +1101,13 @@ mod tests {
             // Allocate space for a 2-word indirect atom
             let ptr = slab.alloc_indirect(2);
             // Write a value ending in zero (non-normalized)
-            *ptr.add(1) = 2;  // size 2 words
-            *ptr.add(2) = 123;  // first word
-            *ptr.add(3) = 0;    // second word is zero - not normalized
-            // Create an indirect atom from this memory
+            *ptr.add(1) = 2; // size 2 words
+            *ptr.add(2) = 123; // first word
+            *ptr.add(3) = 0; // second word is zero - not normalized
+                             // Create an indirect atom from this memory
             let non_normalized = IndirectAtom::from_raw_pointer(ptr).as_atom().as_noun();
             slab.set_root(non_normalized);
-            
+
             let result = slab.validate_root();
             assert!(
                 result.is_err(),
@@ -1128,7 +1127,7 @@ mod tests {
 
         // Create a valid noun in the stack
         let valid_noun = T(&mut stack, &[D(1), D(2)]);
-        
+
         // This should pass verification since it's properly allocated in the stack
         let result = slab.verify_copied_noun(valid_noun);
         assert!(
@@ -1147,7 +1146,7 @@ mod tests {
             set_mug(cell.as_allocated(), 12345); // Wrong mug value
 
             let invalid_noun = cell.as_noun();
-            
+
             // This should fail verification due to incorrect mug
             let result = slab.verify_copied_noun(invalid_noun);
             assert!(

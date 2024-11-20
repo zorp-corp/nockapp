@@ -5,6 +5,7 @@ edition.workspace = true
 
 [features]
 trait-alias = []
+validate-nouns = []
 
 [dependencies]
 anyhow = { workspace = true }
