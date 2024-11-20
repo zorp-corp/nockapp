@@ -493,7 +493,7 @@ impl NounSlab {
         }
         #[cfg(feature = "validate-nouns")]
         self.validate_root()
-            .expect("Noun was not fully cued into slab");
+            .expect("Noun was not properly cued into slab");
         Ok(res)
     }
 
