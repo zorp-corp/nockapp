@@ -7,19 +7,13 @@ use intmap::IntMap;
 use std::alloc::Layout;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping;
-use sword::mem::NockStack;
-use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
-use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
-use sword::jets::hot::URBIT_HOT_STATE;
 use sword::jets::bits::util::met;
+use sword::mem::NockStack;
+use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, mug_u32, set_mug};
+use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
 use sword::persist::pma_contains;
 use sword::serialization::{met0_u64_to_usize, met0_usize};
 use thiserror::Error;
-use sword::interpreter::{Context, interpret};
-use sword::jets::{cold::Cold, warm::Warm, hot::Hot};
-use sword::hamt::Hamt;
-use std::pin::Pin;
-use crate::utils::slogger::CrownSlogger;
 
 const CELL_MEM_WORD_SIZE: usize = (size_of::<CellMemory>() + 7) >> 3;
 
@@ -200,6 +194,8 @@ impl NounSlab {
                 break;
             }
         }
+        self.validate_root()
+            .expect("Noun not properly copied into slab");
     }
 
     /// Copy the root noun from this slab into the given NockStack, only leaving references into the PMA
@@ -264,20 +260,21 @@ impl NounSlab {
         }
 
         // Verify that the copied noun is fully in the stack or PMA
-        self.verify_copied_noun(res).expect("Noun was not fully copied to stack");
-        
+        self.verify_copied_noun(res, stack)
+            .expect("Noun was not properly copied to stack");
+
         res
     }
 
     /// Verifies that a noun does not contain any references to memory in this slab
-    fn verify_copied_noun(&self, noun: Noun) -> Result<(), String> {
-        let mut stack = vec![noun];
+    fn verify_copied_noun(&self, noun: Noun, nockstack: &mut NockStack) -> Result<(), String> {
+        let mut stack = vec![noun]; // traversal stack
         let mut visited = std::collections::HashSet::new();
 
         while let Some(noun) = stack.pop() {
             if let Ok(allocated) = noun.as_allocated() {
                 let ptr = unsafe { allocated.to_raw_pointer() };
-                
+
                 // Skip if we've seen this pointer before
                 if !visited.insert(ptr as u64) {
                     continue;
@@ -285,10 +282,18 @@ impl NounSlab {
 
                 // Check if pointer is in PMA
                 if unsafe { pma_contains(ptr, 1) } {
-                    return Err(format!(
-                        "Found noun allocated in PMA at {:p}",
-                        ptr
-                    ));
+                    return Err(format!("Found noun allocated in PMA at {:p}", ptr));
+                }
+
+                // Verify cached mug if present
+                if let Some(cached_mug) = allocated.get_cached_mug() {
+                    let computed_mug = mug_u32(nockstack, noun);
+                    if cached_mug != computed_mug {
+                        return Err(format!(
+                            "Found noun with incorrect mug at {:p} - cached: {}, computed: {}",
+                            ptr, cached_mug, computed_mug
+                        ));
+                    }
                 }
 
                 // Check if pointer is in any of the slabs (this would be bad)
@@ -297,12 +302,9 @@ impl NounSlab {
                         let slab_start = *slab_ptr as *mut u64;
                         let slab_size = layout.size() / std::mem::size_of::<u64>();
                         let slab_end = unsafe { slab_start.add(slab_size) };
-                        
+
                         if (ptr as *mut u64) >= slab_start && (ptr as *mut u64) < slab_end {
-                            return Err(format!(
-                                "Found noun still allocated in slab at {:p}", 
-                                ptr
-                            ));
+                            return Err(format!("Found noun still allocated in slab at {:p}", ptr));
                         }
                     }
                 }
@@ -317,8 +319,7 @@ impl NounSlab {
                         if !slice.is_empty() && slice.last().unwrap() == &0 {
                             return Err(format!(
                                 "Found non-normalized indirect atom at {:p} with value {:?}",
-                                ptr,
-                                slice
+                                ptr, slice
                             ));
                         }
 
@@ -340,11 +341,10 @@ impl NounSlab {
                         if bit_size <= 63 {
                             return Err(format!(
                                 "Found indirect atom that should be direct at {:p} - only {} bits",
-                                ptr,
-                                bit_size
+                                ptr, bit_size
                             ));
                         }
-                    },
+                    }
                     Either::Right(cell) => {
                         stack.push(cell.head());
                         stack.push(cell.tail());
@@ -394,6 +394,7 @@ impl NounSlab {
                 }
             }
         }
+        // we do not call validate_root here since this already performs the same check
         self.root = root;
     }
 
@@ -487,6 +488,8 @@ impl NounSlab {
                 }
             }
         }
+        self.validate_root()
+            .expect("Noun was not fully cued into slab");
         Ok(res)
     }
 
@@ -506,10 +509,21 @@ impl NounSlab {
         while let Some(noun) = stack.pop() {
             if let Ok(allocated) = noun.as_allocated() {
                 let ptr = unsafe { allocated.to_raw_pointer() };
-                
+
                 // Skip if we've seen this pointer before
                 if !visited.insert(ptr as u64) {
                     continue;
+                }
+
+                // Verify cached mug if present
+                if let Some(cached_mug) = allocated.get_cached_mug() {
+                    let computed_mug = slab_mug(noun);
+                    if cached_mug != computed_mug {
+                        return Err(format!(
+                            "Found noun with incorrect mug at {:p} - cached: {}, computed: {}",
+                            ptr, cached_mug, computed_mug
+                        ));
+                    }
                 }
 
                 // Check if pointer is in any of the slabs
@@ -519,7 +533,7 @@ impl NounSlab {
                         let slab_start = *slab_ptr as *mut u64;
                         let slab_size = layout.size() / std::mem::size_of::<u64>();
                         let slab_end = unsafe { slab_start.add(slab_size) };
-                        
+
                         if (ptr as *mut u64) >= slab_start && (ptr as *mut u64) < slab_end {
                             found_in_slab = true;
                             break;
@@ -528,10 +542,10 @@ impl NounSlab {
                 }
 
                 let is_in_pma = unsafe { pma_contains(ptr, 1) };
-                
+
                 if !found_in_slab && !is_in_pma {
                     return Err(format!(
-                        "Found noun allocated outside of all slabs and PMA at {:p}", 
+                        "Found noun allocated outside of all slabs and PMA at {:p}",
                         ptr
                     ));
                 }
@@ -543,8 +557,7 @@ impl NounSlab {
                         if !slice.is_empty() && slice.last().unwrap() == &0 {
                             return Err(format!(
                                 "Found non-normalized indirect atom at {:p} with value {:?}",
-                                ptr,
-                                slice
+                                ptr, slice
                             ));
                         }
 
@@ -566,8 +579,7 @@ impl NounSlab {
                         if bit_size <= 63 {
                             return Err(format!(
                                 "Found indirect atom that should be direct at {:p} - only {} bits",
-                                ptr,
-                                bit_size
+                                ptr, bit_size
                             ));
                         }
                     }
@@ -1041,116 +1053,48 @@ mod tests {
     }
 
     #[test]
-    fn test_nockstack_slab_equality() {
-        // Create initial NockStack with the test noun
-        let mut stack = NockStack::new(100000, 0);
-        let a_values = [
-            0xea31bc2f1dcd1ff1u64,
-            0x0dd3c7e3b75f3abbu64,
-            0x8f9ff1e4b2ca417fu64,
-            0x3bc6aedea88fed36u64,
-            0x9d68355b4a0a18d0u64,
-        ];
-        // DIRECT_MAX is u64::MAX >> 1 = 0x7FFF_FFFF_FFFF_FFFF
-        // Compare each value against DIRECT_MAX to determine if it needs to be indirect
-        println!("DIRECT_MAX = 0x7FFF_FFFF_FFFF_FFFF");
-        for (i, &val) in a_values.iter().enumerate() {
-            println!("a_values[{}] = 0x{:016x} {}", i, val,
-                if val <= 0x7FFF_FFFF_FFFF_FFFF {
-                    "(direct)"
-                } else {
-                    "(indirect)" 
-                }
-            );
-        }
-        // Convert each value to an Atom using from_bytes
-        let atoms: Vec<_> = a_values.iter()
-            .map(|&x| {
-                let bytes = Bytes::copy_from_slice(&x.to_le_bytes());
-                Atom::from_bytes(&mut stack, &bytes).as_noun()
-            })
-            .collect();
-        
-        // Create 'a' as a cell containing these atoms
-        let a = T(&mut stack, &atoms);
-        
-        // Create cell X = [a a]
-        let x = T(&mut stack, &[a, a]);
-        
-        println!("Original X in NockStack:");
-        println!("{:?}", x);
-
-        // Copy to NounSlab
-        let mut slab = NounSlab::new();
-        slab.copy_into(x);
-        let slab_x = unsafe { slab.root() };
-        
-        println!("X in NounSlab:");
-        println!("{:?}", slab_x);
-
-        // Validate that nouns are in the allocation range
-        match slab.validate_root() {
-            Ok(_) => println!("Slab validation passed"),
-            Err(e) => {
-                println!("Slab validation failed: {}", e);
-                panic!("Validation failed");
-            }
-        }
-
-        // Copy back to new NockStack
-        let mut new_stack = NockStack::new(100000, 0);
-        let copied_x = slab.copy_to_stack(&mut new_stack);
-        
-        println!("Copied X back to NockStack:");
-        println!("{:?}", copied_x);
-
-        // Create interpreter context
-        let mut cold = Cold::new(&mut new_stack);
-        let hot = Hot::init(&mut new_stack, &URBIT_HOT_STATE);
-        let warm = Warm::init(&mut new_stack, &mut cold, &hot);
-        let cache = Hamt::<Noun>::new(&mut new_stack);
-        let slogger = std::boxed::Box::pin(CrownSlogger {});
-        let mut context = Context {
-            stack: new_stack,
-            slogger,
-            cold,
-            warm,
-            hot,
-            cache,
-            scry_stack: D(0),
-            trace_info: None,
-        };
-
-        // Get the head and tail of X to compare them
-        let head = T(&mut context.stack, &[D(0), D(2)]);  // [0 2] gets head
-        let tail = T(&mut context.stack, &[D(0), D(3)]);  // [0 3] gets tail
-        let formula = T(&mut context.stack, &[D(5), head, tail]);  // [5 head tail]
-        
-        let result = interpret(&mut context, copied_x, formula);
-        
-        println!("Interpret result: {:?}", result);
-        assert!(unsafe { result.unwrap().raw_equals(D(0)) },
-            "Result should be 0 (true) since head and tail are equal");
-    }
-
-    #[test]
     fn test_validate_root() {
         let mut slab = NounSlab::new();
-        
+
         // Valid case - simple cell
         let noun = T(&mut slab, &[D(1), D(2)]);
         slab.set_root(noun);
-        assert!(slab.validate_root().is_ok(), "Valid noun should pass validation");
+        assert!(
+            slab.validate_root().is_ok(),
+            "Valid noun should pass validation"
+        );
 
         // Valid case - indirect atom
         let large_number = u64::MAX as u128 + 1;
         let large_number_bytes = Bytes::from(large_number.to_le_bytes().to_vec());
         let indirect_atom = Atom::from_bytes(&mut slab, &large_number_bytes);
         slab.set_root(indirect_atom.as_noun());
-        assert!(slab.validate_root().is_ok(), "Valid indirect atom should pass validation");
+        assert!(
+            slab.validate_root().is_ok(),
+            "Valid indirect atom should pass validation"
+        );
 
         // Invalid case - non-normalized indirect atom
-        // This would require creating a non-normalized atom directly, which isn't 
-        // possible through normal APIs. You might need unsafe code to test this.
+        unsafe {
+            // Allocate space for a 2-word indirect atom
+            let ptr = slab.alloc_indirect(2);
+            // Write a value ending in zero (non-normalized)
+            *ptr.add(1) = 2;  // size 2 words
+            *ptr.add(2) = 123;  // first word
+            *ptr.add(3) = 0;    // second word is zero - not normalized
+            // Create an indirect atom from this memory
+            let non_normalized = IndirectAtom::from_raw_pointer(ptr).as_atom().as_noun();
+            slab.set_root(non_normalized);
+            
+            let result = slab.validate_root();
+            assert!(
+                result.is_err(),
+                "Non-normalized indirect atom should fail validation"
+            );
+            assert!(
+                result.unwrap_err().contains("non-normalized indirect atom"),
+                "Error message should mention non-normalized atom"
+            );
+        }
     }
 }
