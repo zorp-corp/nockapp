@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut slab = NounSlab::new();
     let hoon_cord = Atom::from_value(&mut slab, HOON_TXT).unwrap().as_noun();
-    let bootstrap_poke = T(&mut slab, &[D(tas!(b"boot")), hoon_cord]);
+    let bootstrap_poke = T(&mut slab, &[D(tas!(b"boot")), hoon_cord])?;
     slab.set_root(bootstrap_poke);
 
     nockapp
@@ -115,15 +115,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Atom::from_value(&mut slab, contents_vec).unwrap().as_noun()
             };
 
-            let entry_cell = T(&mut slab, &[path_cord, contents]);
-            directory_noun = T(&mut slab, &[entry_cell, directory_noun]);
+            let entry_cell = T(&mut slab, &[path_cord, contents])?;
+            directory_noun = T(&mut slab, &[entry_cell, directory_noun])?;
         }
     }
     let arbitrary_noun = if cli.arbitrary { D(0) } else { D(1) };
     let poke = T(
         &mut slab,
         &[D(tas!(b"build")), entry_path, entry_contents, directory_noun, arbitrary_noun],
-    );
+    )?;
     slab.set_root(poke);
 
     nockapp

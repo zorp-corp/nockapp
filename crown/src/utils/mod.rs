@@ -72,17 +72,17 @@ pub fn make_tas<A: NounAllocator>(allocator: &mut A, tas: &str) -> Atom {
     let tas_bytes: &[u8] = tas.as_bytes();
     unsafe {
         let mut tas_atom =
-            IndirectAtom::new_raw_bytes(allocator, tas_bytes.len(), tas_bytes.as_ptr());
+            IndirectAtom::new_raw_bytes(allocator, tas_bytes.len(), tas_bytes.as_ptr()).unwrap();
         tas_atom.normalize_as_atom()
     }
 }
 
 // serialize a noun for writing over a socket or a file descriptor
 pub fn serialize_noun(stack: &mut NockStack, noun: Noun) -> Result<Vec<u8>> {
-    let atom = jam(stack, noun);
+    let atom = jam(stack, noun)?;
     let size = atom.size() << 3;
 
-    let buf = unsafe { from_raw_parts_mut(stack.struct_alloc::<u8>(size + 5), size + 5) };
+    let buf = unsafe { from_raw_parts_mut(stack.struct_alloc::<u8>(size + 5)?, size + 5) };
     buf[0] = 0u8;
     buf[1] = size as u8;
     buf[2] = (size >> 8) as u8;

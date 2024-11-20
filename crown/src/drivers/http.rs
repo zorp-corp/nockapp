@@ -75,17 +75,17 @@ pub fn http() -> IODriverFn {
                         let val = v.to_str().unwrap().to_string();
                         let k_atom = Atom::from_value(&mut slab, key).unwrap();
                         let v_atom = Atom::from_value(&mut slab, val).unwrap();
-                        let header_cell = T(&mut slab, &[k_atom.as_noun(), v_atom.as_noun()]);
-                        headers = T(&mut slab, &[header_cell, headers]);
+                        let header_cell = T(&mut slab, &[k_atom.as_noun(), v_atom.as_noun()])?;
+                        headers = T(&mut slab, &[header_cell, headers])?;
                     }
 
                     let body: crate::Noun = {
                         if let Some(bod) = msg.body {
-                            let ato = Atom::from_bytes(&mut slab, &bod).as_noun();
+                            let ato = Atom::from_bytes(&mut slab, &bod)?.as_noun();
                             T(
                                 &mut slab,
                                 &[D(0), D(bod.len().try_into().unwrap()), ato],
-                            )
+                            )?
                         } else {
                             D(0)
                         }
@@ -95,7 +95,7 @@ pub fn http() -> IODriverFn {
                         T(
                             &mut slab,
                             &[D(tas!(b"req")), id, uri, method, headers, body],
-                        )
+                        )?
                     };
                     debug!("poking: {:?}", poke);
                     slab.set_root(poke);

@@ -2,7 +2,6 @@
 use blake3::{Hash, Hasher};
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::fs::File;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -13,10 +12,9 @@ use sword::jets::hot::{Hot, HotEntry, URBIT_HOT_STATE};
 use sword::jets::list::util::zing;
 use sword::jets::nock::util::mook;
 use sword::jets::warm::Warm;
-use sword::mem::NockStack;
+use sword::mem::{AllocResult, NockStack};
 use sword::mug::met3_usize;
 use sword::noun::{Atom, Cell, DirectAtom, IndirectAtom, Noun, Slots, D, T};
-use sword::persist::pma_open;
 use sword::trace::{path_to_cord, write_serf_trace_safe, TraceInfo};
 use sword_macros::tas;
 use tracing::info;
@@ -45,8 +43,6 @@ enum BTMetaField {
 pub struct Kernel {
     /// The Serf managing the interface to the Sword.
     pub serf: Serf,
-    /// Directory path for storing pma snapshots.
-    pma_dir: PathBuf,
     /// Jam persistence buffer paths.
     pub jam_paths: JamPaths,
     /// Buffer toggle for writing to the jam buffer.
@@ -69,18 +65,11 @@ impl Kernel {
     ///
     /// A new `Kernel` instance.
     pub fn load_with_hot_state(
-        pma_dir: PathBuf,
         jam_paths: JamPaths,
         kernel: &[u8],
         hot_state: &[HotEntry],
         trace: bool,
-    ) -> Self {
-        let mut pma_path = pma_dir.clone();
-        pma_path.push(".crown");
-        pma_path.push("chk");
-        std::fs::create_dir_all(&pma_path).unwrap();
-        pma_open(pma_path).expect("serf: pma open failed");
-
+    ) -> Result<Self> {
         std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
 
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
@@ -98,15 +87,14 @@ impl Kernel {
             |snapshot| Arc::new(AtomicBool::new(!snapshot.buff_index)),
         );
 
-        let serf = Serf::new(stack, checkpoint, kernel, hot_state, trace);
+        let serf = Serf::new(stack, checkpoint, kernel, hot_state, trace)?;
         let terminator = Arc::new(AtomicBool::new(false));
-        Self {
+        Ok(Self {
             serf,
-            pma_dir,
             jam_paths,
             terminator,
             buffer_toggle,
-        }
+        })
     }
 
     /// Loads a kernel with default hot state.
@@ -120,13 +108,7 @@ impl Kernel {
     /// # Returns
     ///
     /// A new `Kernel` instance.
-    pub fn load(pma_dir: PathBuf, jam_paths: JamPaths, kernel: &[u8], trace: bool) -> Self {
-        let mut pma_path = pma_dir.clone();
-        pma_path.push(".crown");
-        pma_path.push("chk");
-        std::fs::create_dir_all(&pma_path).unwrap();
-        pma_open(pma_path).expect("serf: pma open failed");
-
+    pub fn load(jam_paths: JamPaths, kernel: &[u8], trace: bool) -> Result<Self> {
         std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
 
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
@@ -144,19 +126,18 @@ impl Kernel {
             |snapshot| Arc::new(AtomicBool::new(!snapshot.buff_index)),
         );
 
-        let serf = Serf::new(stack, checkpoint, kernel, &[], trace);
+        let serf = Serf::new(stack, checkpoint, kernel, &[], trace)?;
         let terminator = Arc::new(AtomicBool::new(false));
-        Self {
+        Ok(Self {
             serf,
-            pma_dir,
             jam_paths,
             terminator,
             buffer_toggle,
-        }
+        })
     }
 
     /// Produces a checkpoint of the kernel state.
-    pub fn checkpoint(&mut self) -> JammedCheckpoint {
+    pub fn checkpoint(&mut self) -> Result<JammedCheckpoint> {
         let serf = &self.serf;
         let version = serf.version;
         let ker_hash = serf.ker_hash;
@@ -164,7 +145,7 @@ impl Kernel {
         let ker_state = serf.arvo.slot(STATE_AXIS).unwrap();
         let cold = serf.context.cold;
         let buff_index = self.buffer_toggle.load(Ordering::SeqCst);
-        JammedCheckpoint::new(
+        Ok(JammedCheckpoint::new(
             &mut self.serf.stack(),
             version,
             buff_index,
@@ -172,7 +153,7 @@ impl Kernel {
             event_num,
             &cold,
             &ker_state,
-        )
+        )?)
     }
 
     /// Performs a peek operation on the Arvo state.
@@ -207,13 +188,13 @@ impl Kernel {
     /// # Returns
     ///
     /// A noun representing the error.
-    pub fn goof(&mut self, mote: Mote, traces: Noun) -> Noun {
+    pub fn goof(&mut self, mote: Mote, traces: Noun) -> Result<Noun> {
         let trace = zing(&mut self.serf.context.stack, traces).expect("serf: goof: zing failed");
-        let tone = Cell::new(&mut self.serf.context.stack, D(2), trace);
+        let tone = Cell::new(&mut self.serf.context.stack, D(2), trace)?;
         let tang = mook(&mut self.serf.context, tone, false)
             .expect("serf: goof: +mook crashed on bail")
             .tail();
-        T(&mut self.serf.context.stack, &[D(mote as u64), tang])
+        Ok(T(&mut self.serf.context.stack, &[D(mote as u64), tang])?)
     }
 
     /// Performs a poke operation on the Arvo state.
@@ -233,9 +214,9 @@ impl Kernel {
                 let eve = self.serf.event_num;
 
                 unsafe {
-                    self.serf.event_update(eve + 1, cell.tail());
-                    self.serf.stack().preserve(&mut fec);
-                    self.serf.preserve_event_update_leftovers();
+                    self.serf.event_update(eve + 1, cell.tail())?;
+                    self.serf.stack().preserve(&mut fec)?;
+                    self.serf.preserve_event_update_leftovers()?;
                 }
                 Ok(fec)
             }
@@ -291,7 +272,9 @@ impl Kernel {
                         }
                     };
 
-                    Err(self.goof(mote, traces))
+                    Err(self
+                        .goof(mote, traces)
+                        .expect("Crashed while trying to goof trace: {0}"))
                 }
                 _ => Err(D(0)),
             },
@@ -324,9 +307,9 @@ impl Kernel {
                     eve += 1;
 
                     unsafe {
-                        self.serf.event_update(eve, arvo);
-                        self.serf.context.stack.preserve(&mut lit);
-                        self.serf.preserve_event_update_leftovers();
+                        self.serf.event_update(eve, arvo)?;
+                        self.serf.context.stack.preserve(&mut lit)?;
+                        self.serf.preserve_event_update_leftovers()?;
                     }
                 }
                 Err(goof) => {
@@ -349,7 +332,7 @@ impl Kernel {
     /// Result containing the new event or an error.
     fn poke_swap(&mut self, job: Noun, goof: Noun) -> Result<Noun> {
         let stack = &mut self.serf.context.stack;
-        self.serf.context.cache = Hamt::<Noun>::new(stack);
+        self.serf.context.cache = Hamt::<Noun>::new(stack)?;
         let job_cell = job.as_cell().expect("serf: poke: job not a cell");
         // job data is job without event_num
         let job_data = job_cell
@@ -358,17 +341,17 @@ impl Kernel {
             .expect("serf: poke: data not a cell");
         //  job input is job without event_num or wire
         let job_input = job_data.tail();
-        let wire = T(stack, &[D(0), D(tas!(b"arvo")), D(0)]);
+        let wire = T(stack, &[D(0), D(tas!(b"arvo")), D(0)])?;
         let crud = DirectAtom::new_panic(tas!(b"crud"));
         let event_num = D(self.serf.event_num + 1);
 
-        let mut ovo = T(stack, &[event_num, wire, goof, job_input]);
+        let mut ovo = T(stack, &[event_num, wire, goof, job_input])?;
         let trace_name = if self.serf.context.trace_info.is_some() {
             Some(Self::poke_trace_name(
                 &mut self.serf.context.stack,
                 wire,
                 crud.as_atom(),
-            ))
+            )?)
         } else {
             None
         };
@@ -380,17 +363,17 @@ impl Kernel {
                 let eve = self.serf.event_num;
 
                 unsafe {
-                    self.serf.event_update(eve + 1, cell.tail());
-                    self.serf.context.stack.preserve(&mut ovo);
-                    self.serf.context.stack.preserve(&mut fec);
-                    self.serf.preserve_event_update_leftovers();
+                    self.serf.event_update(eve + 1, cell.tail())?;
+                    self.serf.context.stack.preserve(&mut ovo)?;
+                    self.serf.context.stack.preserve(&mut fec)?;
+                    self.serf.preserve_event_update_leftovers()?;
                 }
-                Ok(self.serf.poke_swap(eve, eve, ovo, fec))
+                self.serf.poke_swap(eve, eve, ovo, fec)
             }
             Err(goof_crud) => {
                 let stack = &mut self.serf.context.stack;
-                let lud = T(stack, &[goof_crud, goof, D(0)]);
-                Ok(self.serf.poke_bail(lud))
+                let lud = T(stack, &[goof_crud, goof, D(0)])?;
+                self.serf.poke_bail(lud)
             }
         }
     }
@@ -406,8 +389,8 @@ impl Kernel {
     /// # Returns
     ///
     /// A string representing the trace name.
-    fn poke_trace_name(stack: &mut NockStack, wire: Noun, vent: Atom) -> String {
-        let wpc = path_to_cord(stack, wire);
+    fn poke_trace_name(stack: &mut NockStack, wire: Noun, vent: Atom) -> Result<String> {
+        let wpc = path_to_cord(stack, wire)?;
         let wpc_len = met3_usize(wpc);
         let wpc_bytes = &wpc.as_bytes()[0..wpc_len];
         let wpc_str = match std::str::from_utf8(wpc_bytes) {
@@ -428,7 +411,7 @@ impl Kernel {
             }
         };
 
-        format!("poke [{} {}]", wpc_str, vc_str)
+        Ok(format!("poke [{} {}]", wpc_str, vc_str))
     }
 
     /// Performs a poke operation with a given cause.
@@ -445,20 +428,20 @@ impl Kernel {
 
         let random_bytes = rand::random::<u64>();
         let bytes = random_bytes.as_bytes()?;
-        let eny: Atom = Atom::from_bytes(stack, &bytes);
+        let eny: Atom = Atom::from_bytes(stack, &bytes)?;
         let our = <sword::noun::Atom as AtomExt>::from_value(stack, 0)?; // Using 0 as default value
         let now: Atom = unsafe {
             let mut t_vec: Vec<u8> = vec![];
             t_vec.write_u128::<LittleEndian>(current_da().0)?;
-            IndirectAtom::new_raw_bytes(stack, 16, t_vec.as_slice().as_ptr()).normalize_as_atom()
+            IndirectAtom::new_raw_bytes(stack, 16, t_vec.as_slice().as_ptr())?.normalize_as_atom()
         };
 
         let event_num = D(self.serf.event_num + 1);
-        let wire = T(stack, &[D(tas!(b"poke")), D(0)]);
+        let wire = T(stack, &[D(tas!(b"poke")), D(0)])?;
         let poke = T(
             stack,
             &[event_num, wire, eny.as_noun(), our.as_noun(), now.as_noun(), cause],
-        );
+        )?;
 
         self.do_poke(poke)
     }
@@ -499,16 +482,16 @@ impl Serf {
         kernel_bytes: &[u8],
         constant_hot_state: &[HotEntry],
         trace: bool,
-    ) -> Self {
+    ) -> Result<Self> {
         let hot_state = [URBIT_HOT_STATE, constant_hot_state].concat();
-        let cache = Hamt::<Noun>::new(&mut stack);
-        let (mut cold, event_num) = checkpoint.as_ref().map_or_else(
-            || (Cold::new(&mut stack), 0),
-            |snapshot| (snapshot.cold, snapshot.event_num),
-        );
+        let cache = Hamt::<Noun>::new(&mut stack)?;
+        let (mut cold, event_num) = match checkpoint.as_ref() {
+            None => (Cold::new(&mut stack)?, 0),
+            Some(snapshot) => (snapshot.cold, snapshot.event_num),
+        };
 
-        let hot = Hot::init(&mut stack, &hot_state);
-        let warm = Warm::init(&mut stack, &mut cold, &hot);
+        let hot = Hot::init(&mut stack, &hot_state)?;
+        let warm = Warm::init(&mut stack, &mut cold, &hot)?;
         let slogger = std::boxed::Box::pin(CrownSlogger {});
 
         let trace_info = if trace {
@@ -546,7 +529,7 @@ impl Serf {
         let mut arvo = {
             let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes)
                 .expect("invalid kernel jam");
-            let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
+            let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)])?;
             let arvo = if context.trace_info.is_some() {
                 let start = Instant::now();
                 let arvo = interpret(&mut context, kernel_trap, fol).unwrap(); // TODO better error
@@ -575,10 +558,10 @@ impl Serf {
         };
 
         unsafe {
-            serf.event_update(event_num, arvo);
-            serf.preserve_event_update_leftovers();
+            serf.event_update(event_num, arvo)?;
+            serf.preserve_event_update_leftovers()?;
         }
-        serf
+        Ok(serf)
     }
 
     /// Performs a load operation, transferring the state from a snapshot kernel to a new kernel.
@@ -614,12 +597,13 @@ impl Serf {
     /// # Safety
     ///
     /// This function is unsafe because it modifies the Serf's state directly.
-    pub unsafe fn event_update(&mut self, new_event_num: u64, new_arvo: Noun) {
+    pub unsafe fn event_update(&mut self, new_event_num: u64, new_arvo: Noun) -> Result<()> {
         self.arvo = new_arvo;
         self.event_num = new_event_num;
 
-        self.context.cache = Hamt::new(&mut self.context.stack);
+        self.context.cache = Hamt::new(&mut self.context.stack)?;
         self.context.scry_stack = D(0);
+        Ok(())
     }
 
     /// Preserves leftovers after an event update.
@@ -627,14 +611,15 @@ impl Serf {
     /// # Safety
     ///
     /// This function is unsafe because it modifies the Serf's state directly.
-    pub unsafe fn preserve_event_update_leftovers(&mut self) {
+    pub unsafe fn preserve_event_update_leftovers(&mut self) -> AllocResult<()> {
         let stack = &mut self.context.stack;
-        stack.preserve(&mut self.context.warm);
-        stack.preserve(&mut self.context.hot);
-        stack.preserve(&mut self.context.cache);
-        stack.preserve(&mut self.context.cold);
-        stack.preserve(&mut self.arvo);
+        stack.preserve(&mut self.context.warm)?;
+        stack.preserve(&mut self.context.hot)?;
+        stack.preserve(&mut self.context.cache)?;
+        stack.preserve(&mut self.context.cold)?;
+        stack.preserve(&mut self.arvo)?;
         stack.flip_top_frame(0);
+        Ok(())
     }
 
     /// Returns a mutable reference to the Nock stack.
@@ -658,11 +643,11 @@ impl Serf {
     /// # Returns
     ///
     /// A noun representing the poke swap.
-    pub fn poke_swap(&mut self, eve: u64, mug: u64, ovo: Noun, fec: Noun) -> Noun {
-        T(
+    pub fn poke_swap(&mut self, eve: u64, mug: u64, ovo: Noun, fec: Noun) -> Result<Noun> {
+        Ok(T(
             self.stack(),
             &[D(tas!(b"poke")), D(tas!(b"swap")), D(eve), D(mug), ovo, fec],
-        )
+        )?)
     }
 
     /// Creates a poke bail noun.
@@ -674,8 +659,8 @@ impl Serf {
     /// # Returns
     ///
     /// A noun representing the poke bail.
-    pub fn poke_bail(&mut self, lud: Noun) -> Noun {
-        T(self.stack(), &[D(tas!(b"poke")), D(tas!(b"bail")), lud])
+    pub fn poke_bail(&mut self, lud: Noun) -> Result<Noun> {
+        Ok(T(self.stack(), &[D(tas!(b"poke")), D(tas!(b"bail")), lud])?)
     }
 }
 
@@ -699,7 +684,7 @@ mod tests {
             .join("assets")
             .join(jam);
         let jam_bytes = fs::read(jam_path).expect(&format!("Failed to read {} file", jam));
-        let kernel = Kernel::load(snap_dir, jam_paths, &jam_bytes, false);
+        let kernel = Kernel::load(jam_paths, &jam_bytes, false).expect("Failed to load kernel");
         (kernel, temp_dir)
     }
 

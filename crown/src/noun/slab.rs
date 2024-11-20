@@ -7,10 +7,9 @@ use intmap::IntMap;
 use std::alloc::Layout;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping;
-use sword::mem::NockStack;
+use sword::mem::{AllocResult, AllocationError, NockStack};
 use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
 use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
-use sword::persist::pma_contains;
 use sword::serialization::{met0_u64_to_usize, met0_usize};
 use thiserror::Error;
 
@@ -30,13 +29,13 @@ pub struct NounSlab {
 impl Clone for NounSlab {
     fn clone(&self) -> Self {
         let mut slab = Self::new();
-        slab.copy_into(self.root);
+        slab.copy_into(self.root).unwrap();
         slab
     }
 }
 
 impl NounAllocator for NounSlab {
-    unsafe fn alloc_indirect(&mut self, words: usize) -> *mut u64 {
+    unsafe fn alloc_indirect(&mut self, words: usize) -> AllocResult<*mut u64> {
         let raw_size = words + 2;
 
         // Make sure we have enough space
@@ -57,9 +56,9 @@ impl NounAllocator for NounSlab {
 
         let new_indirect_ptr = self.allocation_start;
         self.allocation_start = self.allocation_start.add(raw_size);
-        new_indirect_ptr
+        Ok(new_indirect_ptr)
     }
-    unsafe fn alloc_cell(&mut self) -> *mut CellMemory {
+    unsafe fn alloc_cell(&mut self) -> AllocResult<*mut CellMemory> {
         if self.allocation_start.is_null()
             || self.allocation_start.add(CELL_MEM_WORD_SIZE) > self.allocation_stop
         {
@@ -76,10 +75,10 @@ impl NounAllocator for NounSlab {
         }
         let new_cell_ptr = self.allocation_start as *mut CellMemory;
         self.allocation_start = self.allocation_start.add(CELL_MEM_WORD_SIZE);
-        new_cell_ptr
+        Ok(new_cell_ptr)
     }
 
-    unsafe fn alloc_struct<T>(&mut self, count: usize) -> *mut T {
+    unsafe fn alloc_struct<T>(&mut self, count: usize) -> AllocResult<*mut T> {
         let layout = Layout::array::<T>(count).expect("Bad layout in alloc_struct");
         let word_size = (layout.size() + 7) >> 3;
         assert!(layout.align() <= std::mem::size_of::<u64>());
@@ -99,7 +98,7 @@ impl NounAllocator for NounSlab {
         }
         let new_struct_ptr = self.allocation_start as *mut T;
         self.allocation_start = self.allocation_start.add(word_size);
-        new_struct_ptr
+        Ok(new_struct_ptr)
     }
 }
 
@@ -129,7 +128,7 @@ impl NounSlab {
 
     /// Copy a noun into this slab, only leaving references into the PMA. Set that noun as the root
     /// noun.
-    pub fn copy_into(&mut self, copy_root: Noun) {
+    pub fn copy_into(&mut self, copy_root: Noun) -> AllocResult<()> {
         let mut copied: IntMap<Noun> = IntMap::new();
         let mut copy_stack = vec![(copy_root, &mut self.root as *mut Noun)];
         loop {
@@ -140,17 +139,13 @@ impl NounSlab {
                     }
                     Either::Right(allocated) => match allocated.as_either() {
                         Either::Left(indirect) => {
-                            let indirect_ptr = unsafe { indirect.to_raw_pointer() };
                             let indirect_mem_size = indirect.raw_size();
-                            if unsafe { pma_contains(indirect_ptr, indirect_mem_size) } {
-                                unsafe { *dest = noun };
-                                continue;
-                            }
+                            let indirect_ptr = unsafe { indirect.to_raw_pointer() };
                             if let Some(copied_noun) = copied.get(indirect_ptr as u64) {
                                 unsafe { *dest = *copied_noun };
                                 continue;
                             }
-                            let indirect_new_mem = unsafe { self.alloc_indirect(indirect.size()) };
+                            let indirect_new_mem = unsafe { self.alloc_indirect(indirect.size())? };
                             unsafe {
                                 copy_nonoverlapping(
                                     indirect_ptr, indirect_new_mem, indirect_mem_size,
@@ -166,15 +161,11 @@ impl NounSlab {
                         }
                         Either::Right(cell) => {
                             let cell_ptr = unsafe { cell.to_raw_pointer() };
-                            if unsafe { pma_contains(cell_ptr, 1) } {
-                                unsafe { *dest = noun };
-                                continue;
-                            }
                             if let Some(copied_noun) = copied.get(cell_ptr as u64) {
                                 unsafe { *dest = *copied_noun };
                                 continue;
                             }
-                            let cell_new_mem = unsafe { self.alloc_cell() };
+                            let cell_new_mem = unsafe { self.alloc_cell()? };
                             unsafe { copy_nonoverlapping(cell_ptr, cell_new_mem, 1) };
                             let copied_noun =
                                 unsafe { Cell::from_raw_pointer(cell_new_mem).as_noun() };
@@ -190,7 +181,7 @@ impl NounSlab {
                     },
                 }
             } else {
-                break;
+                break Ok(());
             }
         }
     }
@@ -199,7 +190,7 @@ impl NounSlab {
     ///
     /// Note that this consumes the slab, the slab will be freed after and the root noun returned
     /// referencing the stack. Nouns referencing the slab should not be used past this point.
-    pub fn copy_to_stack(self, stack: &mut NockStack) -> Noun {
+    pub fn copy_to_stack(self, stack: &mut NockStack) -> AllocResult<Noun> {
         let mut res = D(0);
         let mut copy_stack = vec![(self.root, &mut res as *mut Noun)];
         loop {
@@ -210,14 +201,10 @@ impl NounSlab {
                     } else {
                         match allocated.as_either() {
                             Either::Left(mut indirect) => {
-                                let raw_pointer = unsafe { indirect.to_raw_pointer() };
                                 let raw_size = indirect.raw_size();
-                                if unsafe { pma_contains(raw_pointer, raw_size) } {
-                                    unsafe { *dest = noun }; // in PMA
-                                    continue;
-                                }
+                                let raw_pointer = unsafe { indirect.to_raw_pointer() };
                                 unsafe {
-                                    let indirect_mem = stack.alloc_indirect(indirect.size());
+                                    let indirect_mem = stack.alloc_indirect(indirect.size())?;
                                     std::ptr::copy_nonoverlapping(
                                         raw_pointer, indirect_mem, raw_size,
                                     );
@@ -227,23 +214,15 @@ impl NounSlab {
                                         .as_noun();
                                 }
                             }
-                            Either::Right(mut cell) => {
-                                let raw_pointer = unsafe { cell.to_raw_pointer() };
-                                if unsafe { pma_contains(raw_pointer, 1) } {
-                                    unsafe { *dest = noun }; // in PMA
-                                    continue;
-                                }
-                                unsafe {
-                                    let cell_mem = stack.alloc_cell();
-                                    copy_nonoverlapping(raw_pointer, cell_mem, 1);
-                                    copy_stack
-                                        .push((cell.tail(), &mut (*cell_mem).tail as *mut Noun));
-                                    copy_stack
-                                        .push((cell.head(), &mut (*cell_mem).head as *mut Noun));
-                                    cell.set_forwarding_pointer(cell_mem);
-                                    *dest = Cell::from_raw_pointer(cell_mem).as_noun()
-                                }
-                            }
+                            Either::Right(mut cell) => unsafe {
+                                let cell_mem = stack.alloc_cell()?;
+                                let raw_pointer = cell.to_raw_pointer();
+                                copy_nonoverlapping(raw_pointer, cell_mem, 1);
+                                copy_stack.push((cell.tail(), &mut (*cell_mem).tail as *mut Noun));
+                                copy_stack.push((cell.head(), &mut (*cell_mem).head as *mut Noun));
+                                cell.set_forwarding_pointer(cell_mem);
+                                *dest = Cell::from_raw_pointer(cell_mem).as_noun()
+                            },
                         }
                     }
                 } else {
@@ -255,7 +234,7 @@ impl NounSlab {
                 break;
             }
         }
-        res
+        Ok(res)
     }
 
     /// Set the root of the noun slab.
@@ -266,11 +245,6 @@ impl NounSlab {
             match allocated.as_either() {
                 Either::Left(indirect) => {
                     let ptr = unsafe { indirect.to_raw_pointer() };
-                    let raw_sz = indirect.raw_size();
-                    if unsafe { pma_contains(ptr, raw_sz) } {
-                        self.root = root;
-                        return;
-                    }
                     let u8_ptr = ptr as *const u8;
                     for slab in &self.slabs {
                         if unsafe { u8_ptr >= slab.0 && u8_ptr < slab.0.add(slab.1.size()) } {
@@ -282,10 +256,6 @@ impl NounSlab {
                 }
                 Either::Right(cell) => {
                     let ptr = unsafe { cell.to_raw_pointer() };
-                    if unsafe { pma_contains(ptr, 1) } {
-                        self.root = root;
-                        return;
-                    }
                     let u8_ptr = ptr as *const u8;
                     for slab in &self.slabs {
                         if unsafe { u8_ptr >= slab.0 && u8_ptr < slab.0.add(slab.1.size()) } {
@@ -363,7 +333,7 @@ impl NounSlab {
                         } else {
                             // 0 - cell
                             cursor += 1;
-                            let (cell, cell_mem) = unsafe { Cell::new_raw_mut(self) };
+                            let (cell, cell_mem) = unsafe { Cell::new_raw_mut(self)? };
                             unsafe {
                                 *dest = cell.as_noun();
                             }
@@ -508,7 +478,7 @@ fn rub_atom(
                 // Indirect atom
                 let indirect_words = (sz + 63) >> 6; // fast round to 64-bit words
                 let (mut indirect, slice) =
-                    unsafe { IndirectAtom::new_raw_mut_bitslice(slab, indirect_words) };
+                    unsafe { IndirectAtom::new_raw_mut_bitslice(slab, indirect_words)? };
                 slice[0..sz].clone_from_bitslice(&buffer[*cursor..*cursor + sz]);
                 *cursor += sz;
                 Ok(unsafe { indirect.normalize_as_atom() })
@@ -527,6 +497,8 @@ pub enum CueError {
     BackrefTooBig,
     #[error("cue: truncated buffer")]
     TruncatedBuffer,
+    #[error("cue: allocation error {0}")]
+    AllocationError(#[from] AllocationError),
 }
 
 /// Slab size from vector index, in 8-byte words
@@ -681,13 +653,15 @@ mod tests {
         let test_noun = T(
             &mut slab,
             &[D(tas!(b"request")), D(tas!(b"block")), D(tas!(b"by-id")), D(0)],
-        );
+        )
+        .unwrap();
         slab.set_root(test_noun);
         let jammed: Vec<u8> = slab.jam().to_vec();
         println!("jammed: {:?}", jammed);
 
         let mut stack = NockStack::new(1000, 0);
         let mut sword_jammed: Vec<u8> = sword::serialization::jam(&mut stack, test_noun)
+            .unwrap()
             .as_bytes()
             .to_vec();
         let sword_suffix: Vec<u8> = sword_jammed.split_off(jammed.len());
@@ -703,7 +677,7 @@ mod tests {
     #[test]
     fn test_jam_cue_roundtrip() {
         let mut original_slab = NounSlab::new();
-        let original_noun = T(&mut original_slab, &[D(5), D(23)]);
+        let original_noun = T(&mut original_slab, &[D(5), D(23)]).unwrap();
         println!("original_noun: {:?}", original_noun);
         original_slab.set_root(original_noun);
 
@@ -731,7 +705,8 @@ mod tests {
         let complex_noun = T(
             &mut slab,
             &[D(tas!(b"request")), D(tas!(b"block")), D(tas!(b"by-id")), D(0)],
-        );
+        )
+        .unwrap();
         slab.set_root(complex_noun);
 
         let jammed = slab.jam();
@@ -749,8 +724,8 @@ mod tests {
         let mut slab = NounSlab::new();
         let large_number = u64::MAX as u128 + 1;
         let large_number_bytes = Bytes::from(large_number.to_le_bytes().to_vec());
-        let indirect_atom = Atom::from_bytes(&mut slab, &large_number_bytes);
-        let noun_with_indirect = T(&mut slab, &[D(1), indirect_atom.as_noun(), D(2)]);
+        let indirect_atom = Atom::from_bytes(&mut slab, &large_number_bytes).unwrap();
+        let noun_with_indirect = T(&mut slab, &[D(1), indirect_atom.as_noun(), D(2)]).unwrap();
         println!("noun_with_indirect: {:?}", noun_with_indirect);
         slab.set_root(noun_with_indirect);
 
@@ -771,7 +746,8 @@ mod tests {
         let tas_noun = T(
             &mut slab,
             &[D(tas!(b"foo")), D(tas!(b"bar")), D(tas!(b"baz"))],
-        );
+        )
+        .unwrap();
         slab.set_root(tas_noun);
 
         let jammed = slab.jam();
@@ -850,7 +826,7 @@ mod tests {
         let result = slab.cue_into(jammed_bytes);
         assert!(result.is_ok(), "cue_into should succeed");
         if let Ok(cued_noun) = result {
-            let expected_noun = T(&mut slab, &[D(1), D(0)]);
+            let expected_noun = T(&mut slab, &[D(1), D(0)]).unwrap();
             assert!(
                 slab_equality(cued_noun, expected_noun),
                 "Cued noun should equal [1 0]"

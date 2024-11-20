@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::kernel::checkpoint::CheckpointError;
+
 #[derive(Debug, Error)]
 pub enum ExternalError {
     #[error("unknown error: {0}")]
@@ -69,6 +71,10 @@ pub enum CrownError<T = ExternalError> {
     UnknownError(anyhow::Error),
     #[error("queue")]
     QueueError(#[from] QueueErrorWrapper),
+    #[error("allocation error: {0}")]
+    AllocationError(#[from] sword::mem::AllocationError),
+    #[error("checkpoint error: {0}")]
+    CheckpointError(#[from] CheckpointError),
 }
 
 #[derive(Debug)]

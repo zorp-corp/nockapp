@@ -60,21 +60,21 @@ pub fn file() -> IODriverFn {
                         Ok(contents) => {
                             let mut poke_slab = NounSlab::new();
                             let contents_atom = unsafe {
-                                IndirectAtom::new_raw_bytes_ref(&mut poke_slab, &contents)
+                                IndirectAtom::new_raw_bytes_ref(&mut poke_slab, &contents)?
                                     .normalize_as_atom()
                             };
                             let contents_noun = Noun::from_atom(contents_atom);
                             let poke_noun = T(
                                 &mut poke_slab,
                                 &[D(tas!(b"file")), D(tas!(b"read")), D(0), contents_noun],
-                            );
+                            )?;
                             poke_slab.set_root(poke_noun);
                             handle.poke(poke_slab).await?;
                         }
                         Err(_) => {
                             let mut poke_slab = NounSlab::new();
                             let poke_noun =
-                                T(&mut poke_slab, &[D(tas!(b"file")), D(tas!(b"read")), D(0)]);
+                                T(&mut poke_slab, &[D(tas!(b"file")), D(tas!(b"read")), D(0)])?;
                             poke_slab.set_root(poke_noun);
                             handle.poke(poke_slab).await?;
                         }
@@ -101,7 +101,7 @@ pub fn file() -> IODriverFn {
                                     contents_atom.as_noun(),
                                     D(1),
                                 ],
-                            );
+                            )?;
                             poke_slab.set_root(poke_noun);
                             handle.poke(poke_slab).await?;
                         }
@@ -117,7 +117,7 @@ pub fn file() -> IODriverFn {
                                     contents_atom.as_noun(),
                                     D(0),
                                 ],
-                            );
+                            )?;
                             poke_slab.set_root(poke_noun);
                             handle.poke(poke_slab).await?;
                         }

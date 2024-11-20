@@ -79,7 +79,7 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
 
                             match directive_tag {
                                 tas!(b"poke") => {
-                                    let poke = T(&mut slab, &[D(tas!(b"npc")), directive_cell.tail()]);
+                                    let poke = T(&mut slab, &[D(tas!(b"npc")), directive_cell.tail()])?;
                                     slab.set_root(poke);
 
                                     let result = handle.poke(slab).await?;
@@ -89,7 +89,7 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                     };
 
                                     let mut response_slab = NounSlab::new();
-                                    let response_noun = T(&mut response_slab, &[D(pid), D(tag), noun]);
+                                    let response_noun = T(&mut response_slab, &[D(pid), D(tag), noun])?;
                                     response_slab.set_root(response_noun);
                                     if !write_message(&mut stream_write, response_slab).await? {
                                         break 'driver;
@@ -102,7 +102,7 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                     match peek_res {
                                         Some(mut bind_slab) => {
                                             let peek_res = unsafe { bind_slab.root() };
-                                            let bind_noun = T(&mut bind_slab, &[D(pid), D(tas!(b"bind")), peek_res]);
+                                            let bind_noun = T(&mut bind_slab, &[D(pid), D(tas!(b"bind")), peek_res])?;
                                             bind_slab.set_root(bind_noun);
                                             if !write_message(&mut stream_write, bind_slab).await? {
                                                 break 'driver;
@@ -121,9 +121,9 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                         _ => unreachable!(),
                                     };
                                     let poke = if tag == tas!(b"npc-bind") {
-                                        T(&mut slab, &[D(tag), D(pid), directive_cell.tail()])
+                                        T(&mut slab, &[D(tag), D(pid), directive_cell.tail()])?
                                     } else {
-                                        T(&mut slab, &[D(tag), D(pid)])
+                                        T(&mut slab, &[D(tag), D(pid)])?
                                     };
                                     slab.set_root(poke);
                                     if tag == tas!(b"npc-nack") {

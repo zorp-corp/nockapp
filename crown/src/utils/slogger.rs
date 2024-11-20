@@ -4,7 +4,7 @@ use either::Either::*;
 use std::io::{stderr, Write};
 use sword::interpreter::Slogger;
 use sword::jets::list::util::lent;
-use sword::mem::NockStack;
+use sword::mem::{AllocResult, NockStack};
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
 use sword_macros::tas;
 
@@ -12,15 +12,16 @@ pub struct CrownSlogger {}
 
 impl Slogger for CrownSlogger {
     // XX todo: restore pretty colors?
-    fn slog(&mut self, stack: &mut NockStack, _pri: u64, tank: Noun) {
+    fn slog(&mut self, stack: &mut NockStack, _pri: u64, tank: Noun) -> AllocResult<()> {
         permit_alloc(|| {
             let mut err_handle = stderr().lock();
             slog_tank(stack, tank, &mut err_handle).unwrap();
             err_handle.write(b"\n").unwrap();
         });
+        Ok(())
     }
 
-    fn flog(&mut self, _stack: &mut NockStack, cord: Noun) {
+    fn flog(&mut self, _stack: &mut NockStack, cord: Noun) -> AllocResult<()> {
         let cord_atom = cord.as_atom().unwrap();
         permit_alloc(|| {
             let mut err_handle = stderr().lock();
@@ -28,6 +29,7 @@ impl Slogger for CrownSlogger {
             slog_cord(cord_atom, &mut err_handle).unwrap();
             err_handle.write(b"\n").unwrap();
         });
+        Ok(())
     }
 }
 
@@ -107,7 +109,7 @@ fn crip(stack: &mut NockStack, mut tape: Noun) -> Result<Atom> {
     if l == 0 {
         return Ok(unsafe { DirectAtom::new_unchecked(0).as_atom() });
     }
-    let (mut indirect, buf) = unsafe { IndirectAtom::new_raw_mut_bytes(stack, l) };
+    let (mut indirect, buf) = unsafe { IndirectAtom::new_raw_mut_bytes(stack, l)? };
 
     let mut idx = 0;
     loop {
