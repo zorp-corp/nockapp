@@ -260,14 +260,13 @@ impl NounSlab {
         }
 
         // Verify that the copied noun is fully in the stack or PMA
-        self.verify_copied_noun(res, stack)
+        self.verify_copied_noun(res)
             .expect("Noun was not properly copied to stack");
-
         res
     }
 
     /// Verifies that a noun does not contain any references to memory in this slab
-    fn verify_copied_noun(&self, noun: Noun, nockstack: &mut NockStack) -> Result<(), String> {
+    fn verify_copied_noun(&self, noun: Noun) -> Result<(), String> {
         let mut stack = vec![noun]; // traversal stack
         let mut visited = std::collections::HashSet::new();
 
@@ -287,7 +286,8 @@ impl NounSlab {
 
                 // Verify cached mug if present
                 if let Some(cached_mug) = allocated.get_cached_mug() {
-                    let computed_mug = mug_u32(nockstack, noun);
+                    let computed_mug = slab_mug_no_cache(noun);
+                    println!("cached_mug: {}, computed_mug: {}", cached_mug, computed_mug);
                     if cached_mug != computed_mug {
                         return Err(format!(
                             "Found noun with incorrect mug at {:p} - cached: {}, computed: {}",
@@ -394,7 +394,8 @@ impl NounSlab {
                 }
             }
         }
-        // we do not call validate_root here since this already performs the same check
+        self.validate_root()
+            .expect("Noun was not properly copied into slab");
         self.root = root;
     }
 
@@ -517,7 +518,7 @@ impl NounSlab {
 
                 // Verify cached mug if present
                 if let Some(cached_mug) = allocated.get_cached_mug() {
-                    let computed_mug = slab_mug(noun);
+                    let computed_mug = slab_mug_no_cache(noun);
                     if cached_mug != computed_mug {
                         return Err(format!(
                             "Found noun with incorrect mug at {:p} - cached: {}, computed: {}",
@@ -856,6 +857,28 @@ fn slab_mug(a: Noun) -> u32 {
     get_mug(a).expect("Noun should have a mug once mugged.")
 }
 
+/// Calculate the mug of a noun without using the cache.
+fn slab_mug_no_cache(a: Noun) -> u32 {
+    match a.as_either_direct_allocated() {
+        Either::Left(direct) => {
+            calc_atom_mug_u32(direct.as_atom())
+        }
+        Either::Right(allocated) => {
+            match allocated.as_either() {
+                Either::Left(indirect) => {
+                    calc_atom_mug_u32(indirect.as_atom())
+                }
+                Either::Right(cell) => {
+                    // Recursively calculate mugs for head and tail
+                    let head_mug = slab_mug_no_cache(cell.head());
+                    let tail_mug = slab_mug_no_cache(cell.tail());
+                    unsafe { calc_cell_mug_u32(head_mug, tail_mug) }
+                }
+            }
+        }
+    }
+}
+
 enum CueStackEntry {
     DestinationPointer(*mut Noun),
     BackRef(u64, *const Noun),
@@ -1094,6 +1117,46 @@ mod tests {
             assert!(
                 result.unwrap_err().contains("non-normalized indirect atom"),
                 "Error message should mention non-normalized atom"
+            );
+        }
+    }
+
+    #[test]
+    fn test_verify_copied_noun() {
+        let mut stack = NockStack::new(10000, 0);
+        let slab = NounSlab::new();
+
+        // Create a valid noun in the stack
+        let valid_noun = T(&mut stack, &[D(1), D(2)]);
+        
+        // This should pass verification since it's properly allocated in the stack
+        let result = slab.verify_copied_noun(valid_noun);
+        assert!(
+            result.is_ok(),
+            "Valid noun in stack should pass verification"
+        );
+
+        // Create a noun with an incorrect mug
+        unsafe {
+            // Allocate a cell in the stack
+            let cell_mem = stack.alloc_cell();
+            (*cell_mem).head = D(1);
+            (*cell_mem).tail = D(2);
+            // Set an incorrect mug value
+            let cell = Cell::from_raw_pointer(cell_mem);
+            set_mug(cell.as_allocated(), 12345); // Wrong mug value
+
+            let invalid_noun = cell.as_noun();
+            
+            // This should fail verification due to incorrect mug
+            let result = slab.verify_copied_noun(invalid_noun);
+            assert!(
+                result.is_err(),
+                "Noun with incorrect mug should fail verification"
+            );
+            assert!(
+                result.unwrap_err().contains("incorrect mug"),
+                "Error message should mention incorrect mug"
             );
         }
     }
