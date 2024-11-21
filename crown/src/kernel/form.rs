@@ -618,7 +618,7 @@ impl Serf {
         stack.preserve(&mut self.context.cache)?;
         stack.preserve(&mut self.context.cold)?;
         stack.preserve(&mut self.arvo)?;
-        stack.flip_top_frame(0);
+        stack.flip_top_frame(0)?;
         Ok(())
     }
 
