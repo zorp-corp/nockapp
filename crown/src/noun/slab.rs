@@ -268,6 +268,7 @@ impl NounSlab {
     }
 
     /// Verifies that a noun does not contain any references to memory in this slab
+    #[allow(dead_code)]
     fn verify_copied_noun(&self, noun: Noun) -> Result<(), String> {
         let mut stack = vec![noun]; // traversal stack
         let mut visited = std::collections::HashSet::new();
@@ -396,6 +397,7 @@ impl NounSlab {
                 }
             }
         }
+        #[cfg(feature = "validate-nouns")]
         self.validate_root()
             .expect("Noun was not properly copied into slab");
         self.root = root;
@@ -506,6 +508,7 @@ impl NounSlab {
 
     /// Validates that all allocated nouns in the tree are contained within one of this slab's
     /// allocated memory regions or the PMA
+    #[allow(dead_code)]
     pub fn validate_root(&self) -> Result<(), String> {
         let mut stack = vec![self.root];
         let mut visited = std::collections::HashSet::new();
