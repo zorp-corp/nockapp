@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::kernel::checkpoint::JamPaths;
-    use crate::kernel::form::Kernel;
+    use crate::kernel::form::{Kernel, STATE_AXIS};
     use crate::noun::slab::{slab_equality, NounSlab};
     use crate::{NockApp, NounExt};
+    use sword::noun::Slots;
 
     use std::fs;
     use std::path::Path;
@@ -47,7 +48,7 @@ mod tests {
     #[traced_test]
     async fn test_nockapp_save() {
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
-        let mut arvo = nockapp.kernel.serf.arvo;
+        let mut state = nockapp.kernel.serf.arvo.slot(STATE_AXIS).unwrap();
         let jam_paths = nockapp.kernel.jam_paths.clone();
         assert_eq!(nockapp.kernel.serf.event_num, 0);
 
@@ -70,7 +71,7 @@ mod tests {
             assert!(unifying_equality(
                 nockapp.kernel.serf.stack(),
                 &mut checkpoint.ker_state,
-                &mut arvo
+                &mut state
             )
             .expect("Unifying equality failed with allocation error"));
         }
@@ -103,7 +104,7 @@ mod tests {
     async fn test_nockapp_poke_save() {
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
         assert_eq!(nockapp.kernel.serf.event_num, 0);
-        let mut arvo_before_poke = nockapp.kernel.serf.arvo;
+        let mut state_before_poke = nockapp.kernel.serf.arvo.slot(STATE_AXIS).unwrap();
 
         let poke = D(tas!(b"inc"));
 
@@ -120,18 +121,18 @@ mod tests {
 
         // Checkpoint event number should be 1
         assert!(checkpoint.event_num == 1);
-        let mut arvo_after_poke = nockapp.kernel.serf.arvo;
+        let mut state_after_poke = nockapp.kernel.serf.arvo.slot(STATE_AXIS).unwrap();
 
         unsafe {
             let stack = nockapp.kernel.serf.stack();
             // Checkpoint kernel should be equal to the saved kernel
             assert!(
-                unifying_equality(stack, &mut checkpoint.ker_state, &mut arvo_after_poke)
+                unifying_equality(stack, &mut checkpoint.ker_state, &mut state_after_poke)
                     .expect("unifying equality failed with allocation error")
             );
             // Checkpoint kernel should be different from the kernel before the poke
             assert!(
-                !unifying_equality(stack, &mut checkpoint.ker_state, &mut arvo_before_poke)
+                !unifying_equality(stack, &mut checkpoint.ker_state, &mut state_before_poke)
                     .expect("unifying equality failed with allocation error")
             );
         }
