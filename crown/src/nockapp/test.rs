@@ -1,9 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::kernel::checkpoint::JamPaths;
-    use crate::kernel::form::Kernel;
+    use crate::kernel::form::{Kernel, STATE_AXIS};
     use crate::noun::slab::{slab_equality, NounSlab};
     use crate::{NockApp, NounExt};
+    use sword::noun::Slots;
 
     use std::fs;
     use std::path::Path;
@@ -26,7 +27,7 @@ mod tests {
             .join("tests")
             .join(jam);
         let jam_bytes = fs::read(jam_path).expect(&format!("Failed to read {} file", jam));
-        let kernel = Kernel::load(snap_dir, jam_paths, &jam_bytes, false);
+        let kernel = Kernel::load(jam_paths, &jam_bytes, false).expect("Failed to load kernel");
         (temp_dir, NockApp::new(kernel, Duration::from_secs(1)))
     }
 
@@ -47,7 +48,7 @@ mod tests {
     #[traced_test]
     async fn test_nockapp_save() {
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
-        let mut arvo = nockapp.kernel.serf.arvo;
+        let mut state = nockapp.kernel.serf.arvo.slot(STATE_AXIS).unwrap();
         let jam_paths = nockapp.kernel.jam_paths.clone();
         assert_eq!(nockapp.kernel.serf.event_num, 0);
 
@@ -70,24 +71,30 @@ mod tests {
             assert!(unifying_equality(
                 nockapp.kernel.serf.stack(),
                 &mut checkpoint.ker_state,
-                &mut arvo
-            ));
+                &mut state
+            )
+            .expect("Unifying equality failed with allocation error"));
         }
 
         // Checkpoint cold state should be equal to the saved cold state
-        let mut cold_chk_noun = checkpoint.cold.into_noun(nockapp.kernel.serf.stack());
+        let mut cold_chk_noun = checkpoint
+            .cold
+            .into_noun(nockapp.kernel.serf.stack())
+            .unwrap();
         let mut cold_noun = nockapp
             .kernel
             .serf
             .context
             .cold
-            .into_noun(nockapp.kernel.serf.stack());
+            .into_noun(nockapp.kernel.serf.stack())
+            .unwrap();
         unsafe {
             assert!(unifying_equality(
                 nockapp.kernel.serf.stack(),
                 &mut cold_chk_noun,
                 &mut cold_noun
-            ));
+            )
+            .expect("unifying equality failed with allocation error"));
         };
     }
 
@@ -97,7 +104,7 @@ mod tests {
     async fn test_nockapp_poke_save() {
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
         assert_eq!(nockapp.kernel.serf.event_num, 0);
-        let mut arvo_before_poke = nockapp.kernel.serf.arvo;
+        let mut state_before_poke = nockapp.kernel.serf.arvo.slot(STATE_AXIS).unwrap();
 
         let poke = D(tas!(b"inc"));
 
@@ -114,34 +121,41 @@ mod tests {
 
         // Checkpoint event number should be 1
         assert!(checkpoint.event_num == 1);
-        let mut arvo_after_poke = nockapp.kernel.serf.arvo;
+        let mut state_after_poke = nockapp.kernel.serf.arvo.slot(STATE_AXIS).unwrap();
 
         unsafe {
             let stack = nockapp.kernel.serf.stack();
             // Checkpoint kernel should be equal to the saved kernel
-            assert!(unifying_equality(
-                stack, &mut checkpoint.ker_state, &mut arvo_after_poke
-            ));
+            assert!(
+                unifying_equality(stack, &mut checkpoint.ker_state, &mut state_after_poke)
+                    .expect("unifying equality failed with allocation error")
+            );
             // Checkpoint kernel should be different from the kernel before the poke
-            assert!(!unifying_equality(
-                stack, &mut checkpoint.ker_state, &mut arvo_before_poke
-            ));
+            assert!(
+                !unifying_equality(stack, &mut checkpoint.ker_state, &mut state_before_poke)
+                    .expect("unifying equality failed with allocation error")
+            );
         }
 
         // Checkpoint cold state should be equal to the saved cold state
-        let mut cold_chk_noun = checkpoint.cold.into_noun(nockapp.kernel.serf.stack());
+        let mut cold_chk_noun = checkpoint
+            .cold
+            .into_noun(nockapp.kernel.serf.stack())
+            .unwrap();
         let mut cold_noun = nockapp
             .kernel
             .serf
             .context
             .cold
-            .into_noun(nockapp.kernel.serf.stack());
+            .into_noun(nockapp.kernel.serf.stack())
+            .unwrap();
         unsafe {
             assert!(unifying_equality(
                 nockapp.kernel.serf.stack(),
                 &mut cold_chk_noun,
                 &mut cold_noun
-            ));
+            )
+            .expect("unifying equality failed with allocation error"));
         };
     }
 
@@ -171,7 +185,7 @@ mod tests {
             assert!(checkpoint.event_num == i);
 
             // Checkpointed state should have been incremented
-            let peek = T(nockapp.kernel.serf.stack(), &[D(tas!(b"state")), D(0)]);
+            let peek = T(nockapp.kernel.serf.stack(), &[D(tas!(b"state")), D(0)]).unwrap();
 
             // res should be [~ ~ val]
             let res = nockapp.kernel.peek(peek).unwrap();
@@ -200,7 +214,7 @@ mod tests {
         assert_eq!(nockapp.save_sem.available_permits(), 1);
 
         // Generate an invalid checkpoint by incrementing the event number
-        let mut invalid = nockapp.kernel.checkpoint();
+        let mut invalid = nockapp.kernel.checkpoint().unwrap();
         invalid.event_num = invalid.event_num + 1;
         assert!(!invalid.validate());
 
@@ -229,10 +243,13 @@ mod tests {
         let mut kernel = nockapp.kernel;
         let mut arvo = kernel.serf.arvo.clone();
         let stack = kernel.serf.stack();
-        let j = jam(stack, arvo);
+        let j = jam(stack, arvo).unwrap();
         let mut c = cue(stack, j).unwrap();
         // new nockstack
-        unsafe { assert!(unifying_equality(stack, &mut arvo, &mut c)) }
+        unsafe {
+            assert!(unifying_equality(stack, &mut arvo, &mut c)
+                .expect("unifying equality failed with allocation error"))
+        }
     }
 
     #[tokio::test]
@@ -241,7 +258,7 @@ mod tests {
         let kernel = nockapp.kernel;
         let mut slab = NounSlab::new();
         let arvo = kernel.serf.arvo.clone();
-        slab.copy_into(arvo);
+        slab.copy_into(arvo).unwrap();
         let bytes = slab.jam();
         let c = slab.cue_into(bytes).unwrap();
         unsafe { assert!(slab_equality(slab.root(), c)) }
@@ -253,7 +270,7 @@ mod tests {
         let mut kernel = nockapp.kernel;
         let mut arvo = kernel.serf.arvo.clone();
         let mut slab = NounSlab::new();
-        slab.copy_into(arvo);
+        slab.copy_into(arvo).unwrap();
         // Use slab to jam
         let bytes = slab.jam();
         let stack = kernel.serf.stack();
@@ -261,7 +278,8 @@ mod tests {
         let mut c = Noun::cue_bytes(stack, &bytes).unwrap();
         unsafe {
             // check for equality
-            assert!(unifying_equality(stack, &mut arvo, &mut c))
+            assert!(unifying_equality(stack, &mut arvo, &mut c)
+                .expect("unifying equality failed with allocation error"))
         }
     }
 }

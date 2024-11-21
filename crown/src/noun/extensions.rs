@@ -1,5 +1,5 @@
 use sword::interpreter::Error;
-use sword::mem::NockStack;
+use sword::mem::{AllocResult, AllocationError, NockStack};
 
 use crate::noun::slab::NounSlab;
 use crate::{Noun, Result, ToBytes, ToBytesExt};
@@ -13,14 +13,14 @@ use sword::serialization::{cue, jam};
 pub trait NounExt {
     fn cue_bytes(stack: &mut NockStack, bytes: &Bytes) -> Result<Noun, Error>;
     fn cue_bytes_slice(stack: &mut NockStack, bytes: &[u8]) -> Result<Noun, Error>;
-    fn jam_self(self, stack: &mut NockStack) -> JammedNoun;
+    fn jam_self(self, stack: &mut NockStack) -> Result<JammedNoun>;
     fn list_iter(self) -> impl Iterator<Item = Noun>;
     fn eq_bytes(self, bytes: impl AsRef<[u8]>) -> bool;
 }
 
 impl NounExt for Noun {
     fn cue_bytes(stack: &mut NockStack, bytes: &Bytes) -> Result<Noun, Error> {
-        let atom = Atom::from_bytes(stack, bytes);
+        let atom = Atom::from_bytes(stack, bytes)?;
         cue(stack, atom)
     }
 
@@ -28,13 +28,13 @@ impl NounExt for Noun {
     // its OK to just cue a byte slice to avoid copying.
     fn cue_bytes_slice(stack: &mut NockStack, bytes: &[u8]) -> Result<Noun, Error> {
         let atom = unsafe {
-            IndirectAtom::new_raw_bytes(stack, bytes.len(), bytes.as_ptr()).normalize_as_atom()
+            IndirectAtom::new_raw_bytes(stack, bytes.len(), bytes.as_ptr())?.normalize_as_atom()
         };
         cue(stack, atom)
     }
 
-    fn jam_self(self, stack: &mut NockStack) -> JammedNoun {
-        JammedNoun::from_noun(stack, self)
+    fn jam_self(self, stack: &mut NockStack) -> Result<JammedNoun> {
+        Ok(JammedNoun::from_noun(stack, self)?)
     }
 
     fn list_iter(self) -> impl Iterator<Item = Noun> {
@@ -51,7 +51,10 @@ impl NounExt for Noun {
 }
 
 pub trait AtomExt {
-    fn from_bytes<A: NounAllocator>(allocator: &mut A, bytes: &Bytes) -> Atom;
+    fn from_bytes<A: NounAllocator>(
+        allocator: &mut A,
+        bytes: &Bytes,
+    ) -> Result<Atom, AllocationError>;
     fn from_value<A: NounAllocator, T: ToBytes>(allocator: &mut A, value: T) -> Result<Atom>;
     fn eq_bytes(self, bytes: impl AsRef<[u8]>) -> bool;
     fn to_bytes_until_nul(self) -> Result<Vec<u8>>;
@@ -59,9 +62,15 @@ pub trait AtomExt {
 }
 
 impl AtomExt for Atom {
-    fn from_bytes<A: NounAllocator>(allocator: &mut A, bytes: &Bytes) -> Atom {
+    fn from_bytes<A: NounAllocator>(
+        allocator: &mut A,
+        bytes: &Bytes,
+    ) -> Result<Atom, AllocationError> {
         unsafe {
-            IndirectAtom::new_raw_bytes(allocator, bytes.len(), bytes.as_ptr()).normalize_as_atom()
+            Ok(
+                IndirectAtom::new_raw_bytes(allocator, bytes.len(), bytes.as_ptr())?
+                    .normalize_as_atom(),
+            )
         }
     }
 
@@ -69,7 +78,7 @@ impl AtomExt for Atom {
         unsafe {
             let data: Bytes = value.as_bytes()?;
             Ok(
-                IndirectAtom::new_raw_bytes(allocator, data.len(), data.as_ptr())
+                IndirectAtom::new_raw_bytes(allocator, data.len(), data.as_ptr())?
                     .normalize_as_atom(),
             )
         }
@@ -115,14 +124,14 @@ impl JammedNoun {
         Self(bytes)
     }
 
-    pub fn from_noun(stack: &mut NockStack, noun: Noun) -> Self {
-        let jammed_atom = jam(stack, noun);
-        JammedNoun(Bytes::copy_from_slice(jammed_atom.as_bytes()))
+    pub fn from_noun(stack: &mut NockStack, noun: Noun) -> AllocResult<Self> {
+        let jammed_atom = jam(stack, noun)?;
+        Ok(JammedNoun(Bytes::copy_from_slice(jammed_atom.as_bytes())))
     }
 
     pub fn cue_self(&self, stack: &mut NockStack) -> Result<Noun, Error> {
         let atom = unsafe {
-            IndirectAtom::new_raw_bytes(stack, self.0.len(), self.0.as_ptr()).normalize_as_atom()
+            IndirectAtom::new_raw_bytes(stack, self.0.len(), self.0.as_ptr())?.normalize_as_atom()
         };
         cue(stack, atom)
     }
@@ -175,16 +184,16 @@ impl Iterator for NounListIterator {
 }
 
 pub trait IntoNoun {
-    fn into_noun(self) -> Noun;
+    fn into_noun(self) -> Result<Noun, AllocationError>;
 }
 
 impl IntoNoun for Atom {
-    fn into_noun(self) -> Noun {
-        self.as_noun()
+    fn into_noun(self) -> Result<Noun, AllocationError> {
+        Ok(self.as_noun())
     }
 }
 impl IntoNoun for u64 {
-    fn into_noun(self) -> Noun {
+    fn into_noun(self) -> Result<Noun, AllocationError> {
         unsafe { Atom::from_raw(self).into_noun() }
     }
 }
@@ -196,18 +205,18 @@ impl FromAtom for u64 {
 }
 
 impl IntoNoun for Noun {
-    fn into_noun(self) -> Noun {
-        self
+    fn into_noun(self) -> Result<Noun, AllocationError> {
+        Ok(self)
     }
 }
 impl IntoNoun for &str {
-    fn into_noun(self) -> Noun {
+    fn into_noun(self) -> Result<Noun, AllocationError> {
         let mut slab = NounSlab::new();
         let contents_atom = unsafe {
             let bytes = self.to_bytes().unwrap();
-            IndirectAtom::new_raw_bytes_ref(&mut slab, bytes.as_slice()).normalize_as_atom()
+            IndirectAtom::new_raw_bytes_ref(&mut slab, bytes.as_slice())?.normalize_as_atom()
         };
-        Noun::from_atom(contents_atom)
+        Ok(Noun::from_atom(contents_atom))
     }
 }
 
@@ -221,14 +230,14 @@ impl FromAtom for Noun {
 }
 
 pub trait IntoSlab {
-    fn into_slab(self) -> NounSlab;
+    fn into_slab(self) -> Result<NounSlab, AllocationError>;
 }
 
 impl IntoSlab for &str {
-    fn into_slab(self) -> NounSlab {
+    fn into_slab(self) -> Result<NounSlab, AllocationError> {
         let mut slab = NounSlab::new();
-        let noun = self.into_noun();
+        let noun = self.into_noun()?;
         slab.set_root(noun);
-        slab
+        Ok(slab)
     }
 }

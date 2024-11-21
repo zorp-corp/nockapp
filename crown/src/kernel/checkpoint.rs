@@ -3,7 +3,7 @@ use bincode::config::{self, Configuration};
 use bincode::{encode_to_vec, Decode, Encode};
 use blake3::{Hash, Hasher};
 use bytes::Bytes;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use sword::jets::cold::{Cold, Nounable};
 use sword::mem::NockStack;
 use sword::noun::{Noun, T};
@@ -29,7 +29,7 @@ impl Checkpoint {
             .as_cell()?;
 
         let cold_mem = Cold::from_noun(stack, &cell.tail())?;
-        let cold = Cold::from_vecs(stack, cold_mem.0, cold_mem.1, cold_mem.2);
+        let cold = Cold::from_vecs(stack, cold_mem.0, cold_mem.1, cold_mem.2)?;
 
         Ok(Self {
             magic_bytes: jam.magic_bytes,
@@ -64,13 +64,14 @@ impl JammedCheckpoint {
         ker_hash: Hash,
         event_num: u64,
         cold: &Cold,
+
         ker_state: &Noun,
-    ) -> Self {
-        let cold_noun = (*cold).into_noun(stack);
-        let cell = T(stack, &[*ker_state, cold_noun]);
-        let jam = JammedNoun::from_noun(stack, cell);
+    ) -> Result<Self, CheckpointError> {
+        let cold_noun = (*cold).into_noun(stack)?;
+        let cell = T(stack, &[*ker_state, cold_noun])?;
+        let jam = JammedNoun::from_noun(stack, cell)?;
         let checksum = Self::checksum(event_num, &jam.0);
-        Self {
+        Ok(Self {
             magic_bytes: tas!(b"JAM"),
             version,
             buff_index,
@@ -78,7 +79,7 @@ impl JammedCheckpoint {
             checksum,
             event_num,
             jam,
-        }
+        })
     }
     pub fn validate(&self) -> bool {
         self.checksum == Self::checksum(self.event_num, &self.jam.0)
@@ -97,19 +98,21 @@ impl JammedCheckpoint {
 }
 
 #[derive(Error, Debug)]
-pub enum CheckpointError<'a> {
+pub enum CheckpointError {
     #[error("IO error: {0}")]
     IOError(#[from] std::io::Error),
     #[error("Bincode error: {0}")]
     DecodeError(#[from] bincode::error::DecodeError),
     #[error("Invalid checksum at {0}")]
-    InvalidChecksum(&'a PathBuf),
+    InvalidChecksum(Box<Path>),
     #[error("Sword noun error: {0}")]
     SwordNounError(#[from] sword::noun::Error),
     #[error("Sword cold error: {0}")]
     FromNounError(#[from] sword::jets::cold::FromNounError),
     #[error("Sword interpreter error")]
     SwordInterpreterError,
+    #[error("AllocationError: {0}")]
+    AllocationError(#[from] sword::mem::AllocationError),
 }
 
 #[derive(Debug, Clone)]
@@ -175,7 +178,9 @@ impl JamPaths {
         if checkpoint.validate() {
             Ok(checkpoint)
         } else {
-            Err(CheckpointError::InvalidChecksum(jam_path))
+            Err(CheckpointError::InvalidChecksum(
+                jam_path.clone().into_boxed_path(),
+            ))
         }
     }
 }

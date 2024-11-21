@@ -78,7 +78,7 @@ pub fn setup(
         "kernel: jam buffer paths: {:?}, {:?}",
         jam_paths.0, jam_paths.1
     );
-    let kernel = Kernel::load_with_hot_state(pma_dir, jam_paths, jam, hot_state, cli.trace);
+    let kernel = Kernel::load_with_hot_state(jam_paths, jam, hot_state, cli.trace)?;
 
     let save_interval = std::time::Duration::from_millis(cli.save_interval);
 

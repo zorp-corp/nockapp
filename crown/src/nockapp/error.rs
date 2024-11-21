@@ -46,4 +46,6 @@ pub enum NockAppError {
     DecodeError(#[from] bincode::error::DecodeError),
     #[error("Send error: {0}")]
     SendError(#[from] tokio::sync::watch::error::SendError<u64>),
+    #[error("Allocation error: {0}")]
+    AllocationError(#[from] sword::mem::AllocationError),
 }

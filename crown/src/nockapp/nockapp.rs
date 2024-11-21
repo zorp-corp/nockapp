@@ -107,7 +107,7 @@ impl NockApp {
     ) -> Result<(), NockAppError> {
         let toggle = self.kernel.buffer_toggle.clone();
         let jam_paths = self.kernel.jam_paths.clone();
-        let checkpoint = self.kernel.checkpoint();
+        let checkpoint = self.kernel.checkpoint()?;
         let bytes = checkpoint.encode()?;
         let send_lock = self.watch_send.clone();
         self.tasks.lock().await.spawn(async move {
@@ -225,7 +225,7 @@ impl NockApp {
                     match action {
                         IOAction::Poke { poke, ack_channel } => {
                             debug!("poke slab: {:?}", poke);
-                            let poke_noun = poke.copy_to_stack(self.kernel.serf.stack());
+                            let poke_noun = poke.copy_to_stack(self.kernel.serf.stack())?;
                             debug!("poke_noun: {:?}", poke_noun);
                             let effects_res = self.kernel.poke(poke_noun);
                             debug!("effects_res: {:?}", effects_res);
@@ -234,7 +234,7 @@ impl NockApp {
                                     let _ = ack_channel.send(PokeResult::Ack);
                                     for effect in effects.list_iter() {
                                         let mut effect_slab = NounSlab::new();
-                                        effect_slab.copy_into(effect);
+                                        effect_slab.copy_into(effect)?;
                                         let _ = self.effect_broadcast.send(effect_slab);
                                     }
                                 },
@@ -244,14 +244,14 @@ impl NockApp {
                             }
                         },
                         IOAction::Peek { path, result_channel } => {
-                            let path_noun = path.copy_to_stack(self.kernel.serf.stack());
+                            let path_noun = path.copy_to_stack(self.kernel.serf.stack())?;
                             info!("path_noun: {:?}", path_noun);
                             let peek_res = self.kernel.peek(path_noun);
 
                             match peek_res {
                                 Ok(res_noun) => {
                                     let mut res_slab = NounSlab::new();
-                                    res_slab.copy_into(res_noun);
+                                    res_slab.copy_into(res_noun)?;
                                     let _ = result_channel.send(Some(res_slab));
                                 },
                                 Err(_) => {
