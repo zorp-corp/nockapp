@@ -1,108 +1,5 @@
 /+  *wrapper
 =>
-|%
-<<<<<<< Updated upstream
-+$  choo-state  [%0 cached-hoon=(unit (trap vase)) ~]
-=======
-+$  choo-state
-  $%  [%0 cached-hoon=(unit (trap vase)) ~]
-      $:  %1
-          cached-hoon=(unit (trap vase))
-          graph-cache=(map path import-graph)
-          vase-cache=(map path (trap vase))
-      ==
-  ==
->>>>>>> Stashed changes
-::
-++  moat  (keep choo-state)
-+$  cause
-  $%  [%build pat=cord tex=cord directory=(list [cord cord]) arbitrary=?]
-      [%file %write path=@t contents=@ success=?]
-      [%boot hoon-txt=cord]
-  ==
-+$  effect
-  $%  [%file %write path=@t contents=@]
-      [%exit id=@]
-  ==
-::
-::  $entry: path of a file along with unit of its contents.
-::
-::    If unit is null, the path must exist inside of the dir map.
-::
-+$  entry  [pat=path tex=(unit cord)]
---
-::
-=<
-~&  %choo-choo
-%-  moat
-^-  fort:moat
-|_  k=choo-state
-+*  builder  +>
-::
-::  +load: upgrade from previous state
-::
-++  load
-  |=  arg=choo-state
-<<<<<<< Updated upstream
-  arg
-=======
-  ?.  ?=(-.arg %0)
-    ?>  ?=(-.arg %1)
-    arg
-  [%1 cached-hoon.arg ~ ~]
->>>>>>> Stashed changes
-::
-::  +peek: external inspect
-::
-++  peek
-  |=  =path
-  ^-  (unit (unit *))
-  ``?=(^ cached-hoon.k)
-::
-::  +poke: external apply
-::
-++  poke
-  |=  [eny=@ our=@ux now=@da dat=*]
-  ^-  [(list effect) choo-state]
-  =/  cause=(unit cause)  ((soft cause) dat)
-  ?~  cause
-    ~&  >>  "input is not a proper cause"
-    !!
-  =/  cause  u.cause
-  ?-    -.cause
-      %file
-    [~ k]
-  ::
-      %boot
-    ~&  hoon-version+hoon-version
-    ?:  ?=(^ cached-hoon.k)
-      [~ k]
-   [~ k(cached-hoon `(build-honc hoon-txt.cause))]
-  ::
-      %build
-    =/  =entry  [(stab pat.cause) `tex.cause]
-    =/  dir
-      %-  ~(gas by *(map path cord))
-      (turn directory.cause |=((pair @t @t) [(stab p) q]))
-    ?>  ?=(^ cached-hoon.k)
-    =/  contents=@
-      %-  jam
-      ?:  arbitrary.cause
-        %-  ~(create-arbitrary builder u.cached-hoon.k)
-        [entry dir]
-      %-  ~(create builder u.cached-hoon.k)
-      [entry dir]
-    :_  k
-    :~  :*  %file
-            %write
-            path=(crip "out.jam")
-            contents=contents
-        ==
-        [%exit 0]
-    ==
-  ==
---
-::
 ::  build system
 ::
 =>
@@ -110,6 +7,7 @@
 ::  dependency system
 ::
 |%
++$  octs  [p=@ud q=@]
 +$  raut
   ::  resolved taut - pax contains real path to file after running taut through +get-fit
   [face=(unit @tas) pax=path]
@@ -122,6 +20,23 @@
       =hoon
   ==
 ::
++$  graph-leaf
+  $%  [%hoon =hoon]
+      [%octs =octs]
+  ==
+::
+++  import-graph
+  $+  import-graph
+  $~  [*path ~ ~ ~ ~ *(unit @tas) [%hoon *hoon] *@]  ::  not needed in the dojo but here for some reason
+  $:  =path
+      sur=(list import-graph)
+      lib=(list import-graph)
+      raw=(list import-graph)
+      bar=(list import-graph)
+      face=(unit @tas)  ::  the face that this node of the import graph has
+      leaf=graph-leaf
+      hash=@            ::  shax hash of file cord
+  ==
 ++  to-wain                                           ::  cord to line list
   |=  txt=cord
   ^-  wain
@@ -294,58 +209,96 @@
 ::
 ::  builder core
 ::
-|_  honc=(trap vase)
+|_  [honc=(trap vase) gra=(map path import-graph) tra=(map path (trap vase))]
 ::
+::
+::  $entry: path of a file along with unit of its contents.
+::
+::    If unit is null, the path must exist inside of the dir map.
+::
++$  entry  [pat=path tex=(unit cord)]
 ++  build-honc
   |=  hoon-txt=cord
   ^-  (trap vase)
   (swet *(trap vase) (ream hoon-txt))
 ::
-+$  octs  [p=@ud q=@]
 ::
-+$  graph-leaf
-  $%  [%hoon =hoon]
-      [%octs =octs]
-  ==
-::
-++  import-graph
-  $+  import-graph
-  $~  [*path ~ ~ ~ ~ *(unit @tas) [%hoon *hoon]]  ::  not needed in the dojo but here for some reason
-  $:  =path
-      sur=(list import-graph)
-      lib=(list import-graph)
-      raw=(list import-graph)
-      bar=(list import-graph)
-      face=(unit @tas)  ::  the face that this node of the import graph has
-      leaf=graph-leaf
-      hash=@            ::  shax hash of file cord
-  ==
+++  evict
+  |=  [=entry dir=(map path import-graph)]
+  ?~  tex.entry
+    %|
+  =/  new-hash=@  (shax u.tex.entry)
+  ?.  (~(has by dir) pat.entry)
+    ~&  "not in dir"
+    ~&  keys+~(key by dir)
+    ~&  path+pat.entry
+    %|
+  =/  old-hash=@  hash:(~(got by dir) pat.entry)
+  ~&  "check hash match {<=(new-hash old-hash)>}"
+  !=(new-hash old-hash)
 ::
 ++  create
   |=  [=entry dir=(map path cord)]
-  ^-  (trap)
+  ^-  [(trap) (map path import-graph) (map path (trap vase))]
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
-  =/  graph  (make-import-graph ~ entry 0 ~ dir)
+  ~&  >>  "create"
+  ~&  >>  gra-keys+~(key by gra)
+  ~&  >>  tra-keys+~(key by tra)
+  =/  res
+    %+  roll
+      ~(tap by dir)
+    |=  [[pat=path cor=cord] [gra=_gra tra=_tra]]
+    ?.  (evict [pat `cor] gra)
+      [gra tra]
+    (evict-cache pat.entry (shax cor) gra tra)
+  =.  gra  -.res
+  =.  tra  +.res
+  ?:  (evict entry gra)
+    ?@  tex.entry
+      !!
+    =/  caches  (evict-cache pat.entry (shax u.tex.entry) gra tra)
+    =/  graph  (make-import-graph ~ entry 0 -:caches dir)
+    ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
+    =/  compiled  (compile-graph (head graph) +:caches)
+    :+  =>  %+  shot  (head compiled)
+          =>(d=!>(dir-hash) |.(d))
+        |.(+:^$)
+      (tail graph)
+    (tail compiled)
+  =/  graph  (make-import-graph ~ entry 0 gra dir)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
-  =;  ker-gen
-    =>  %+  shot  ker-gen
-        =>  d=!>(dir-hash)
-        |.(d)
-    |.(+:^$)
-  %-  head
-  (compile-graph (head graph) ~)
+  =/  compiled  (compile-graph (head graph) tra)
+  :+  =>  %+  shot  (head compiled)
+        =>(d=!>(dir-hash) |.(d))
+      |.(+:^$)
+    (tail graph)
+  (tail compiled)
+::
+::++  create
+::  |=  [=entry dir=(map path cord)]
+::  ^-  (trap)
+::  =/  dir-hash  `@uvI`(mug dir)
+::  ~&  dir-hash+dir-hash
+::  =/  graph  (make-import-graph ~ entry 0 ~ dir)
+::  ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
+::  =;  ker-gen
+::    =>  %+  shot  ker-gen
+::        =>  d=!>(dir-hash)
+::        |.(d)
+::    |.(+:^$)
+::  %-  head
+::  (compile-graph (head graph) ~)
 ++  create-arbitrary
   |=  [=entry dir=(map path cord)]
-  ^-  (trap)
+  ^-  [(trap) (map path import-graph) (map path (trap vase))]
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
   =/  graph  (make-import-graph ~ entry 0 ~ dir)
-  =/  tase
-    %-  head
-    (compile-graph (head graph) ~)
-  =>  tase
-  |.(+:^$)
+  =/  compiled  (compile-graph (head graph) ~)
+  :+  =>(^-((trap vase) (head compiled)) |.(+:^$))
+    (tail graph)
+  (tail compiled)
 ::
 ++  get-file
   |=  [suf=entry dir=(map path cord)]
@@ -353,6 +306,45 @@
   ?~  tex.suf
     (~(got by dir) pat.suf)
   u.tex.suf
+::
+++  evict-cache
+  |=  [pat=path ha=@ gra=(map path import-graph) tra=(map path (trap vase))]
+  ^-  [gra=(map path import-graph) tra=(map path (trap vase))]
+  ~&  >>  "evicting cache"
+  =/  next=(list [path @])  ~[[pat ha]]
+  |-
+  ?~  next
+    [gra tra]
+  =/  [p=path ha=@]  (head next)
+  ?.  (~(has by gra) p)
+    $(next t.next)
+  =/  ig  (~(got by gra) p)
+  ?:  =(ha hash.ig)
+    $(next t.next)
+  =.  gra  (~(del by gra) p)
+  =.  tra  (~(del by tra) p)
+  =;  [gra=(map path import-graph) tra=(map path (trap vase)) next=(list [path @])]
+    %=    $
+      gra   gra
+      tra   tra
+      next  next
+    ==
+  ::  Check for other graphs that include the
+  ::  Evicted file in their dependencies
+  ::  Evict those if they do, and add them to the list
+  ^-  [gra=(map path import-graph) tra=(map path (trap vase)) next=(list [path @])]
+  %+  roll
+    `(list import-graph)`~(val by gra)
+  |=  [g=import-graph gra=_gra tra=_tra n=_^-((list [path @]) (tail next))]
+  ?:  ?&  (lien sur.g |=(gg=import-graph =(p path.gg)))
+          (lien lib.g |=(gg=import-graph =(p path.gg)))
+          (lien raw.g |=(gg=import-graph =(p path.gg)))
+          (lien bar.g |=(gg=import-graph =(p path.gg)))
+      ==
+    :+   (~(del by gra) path.g)
+      (~(del by tra) path.g)
+    (snoc next [path.g hash.g])
+  [gra tra next]
 ::
 ++  make-import-graph
   |=  [face=(unit @tas) suf=entry depth=@ cache=(map path import-graph) dir=(map path cord)]
@@ -516,4 +508,94 @@
   |=  import-graph
   ^-  ?
   &(=(~ sur) =(~ lib))
+--
+=>
+|%
++$  choo-state
+  $%  [%0 cached-hoon=(unit (trap vase)) ~]
+      $:  %1
+          cached-hoon=(unit (trap vase))
+          gra=(map path import-graph)
+          tra=(map path (trap vase))
+      ==
+  ==
+::
+++  moat  (keep choo-state)
++$  cause
+  $%  [%build pat=cord tex=cord directory=(list [cord cord]) arbitrary=?]
+      [%file %write path=@t contents=@ success=?]
+      [%boot hoon-txt=cord]
+  ==
++$  effect
+  $%  [%file %write path=@t contents=@]
+      [%exit id=@]
+  ==
+--
+::
+~&  %choo-choo
+%-  moat
+^-  fort:moat
+|_  k=choo-state
++*  builder  +>
+::
+::  +load: upgrade from previous state
+::
+++  load
+  |=  arg=choo-state
+  ?.  ?=(%0 -.arg)
+    ?>  ?=(%1 -.arg)
+    arg
+  [%1 cached-hoon.arg ~ ~]
+::
+::  +peek: external inspect
+::
+++  peek
+  |=  =path
+  ^-  (unit (unit *))
+  ``?=(^ cached-hoon.k)
+::
+::  +poke: external apply
+::
+++  poke
+  |=  [eny=@ our=@ux now=@da dat=*]
+  ^-  [(list effect) choo-state]
+  =/  cause=(unit cause)  ((soft cause) dat)
+  ?~  cause
+    ~&  >>  "input is not a proper cause"
+    !!
+  =/  cause  u.cause
+  ?-    -.cause
+      %file
+    [~ k]
+  ::
+      %boot
+    ~&  hoon-version+hoon-version
+    ?:  ?=(^ cached-hoon.k)
+      [~ k]
+   [~ k(cached-hoon `(build-honc hoon-txt.cause))]
+  ::
+      %build
+    =/  =entry  [(stab pat.cause) `tex.cause]
+    =/  dir
+      %-  ~(gas by *(map path cord))
+      (turn directory.cause |=((pair @t @t) [(stab p) q]))
+    ~&  >>  "new build"
+    ?>  ?=(^ cached-hoon.k)
+    ?>  ?=(%1 -.k)
+    =/  res
+      ?:  arbitrary.cause
+        %-  ~(create-arbitrary builder u.cached-hoon.k gra.k tra.k)
+        [entry dir]
+      %-  ~(create builder u.cached-hoon.k gra.k tra.k)
+      [entry dir]
+    =/  contents  (jam (head res))
+    :_  k(gra +6:res, tra +7:res)
+    :~  :*  %file
+            %write
+            path=(crip "out.jam")
+            contents=contents
+        ==
+        [%exit 0]
+    ==
+  ==
 --
