@@ -234,7 +234,7 @@
     ~&  path+pat.entry
     %|
   =/  old-hash=@  hash:(~(got by dir) pat.entry)
-  ~&  "check hash match {<=(new-hash old-hash)>}"
+  ~&  "check hash match {<=(new-hash old-hash)>} for path: {<pat.entry>}"
   !=(new-hash old-hash)
 ::
 ++  create
@@ -242,6 +242,7 @@
   ^-  [(trap) (map path import-graph) (map path (trap vase))]
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
+  ~&  keys-dir+~(key by dir)
   ~&  >>  "create"
   ~&  >>  gra-keys+~(key by gra)
   ~&  >>  tra-keys+~(key by tra)
@@ -251,7 +252,7 @@
     |=  [[pat=path cor=cord] [gra=_gra tra=_tra]]
     ?.  (evict [pat `cor] gra)
       [gra tra]
-    (evict-cache pat.entry (shax cor) gra tra)
+    (evict-cache pat (shax cor) gra tra)
   =.  gra  -.res
   =.  tra  +.res
   ?:  (evict entry gra)
@@ -310,7 +311,7 @@
 ++  evict-cache
   |=  [pat=path ha=@ gra=(map path import-graph) tra=(map path (trap vase))]
   ^-  [gra=(map path import-graph) tra=(map path (trap vase))]
-  ~&  >>  "evicting cache"
+  ~&  >>  "evicting cache for pat: {<pat>}"
   =/  next=(list [path @])  ~[[pat ha]]
   |-
   ?~  next
@@ -321,6 +322,7 @@
   =/  ig  (~(got by gra) p)
   ?:  =(ha hash.ig)
     $(next t.next)
+  ~&  >>  "deleting cache entry for {<p>}"
   =.  gra  (~(del by gra) p)
   =.  tra  (~(del by tra) p)
   =;  [gra=(map path import-graph) tra=(map path (trap vase)) next=(list [path @])]
@@ -336,11 +338,14 @@
   %+  roll
     `(list import-graph)`~(val by gra)
   |=  [g=import-graph gra=_gra tra=_tra n=_^-((list [path @]) (tail next))]
-  ?:  ?&  (lien sur.g |=(gg=import-graph =(p path.gg)))
-          (lien lib.g |=(gg=import-graph =(p path.gg)))
-          (lien raw.g |=(gg=import-graph =(p path.gg)))
-          (lien bar.g |=(gg=import-graph =(p path.gg)))
+  ~&  >>  "in {<path.g>}"
+  =/  a  (turn lib.g |=(gg=import-graph ~&(path.gg path.gg)))
+  ?:  ?|  (lien sur.g |=(gg=import-graph ~&(path.gg =(p path.gg))))
+          (lien lib.g |=(gg=import-graph ~&(path.gg =(p path.gg))))
+          (lien raw.g |=(gg=import-graph ~&(path.gg =(p path.gg))))
+          (lien bar.g |=(gg=import-graph ~&(path.gg =(p path.gg))))
       ==
+    ~&  >>  "(inner) deleting cache entry for {<path.g>}"
     :+   (~(del by gra) path.g)
       (~(del by tra) path.g)
     (snoc next [path.g hash.g])
