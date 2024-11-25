@@ -10,7 +10,6 @@ use std::ptr::copy_nonoverlapping;
 use sword::mem::NockStack;
 use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
 use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
-use sword::persist::pma_contains;
 use sword::serialization::{met0_u64_to_usize, met0_usize};
 use thiserror::Error;
 
@@ -142,10 +141,6 @@ impl NounSlab {
                         Either::Left(indirect) => {
                             let indirect_ptr = unsafe { indirect.to_raw_pointer() };
                             let indirect_mem_size = indirect.raw_size();
-                            if unsafe { pma_contains(indirect_ptr, indirect_mem_size) } {
-                                unsafe { *dest = noun };
-                                continue;
-                            }
                             if let Some(copied_noun) = copied.get(indirect_ptr as u64) {
                                 unsafe { *dest = *copied_noun };
                                 continue;
@@ -166,10 +161,6 @@ impl NounSlab {
                         }
                         Either::Right(cell) => {
                             let cell_ptr = unsafe { cell.to_raw_pointer() };
-                            if unsafe { pma_contains(cell_ptr, 1) } {
-                                unsafe { *dest = noun };
-                                continue;
-                            }
                             if let Some(copied_noun) = copied.get(cell_ptr as u64) {
                                 unsafe { *dest = *copied_noun };
                                 continue;
@@ -212,10 +203,6 @@ impl NounSlab {
                             Either::Left(mut indirect) => {
                                 let raw_pointer = unsafe { indirect.to_raw_pointer() };
                                 let raw_size = indirect.raw_size();
-                                if unsafe { pma_contains(raw_pointer, raw_size) } {
-                                    unsafe { *dest = noun }; // in PMA
-                                    continue;
-                                }
                                 unsafe {
                                     let indirect_mem = stack.alloc_indirect(indirect.size());
                                     std::ptr::copy_nonoverlapping(
@@ -229,10 +216,6 @@ impl NounSlab {
                             }
                             Either::Right(mut cell) => {
                                 let raw_pointer = unsafe { cell.to_raw_pointer() };
-                                if unsafe { pma_contains(raw_pointer, 1) } {
-                                    unsafe { *dest = noun }; // in PMA
-                                    continue;
-                                }
                                 unsafe {
                                     let cell_mem = stack.alloc_cell();
                                     copy_nonoverlapping(raw_pointer, cell_mem, 1);
@@ -266,11 +249,6 @@ impl NounSlab {
             match allocated.as_either() {
                 Either::Left(indirect) => {
                     let ptr = unsafe { indirect.to_raw_pointer() };
-                    let raw_sz = indirect.raw_size();
-                    if unsafe { pma_contains(ptr, raw_sz) } {
-                        self.root = root;
-                        return;
-                    }
                     let u8_ptr = ptr as *const u8;
                     for slab in &self.slabs {
                         if unsafe { u8_ptr >= slab.0 && u8_ptr < slab.0.add(slab.1.size()) } {
@@ -282,10 +260,6 @@ impl NounSlab {
                 }
                 Either::Right(cell) => {
                     let ptr = unsafe { cell.to_raw_pointer() };
-                    if unsafe { pma_contains(ptr, 1) } {
-                        self.root = root;
-                        return;
-                    }
                     let u8_ptr = ptr as *const u8;
                     for slab in &self.slabs {
                         if unsafe { u8_ptr >= slab.0 && u8_ptr < slab.0.add(slab.1.size()) } {

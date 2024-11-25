@@ -7,9 +7,9 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-sword = { git = "https://github.com/zorp-corp/sword.git", rev = "1f95b2702d65eb9efc21cdb7c92508f72107a46a" }
-sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev = "1f95b2702d65eb9efc21cdb7c92508f72107a46a" }
-assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev = "1f95b2702d65eb9efc21cdb7c92508f72107a46a" }
+sword = { git = "https://github.com/zorp-corp/sword.git", rev = "a5650ed0c79f807f5727207d751928eb6dad96b7" }
+sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev = "a5650ed0c79f807f5727207d751928eb6dad96b7" }
+assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev = "a5650ed0c79f807f5727207d751928eb6dad96b7" }
 
 # Uncomment for local dev of sword and comment out above
 # assert_no_alloc.path = "../sword/rust/assert_no_alloc"
