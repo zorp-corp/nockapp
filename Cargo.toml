@@ -7,14 +7,14 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-# sword = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d897c8cb7a70e5baf52c9b83f5ef04fe509" }
-# sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d897c8cb7a70e5baf52c9b83f5ef04fe509" }
-# assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev="29cc8d897c8cb7a70e5baf52c9b83f5ef04fe509" }
+sword = { git = "https://github.com/zorp-corp/sword.git", rev = "efec92f277b7d019a3a87faf11e3d545ce399311" }
+sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev = "efec92f277b7d019a3a87faf11e3d545ce399311" }
+assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev = "efec92f277b7d019a3a87faf11e3d545ce399311" }
 
 # Uncomment for local dev of sword and comment out above
-assert_no_alloc.path = "../sword/rust/assert_no_alloc"
-sword.path = "../sword/rust/sword"
-sword_macros.path = "../sword/rust/sword_macros"
+# assert_no_alloc.path = "../sword/rust/assert_no_alloc"
+# sword.path = "../sword/rust/sword"
+# sword_macros.path = "../sword/rust/sword_macros"
 
 # External dependencies
 anyhow = "1.0"

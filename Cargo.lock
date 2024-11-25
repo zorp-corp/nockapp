@@ -139,6 +139,7 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 [[package]]
 name = "assert_no_alloc"
 version = "1.1.2"
+source = "git+https://github.com/zorp-corp/sword.git?rev=efec92f277b7d019a3a87faf11e3d545ce399311#efec92f277b7d019a3a87faf11e3d545ce399311"
 
 [[package]]
 name = "async-trait"
@@ -1157,6 +1158,7 @@ dependencies = [
 [[package]]
 name = "ibig"
 version = "0.3.6"
+source = "git+https://github.com/zorp-corp/sword.git?rev=efec92f277b7d019a3a87faf11e3d545ce399311#efec92f277b7d019a3a87faf11e3d545ce399311"
 dependencies = [
  "cfg-if",
  "num-traits",
@@ -1453,6 +1455,7 @@ dependencies = [
 [[package]]
 name = "murmur3"
 version = "0.5.2"
+source = "git+https://github.com/zorp-corp/sword.git?rev=efec92f277b7d019a3a87faf11e3d545ce399311#efec92f277b7d019a3a87faf11e3d545ce399311"
 
 [[package]]
 name = "nom"
@@ -2015,6 +2018,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sword"
 version = "0.1.0"
+source = "git+https://github.com/zorp-corp/sword.git?rev=efec92f277b7d019a3a87faf11e3d545ce399311#efec92f277b7d019a3a87faf11e3d545ce399311"
 dependencies = [
  "assert_no_alloc",
  "autotools",
@@ -2044,6 +2048,7 @@ dependencies = [
 [[package]]
 name = "sword_crypto"
 version = "0.1.0"
+source = "git+https://github.com/zorp-corp/sword.git?rev=efec92f277b7d019a3a87faf11e3d545ce399311#efec92f277b7d019a3a87faf11e3d545ce399311"
 dependencies = [
  "aes",
  "aes-siv",
@@ -2059,6 +2064,7 @@ dependencies = [
 [[package]]
 name = "sword_guard"
 version = "0.1.0"
+source = "git+https://github.com/zorp-corp/sword.git?rev=efec92f277b7d019a3a87faf11e3d545ce399311#efec92f277b7d019a3a87faf11e3d545ce399311"
 dependencies = [
  "bindgen",
  "cc",
@@ -2067,6 +2073,7 @@ dependencies = [
 [[package]]
 name = "sword_macros"
 version = "0.1.0"
+source = "git+https://github.com/zorp-corp/sword.git?rev=efec92f277b7d019a3a87faf11e3d545ce399311#efec92f277b7d019a3a87faf11e3d545ce399311"
 dependencies = [
  "quote",
  "syn 1.0.109",
@@ -2075,6 +2082,7 @@ dependencies = [
 [[package]]
 name = "sword_pma"
 version = "0.1.0"
+source = "git+https://github.com/zorp-corp/sword.git?rev=efec92f277b7d019a3a87faf11e3d545ce399311#efec92f277b7d019a3a87faf11e3d545ce399311"
 dependencies = [
  "bindgen",
  "cc",
