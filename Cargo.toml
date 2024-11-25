@@ -7,9 +7,9 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-sword = { git = "https://github.com/zorp-corp/sword.git", rev = "efec92f277b7d019a3a87faf11e3d545ce399311" }
-sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev = "efec92f277b7d019a3a87faf11e3d545ce399311" }
-assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev = "efec92f277b7d019a3a87faf11e3d545ce399311" }
+sword = { git = "https://github.com/zorp-corp/sword.git", rev = "1f95b2702d65eb9efc21cdb7c92508f72107a46a" }
+sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev = "1f95b2702d65eb9efc21cdb7c92508f72107a46a" }
+assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev = "1f95b2702d65eb9efc21cdb7c92508f72107a46a" }
 
 # Uncomment for local dev of sword and comment out above
 # assert_no_alloc.path = "../sword/rust/assert_no_alloc"
@@ -21,16 +21,20 @@ anyhow = "1.0"
 async-trait = "0.1"
 axum = "0.7.5"
 bincode = "2.0.0-rc.3"
+bitvec = "1.0.1"
 blake3 = { version = "1.5.1", features = ["serde"] }
 byteorder = "1.5.0"
 bytes = "1.5.0"
 clap = "4.4.4"
 either = "1.9.0"
+futures = "0.3.31"
 getrandom = "0.2.11"
+intmap = "2.0.0"
 rand = "0.8.5"
 samply = "0.11.0"
 serde = "1.0.195"
 tempfile = "3.3"
+termimad = "0.31.0"
 tracing-test = "0.2.5"
 thiserror = "1.0"
 tokio = { version = "1.32", features = [
@@ -50,10 +54,6 @@ tracing-subscriber = { version = "0.3.18", features = [
     "registry",
 ] }
 yaque = "0.6.6"
-bitvec = "1.0.1"
-futures = "0.3.30"
-intmap = "2.0.0"
-termimad = "0.31.0"
 
 [profile.dev]
 # opt-level = 3
@@ -65,3 +65,4 @@ termimad = "0.31.0"
 opt-level = 3
 lto = "fat"
 codegen-units = 1
+debug = 1
