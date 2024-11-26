@@ -1,7 +1,7 @@
 /+  *wrapper
 =>
 |%
-+$  choo-state  [%0 cached-hoon=(unit (trap vase)) ~]
++$  choo-state  [%0 cached-hoon=(unit (trap vase)) build-cache=(map @ (trap vase))]
 ::
 ++  moat  (keep choo-state)
 +$  cause
@@ -19,6 +19,8 @@
 ::    If unit is null, the path must exist inside of the dir map.
 ::
 +$  entry  [pat=path tex=(unit cord)]
+::
++$  build-cache  (map @ (trap vase))
 --
 ::
 =<
@@ -238,6 +240,8 @@
   ?^  (~(get by dir) puz)
     `puz
   $(paz t.paz)
+::  preprocessed hoon file
+::  +$  taut  [face=(unit term) pax=term]
 ++  pile
   $:  sur=(list taut)  ::  /-
       lib=(list taut)  ::  /+
@@ -284,21 +288,20 @@
 ::
 +$  octs  [p=@ud q=@]
 ::
-+$  graph-leaf
-  $%  [%hoon =hoon]
-      [%octs =octs]
+::
++$  temp-cache  (map path (trap vase))
++$  node
+  $:  face=(unit @tas)
+      pat=path
+      rank=@
+      hash=@
+      file=cord
+      rile=rile
   ==
 ::
-++  import-graph
-  $+  import-graph
-  $~  [*path ~ ~ ~ ~ *(unit @tas) [%hoon *hoon]]  ::  not needed in the dojo but here for some reason
-  $:  =path
-      sur=(list import-graph)
-      lib=(list import-graph)
-      raw=(list import-graph)
-      bar=(list import-graph)
-      face=(unit @tas)  ::  the face that this node of the import graph has
-      leaf=graph-leaf
++$  node-set
+  $:  max=@
+      map=(map @ (set node))
   ==
 ::
 ++  create
@@ -334,60 +337,79 @@
     (~(got by dir) pat.suf)
   u.tex.suf
 ::
-::  resolve-pile: no need to recurse on the pile
-++  make-import-graph
-  |=  [face=(unit @tas) suf=entry depth=@ cache=(map path import-graph) dir=(map path cord)]
-  ^-  [import-graph (map path import-graph)]
-  ~&  building-graph-for+[depth=depth pat.suf]
+::  Returns the node set made from all the files in the dependency dir
+::  ALONG with the entry point
+::
+++  make-node-set
+  |=  [suf=entry dir=(map path cord)]
+  ^-  node-set
+  %+  roll
+    ~(tap by dir)
+  |=  [[pat=path tex=cord] ns=node-set]
+  =/  n=node  (make-node face suf dir)
+  =?  max  (gth rank.n max)  rank.n
+  :-  max
+  (~(put by map.ns) rank.n n)
+::
+::  call on each entry in ~(tap by dir)
+::
+++  make-node
+  |=  [face=(unit @tas) suf=entry dir=(map path cord)]
+  ^-  node
+  ~&  building-graph-for+pat.suf
   ?^  existing=(~(get by cache) pat.suf)
     ~&  >  "reusing cached graph for {<pat.suf>}"
     [u.existing(face face) cache]  ::  make sure to use the provided face
   =/  file=cord  (get-file suf dir)
   ?.  (is-hoon pat.suf)
-    =/  graph=import-graph
       :*  pat.suf
-          ~  ~
-          ~  ~
-          face
+          face=`%no-cache-entry-face
+          rank=0
+          ::
+          ::  TODO: is this the right thing to do for jock files?
+          *rile
           [%octs [(met 3 file) file]]
       ==
-    =/  no-face=_graph
-      graph(face `%no-cache-entry-face)
-    :-  graph
-    (~(put by cache) pat.suf no-face)
   =/  rile  (resolve-pile (parse-pile pat.suf (trip file)) dir)
-  =^  new-sur=(list import-graph)  cache
-    %^  spin  sur.rile  cache
-    |=  [raut cache=(map path import-graph)]
-    (make-import-graph face [pax ~] +(depth) cache dir)
-  =^  new-lib=(list import-graph)  cache
-    %^  spin  lib.rile  cache
-    |=  [raut cache=(map path import-graph)]
-    =/  c  (~(got by dir) pax)
-    (make-import-graph face [pax ~] +(depth) cache dir)
-  =^  new-raw=(list import-graph)  cache
-    %^  spin  raw.rile  cache
-    |=  [raut cache=(map path import-graph)]
-    =/  c  (~(got by dir) pax)
-    (make-import-graph face [pax ~] +(depth) cache dir)
-  =^  new-bar=(list import-graph)  cache
-    %^  spin  bar.rile  cache
-    |=  [raut cache=(map path import-graph)]
-    =/  c  (~(got by dir) pax)
-    (make-import-graph face [pax ~] +(depth) cache dir)
-  =/  graph=import-graph
-    :*  pat.suf
-        sur=new-sur
-        lib=new-lib
-        raw=new-raw
-        bar=new-bar
-        face
-        [%hoon hoon.rile]
-    ==
-  =/  no-face=_graph
-    graph(face `%no-cache-entry-face)
-  :-  graph
-  (~(put by cache) pat.suf no-face)
+  =/  rank  0
+  :*  path=pat.suf
+      ::
+      ::  what is this for???
+      ::
+      face=`%no-cache-entry-face
+      rank=rank
+      hash=(hash file)
+      rile=rile
+  ==
+::
+++  compile-node-set
+  |=  [ns=node-set cache=build-cache]
+  ^-  [(trap vase) temp-cache build-cache]
+  =/  temp-cache  (map path (trap vase))
+  %+  roll
+    (range max.ns)
+  |=  [i=@ [cache=_cache temp=_temp-cache]]
+  ?.  (~(has by temp) i)
+    [cache temp]
+  %+  roll
+    (~(got by ns) i)
+  |=  [nod=node [cache=_cache temp=_temp]]
+  ::  check cache first
+  ?:  (~(has by cache) pat.nod)
+    [cache temp]
+  ::  if we need to build, first get dependencies
+  ::  they should be in temp, keyed by their path if they are not,
+  ::  CRASH.
+  ::  slew them all together
+  ::  build the dependency
+  ::  add the face that is needed
+  ::  create the hash to key it by while building the slew
+  (spin sur.rile.nod)
+  ::  build the file
+  ::
+  ::  store it in the persisted cache, keyed by hash
+  ::  store it in the temp (within build) cache, keyed by path
+  ::  STORE IN THE TEMP GRAPH AS FACELESS
 ::
 ++  compile-graph
   ::  accepts an import-graph and compiles it down to a vase
