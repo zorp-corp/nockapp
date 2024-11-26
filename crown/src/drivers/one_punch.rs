@@ -9,9 +9,7 @@ use tracing::{debug, error, info};
 pub fn one_punch_man(data: NounSlab, op: Operation) -> IODriverFn {
     make_driver(|handle| async move {
         let result = match op {
-            Operation::Poke => {
-                Left(handle.poke(data).await?)
-            }
+            Operation::Poke => Left(handle.poke(data).await?),
             Operation::Peek => {
                 debug!("poke_once_driver: peeking with {:?}", data);
                 Right(handle.peek(data).await?)

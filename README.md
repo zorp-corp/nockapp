@@ -22,6 +22,8 @@ cd apps/choo
 cargo run --release bootstrap/kernel.hoon ../hoon-deps
 ```
 
+For large builds, the rust stack might overflow. To get around this, increase the stack size by setting: `RUST_MIN_STACK=838860`.
+
 ## Building NockApps
 
 The `crown` library is the primary framework for building NockApps. It provides a simple interface to a `Kernel`: a Nock core which can make state transitions with effects (via the `poke()` method) and allow inspection of its state via the `peek()` method.

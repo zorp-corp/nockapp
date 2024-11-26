@@ -1,3 +1,4 @@
+/+  *zose
 /+  *wrapper
 =>
 |%
@@ -40,6 +41,8 @@
 ++  poke
   |=  [eny=@ our=@ux now=@da dat=*]
   ^-  [(list effect) test-state]
+  =|  p=pith
+  =/  tap  (en-tape:pith p)
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
