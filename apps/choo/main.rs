@@ -19,7 +19,7 @@ static KERNEL_JAM: &[u8] =
 
 static HOON_TXT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../hoon-deps/lib/hoon-138.hoon"
+    "/../hoon/hoon-138.hoon"
 ));
 
 #[derive(Parser, Debug)]
