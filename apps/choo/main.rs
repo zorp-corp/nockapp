@@ -2,6 +2,8 @@ use crown::kernel::boot;
 use crown::nockapp::driver::Operation;
 use crown::noun::slab::NounSlab;
 use crown::AtomExt;
+use futures::FutureExt;
+use sword::mem::{AllocationError, NewStackError};
 use sword::noun::{Atom, D, T};
 use sword_macros::tas;
 use tokio::fs::File;
@@ -58,10 +60,38 @@ fn is_valid_file_or_dir(entry: &DirEntry) -> bool {
     is_dir || is_hoon || is_jock
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cli = ChooCli::parse();
+type Error = Box<dyn std::error::Error>;
 
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    let cli = ChooCli::parse();
+    let result = std::panic::AssertUnwindSafe(async {
+        let nockapp = initialize_nockapp(cli).await?;
+        work_loop(nockapp).await;
+        Ok::<(), Error>(())
+    })
+    .catch_unwind()
+    .await;
+    if result.is_err() {
+        println!("Caught panic!");
+        // now we downcast the error
+        // and print it out
+        let e = result.unwrap_err();
+        if let Some(e) = e.downcast_ref::<AllocationError>() {
+            println!("Allocation error occurred: {}", e);
+        } else if let Some(e) = e.downcast_ref::<NewStackError>() {
+            println!("NockStack creation error occurred: {}", e);
+        } else {
+            println!("Unknown panic: {e:?}");
+        }
+    } else {
+        println!("no panic!");
+    }
+
+    Ok(())
+}
+
+async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Error> {
     let mut nockapp = boot::setup(KERNEL_JAM, Some(cli.boot), &[], "choo")?;
 
     let mut slab = NounSlab::new();
@@ -131,7 +161,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await;
     nockapp.add_io_driver(crown::file_driver()).await;
     nockapp.add_io_driver(crown::exit_driver()).await;
+    Ok(nockapp)
+}
 
+async fn work_loop(mut nockapp: crown::nockapp::NockApp) {
     loop {
         let work_res = nockapp.work().await;
         if let Err(e) = work_res {
@@ -139,6 +172,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             break;
         }
     }
-
-    Ok(())
 }

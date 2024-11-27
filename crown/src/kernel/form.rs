@@ -16,7 +16,6 @@ use sword::jets::warm::Warm;
 use sword::mem::NockStack;
 use sword::mug::met3_usize;
 use sword::noun::{Atom, Cell, DirectAtom, IndirectAtom, Noun, Slots, D, T};
-use sword::persist::pma_open;
 use sword::trace::{path_to_cord, write_serf_trace_safe, TraceInfo};
 use sword_macros::tas;
 use tracing::info;
@@ -29,7 +28,7 @@ use crate::{AtomExt, CrownError, NounExt, Result, ToBytesExt};
 
 use super::checkpoint::{Checkpoint, JammedCheckpoint};
 
-const STATE_AXIS: u64 = 6;
+pub(crate) const STATE_AXIS: u64 = 6;
 const LOAD_AXIS: u64 = 4;
 const PEEK_AXIS: u64 = 22;
 const POKE_AXIS: u64 = 23;
@@ -75,12 +74,6 @@ impl Kernel {
         hot_state: &[HotEntry],
         trace: bool,
     ) -> Self {
-        let mut pma_path = pma_dir.clone();
-        pma_path.push(".crown");
-        pma_path.push("chk");
-        std::fs::create_dir_all(&pma_path).unwrap();
-        pma_open(pma_path).expect("serf: pma open failed");
-
         std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
 
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
@@ -121,12 +114,6 @@ impl Kernel {
     ///
     /// A new `Kernel` instance.
     pub fn load(pma_dir: PathBuf, jam_paths: JamPaths, kernel: &[u8], trace: bool) -> Self {
-        let mut pma_path = pma_dir.clone();
-        pma_path.push(".crown");
-        pma_path.push("chk");
-        std::fs::create_dir_all(&pma_path).unwrap();
-        pma_open(pma_path).expect("serf: pma open failed");
-
         std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
 
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
