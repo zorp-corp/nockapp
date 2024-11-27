@@ -28,7 +28,7 @@ use crate::{AtomExt, CrownError, NounExt, Result, ToBytesExt};
 
 use super::checkpoint::{Checkpoint, JammedCheckpoint};
 
-const STATE_AXIS: u64 = 6;
+pub(crate) const STATE_AXIS: u64 = 6;
 const LOAD_AXIS: u64 = 4;
 const PEEK_AXIS: u64 = 22;
 const POKE_AXIS: u64 = 23;
