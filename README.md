@@ -28,3 +28,8 @@ The `crown` library is the primary framework for building NockApps. It provides 
 
 For compiling Hoon to Nock, we're also including a pre-release of `choo`: a NockApp for the Hoon compiler. `choo` can compile Hoon to Nock as a batch-mode command-line process, without the need to spin up an interactive Urbit ship. It is intended both for developer workflows and for CI. `choo` is also our first example NockApp. More are coming!
 
+## Features
+
+- `validate-nouns`: Enable runtime validation of noun operations. This performs additional checks to ensure noun integrity but may impact performance. Disable this feature in production for better performance.
+
+In order to enable this feature, run `cargo build -p crown --features validate-nouns`.

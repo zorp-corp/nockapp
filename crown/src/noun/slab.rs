@@ -7,6 +7,7 @@ use intmap::IntMap;
 use std::alloc::Layout;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping;
+use sword::jets::bits::util::met;
 use sword::mem::NockStack;
 use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
 use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
@@ -184,6 +185,9 @@ impl NounSlab {
                 break;
             }
         }
+        #[cfg(feature = "validate-nouns")]
+        self.validate_root()
+            .expect("Noun not properly copied into slab");
     }
 
     /// Copy the root noun from this slab into the given NockStack, only leaving references into the PMA
@@ -238,7 +242,103 @@ impl NounSlab {
                 break;
             }
         }
+
+        // Verify that the copied noun is fully in the stack or PMA
+        #[cfg(feature = "validate-nouns")]
+        self.verify_copied_noun(res)
+            .expect("Noun was not properly copied to stack");
         res
+    }
+
+    /// Verifies that a noun does not contain any references to memory in this slab
+    #[allow(dead_code)]
+    fn verify_copied_noun(&self, noun: Noun) -> Result<(), String> {
+        let mut stack = vec![noun]; // traversal stack
+        let mut visited = std::collections::HashSet::new();
+
+        while let Some(noun) = stack.pop() {
+            if let Ok(allocated) = noun.as_allocated() {
+                let ptr = unsafe { allocated.to_raw_pointer() };
+
+                // Skip if we've seen this pointer before
+                if !visited.insert(ptr as u64) {
+                    continue;
+                }
+
+                // Check if pointer is in PMA
+                if unsafe { pma_contains(ptr, 1) } {
+                    return Err(format!("Found noun allocated in PMA at {:p}", ptr));
+                }
+
+                // Verify cached mug if present
+                if let Some(cached_mug) = allocated.get_cached_mug() {
+                    let computed_mug = slab_mug_no_cache(noun);
+                    println!("cached_mug: {}, computed_mug: {}", cached_mug, computed_mug);
+                    if cached_mug != computed_mug {
+                        return Err(format!(
+                            "Found noun with incorrect mug at {:p} - cached: {}, computed: {}",
+                            ptr, cached_mug, computed_mug
+                        ));
+                    }
+                }
+
+                // Check if pointer is in any of the slabs (this would be bad)
+                for (slab_ptr, layout) in &self.slabs {
+                    if !slab_ptr.is_null() {
+                        let slab_start = *slab_ptr as *mut u64;
+                        let slab_size = layout.size() / std::mem::size_of::<u64>();
+                        let slab_end = unsafe { slab_start.add(slab_size) };
+
+                        if (ptr as *mut u64) >= slab_start && (ptr as *mut u64) < slab_end {
+                            return Err(format!("Found noun still allocated in slab at {:p}", ptr));
+                        }
+                    }
+                }
+
+                // If we get here, the pointer is neither in PMA nor in slabs
+                // This is expected as it should be in the NockStack
+
+                match allocated.as_either() {
+                    Either::Left(indirect) => {
+                        // Check normalization of indirect atoms
+                        let slice = indirect.as_slice();
+                        if !slice.is_empty() && slice.last().unwrap() == &0 {
+                            return Err(format!(
+                                "Found non-normalized indirect atom at {:p} with value {:?}",
+                                ptr, slice
+                            ));
+                        }
+
+                        // Check that indirect atom size is correct
+                        let atom = indirect.as_atom();
+                        let actual_size = slice.len();
+                        let expected_size = met(6, atom);
+                        if actual_size != expected_size {
+                            return Err(format!(
+                                "Found indirect atom with incorrect size at {:p} - expected {} words but got {}",
+                                ptr,
+                                expected_size,
+                                actual_size
+                            ));
+                        }
+
+                        // Check that it shouldn't be a direct atom
+                        let bit_size = met(0, atom);
+                        if bit_size <= 63 {
+                            return Err(format!(
+                                "Found indirect atom that should be direct at {:p} - only {} bits",
+                                ptr, bit_size
+                            ));
+                        }
+                    }
+                    Either::Right(cell) => {
+                        stack.push(cell.head());
+                        stack.push(cell.tail());
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Set the root of the noun slab.
@@ -271,6 +371,9 @@ impl NounSlab {
                 }
             }
         }
+        #[cfg(feature = "validate-nouns")]
+        self.validate_root()
+            .expect("Noun was not properly copied into slab");
         self.root = root;
     }
 
@@ -364,6 +467,9 @@ impl NounSlab {
                 }
             }
         }
+        #[cfg(feature = "validate-nouns")]
+        self.validate_root()
+            .expect("Noun was not properly cued into slab");
         Ok(res)
     }
 
@@ -372,6 +478,101 @@ impl NounSlab {
     /// # Safety: The noun must not be used past the lifetime of the slab.
     pub unsafe fn root(&self) -> Noun {
         self.root
+    }
+
+    /// Validates that all allocated nouns in the tree are contained within one of this slab's
+    /// allocated memory regions or the PMA
+    #[allow(dead_code)]
+    pub fn validate_root(&self) -> Result<(), String> {
+        let mut stack = vec![self.root];
+        let mut visited = std::collections::HashSet::new();
+
+        while let Some(noun) = stack.pop() {
+            if let Ok(allocated) = noun.as_allocated() {
+                let ptr = unsafe { allocated.to_raw_pointer() };
+
+                // Skip if we've seen this pointer before
+                if !visited.insert(ptr as u64) {
+                    continue;
+                }
+
+                // Verify cached mug if present
+                if let Some(cached_mug) = allocated.get_cached_mug() {
+                    let computed_mug = slab_mug_no_cache(noun);
+                    if cached_mug != computed_mug {
+                        return Err(format!(
+                            "Found noun with incorrect mug at {:p} - cached: {}, computed: {}",
+                            ptr, cached_mug, computed_mug
+                        ));
+                    }
+                }
+
+                // Check if pointer is in any of the slabs
+                let mut found_in_slab = false;
+                for (slab_ptr, layout) in &self.slabs {
+                    if !slab_ptr.is_null() {
+                        let slab_start = *slab_ptr as *mut u64;
+                        let slab_size = layout.size() / std::mem::size_of::<u64>();
+                        let slab_end = unsafe { slab_start.add(slab_size) };
+
+                        if (ptr as *mut u64) >= slab_start && (ptr as *mut u64) < slab_end {
+                            found_in_slab = true;
+                            break;
+                        }
+                    }
+                }
+
+                let is_in_pma = unsafe { pma_contains(ptr, 1) };
+
+                if !found_in_slab && !is_in_pma {
+                    return Err(format!(
+                        "Found noun allocated outside of all slabs and PMA at {:p}",
+                        ptr
+                    ));
+                }
+
+                match allocated.as_either() {
+                    Either::Left(indirect) => {
+                        // Check normalization of indirect atoms
+                        let slice = indirect.as_slice();
+                        if !slice.is_empty() && slice.last().unwrap() == &0 {
+                            return Err(format!(
+                                "Found non-normalized indirect atom at {:p} with value {:?}",
+                                ptr, slice
+                            ));
+                        }
+
+                        // Check that indirect atom size is correct
+                        let atom = indirect.as_atom();
+                        let actual_size = slice.len();
+                        let expected_size = met(6, atom);
+                        if actual_size != expected_size {
+                            return Err(format!(
+                                "Found indirect atom with incorrect size at {:p} - expected {} words but got {}",
+                                ptr,
+                                expected_size,
+                                actual_size
+                            ));
+                        }
+
+                        // Check that it shouldn't be a direct atom
+                        let bit_size = met(0, atom);
+                        if bit_size <= 63 {
+                            return Err(format!(
+                                "Found indirect atom that should be direct at {:p} - only {} bits",
+                                ptr, bit_size
+                            ));
+                        }
+                    }
+                    Either::Right(cell) => {
+                        // Add cell's head and tail to stack for processing
+                        stack.push(cell.head());
+                        stack.push(cell.tail());
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -636,6 +837,24 @@ fn slab_mug(a: Noun) -> u32 {
     get_mug(a).expect("Noun should have a mug once mugged.")
 }
 
+/// Calculate the mug of a noun without using the cache.
+fn slab_mug_no_cache(a: Noun) -> u32 {
+    match a.as_either_direct_allocated() {
+        Either::Left(direct) => calc_atom_mug_u32(direct.as_atom()),
+        Either::Right(allocated) => {
+            match allocated.as_either() {
+                Either::Left(indirect) => calc_atom_mug_u32(indirect.as_atom()),
+                Either::Right(cell) => {
+                    // Recursively calculate mugs for head and tail
+                    let head_mug = slab_mug_no_cache(cell.head());
+                    let tail_mug = slab_mug_no_cache(cell.tail());
+                    unsafe { calc_cell_mug_u32(head_mug, tail_mug) }
+                }
+            }
+        }
+    }
+}
+
 enum CueStackEntry {
     DestinationPointer(*mut Noun),
     BackRef(u64, *const Noun),
@@ -828,6 +1047,92 @@ mod tests {
             assert!(
                 slab_equality(cued_noun, expected_noun),
                 "Cued noun should equal [1 0]"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_root() {
+        let mut slab = NounSlab::new();
+
+        // Valid case - simple cell
+        let noun = T(&mut slab, &[D(1), D(2)]);
+        slab.set_root(noun);
+        assert!(
+            slab.validate_root().is_ok(),
+            "Valid noun should pass validation"
+        );
+
+        // Valid case - indirect atom
+        let large_number = u64::MAX as u128 + 1;
+        let large_number_bytes = Bytes::from(large_number.to_le_bytes().to_vec());
+        let indirect_atom = Atom::from_bytes(&mut slab, &large_number_bytes);
+        slab.set_root(indirect_atom.as_noun());
+        assert!(
+            slab.validate_root().is_ok(),
+            "Valid indirect atom should pass validation"
+        );
+
+        // Invalid case - non-normalized indirect atom
+        unsafe {
+            // Allocate space for a 2-word indirect atom
+            let ptr = slab.alloc_indirect(2);
+            // Write a value ending in zero (non-normalized)
+            *ptr.add(1) = 2; // size 2 words
+            *ptr.add(2) = 123; // first word
+            *ptr.add(3) = 0; // second word is zero - not normalized
+                             // Create an indirect atom from this memory
+            let non_normalized = IndirectAtom::from_raw_pointer(ptr).as_atom().as_noun();
+            slab.set_root(non_normalized);
+
+            let result = slab.validate_root();
+            assert!(
+                result.is_err(),
+                "Non-normalized indirect atom should fail validation"
+            );
+            assert!(
+                result.unwrap_err().contains("non-normalized indirect atom"),
+                "Error message should mention non-normalized atom"
+            );
+        }
+    }
+
+    #[test]
+    fn test_verify_copied_noun() {
+        let mut stack = NockStack::new(10000, 0);
+        let slab = NounSlab::new();
+
+        // Create a valid noun in the stack
+        let valid_noun = T(&mut stack, &[D(1), D(2)]);
+
+        // This should pass verification since it's properly allocated in the stack
+        let result = slab.verify_copied_noun(valid_noun);
+        assert!(
+            result.is_ok(),
+            "Valid noun in stack should pass verification"
+        );
+
+        // Create a noun with an incorrect mug
+        unsafe {
+            // Allocate a cell in the stack
+            let cell_mem = stack.alloc_cell();
+            (*cell_mem).head = D(1);
+            (*cell_mem).tail = D(2);
+            // Set an incorrect mug value
+            let cell = Cell::from_raw_pointer(cell_mem);
+            set_mug(cell.as_allocated(), 12345); // Wrong mug value
+
+            let invalid_noun = cell.as_noun();
+
+            // This should fail verification due to incorrect mug
+            let result = slab.verify_copied_noun(invalid_noun);
+            assert!(
+                result.is_err(),
+                "Noun with incorrect mug should fail verification"
+            );
+            assert!(
+                result.unwrap_err().contains("incorrect mug"),
+                "Error message should mention incorrect mug"
             );
         }
     }
