@@ -11,12 +11,6 @@ use tracing::{debug, error, info, warn};
 
 pub struct CrownSlogger;
 
-impl Default for CrownSlogger {
-    fn default() -> Self {
-        Self {}
-    }
-}
-
 impl Slogger for CrownSlogger {
     fn slog(&mut self, stack: &mut NockStack, pri: u64, tank: Noun) {
         permit_alloc(|| {

@@ -496,7 +496,7 @@ impl Serf {
 
         let hot = Hot::init(&mut stack, &hot_state);
         let warm = Warm::init(&mut stack, &mut cold, &hot);
-        let slogger = std::boxed::Box::pin(CrownSlogger::default());
+        let slogger = std::boxed::Box::pin(CrownSlogger {});
 
         let trace_info = if trace {
             let file = File::create("trace.json").expect("Cannot create trace file trace.json");
