@@ -221,14 +221,10 @@ impl NockApp {
             }
             action_res = self.action_channel.recv() => {
                 if let Some(action) = action_res {
-                    debug!("action: {:?}", action);
                     match action {
                         IOAction::Poke { poke, ack_channel } => {
-                            debug!("poke slab: {:?}", poke);
                             let poke_noun = poke.copy_to_stack(self.kernel.serf.stack());
-                            debug!("poke_noun: {:?}", poke_noun);
                             let effects_res = self.kernel.poke(poke_noun);
-                            debug!("effects_res: {:?}", effects_res);
                             match effects_res {
                                 Ok(effects) => {
                                     let _ = ack_channel.send(PokeResult::Ack);

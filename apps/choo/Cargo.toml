@@ -4,13 +4,14 @@ version = "0.1.4"
 edition.workspace = true
 
 [dependencies]
-  crown  = { path = "../../crown" }
-  sword = { workspace = true }
-  sword_macros = { workspace = true }
-  clap = { workspace = true, features = ["derive", "cargo", "color", "env"]}
-  tokio = { workspace = true }
-  tracing = { workspace = true }
-  bytes = { workspace = true }
+crown = { path = "../../crown" }
+sword = { workspace = true }
+sword_macros = { workspace = true }
+clap = { workspace = true, features = ["derive", "cargo", "color", "env"] }
+futures = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+bytes = { workspace = true }
 walkdir = "2.5.0"
 
 [[bin]]

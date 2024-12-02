@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use sword::hamt::Hamt;
-use sword::interpreter::{self, interpret, Error, Mote};
+use sword::interpreter::{self, interpret, Context, Error, Mote};
 use sword::jets::cold::Cold;
 use sword::jets::hot::{Hot, HotEntry, URBIT_HOT_STATE};
 use sword::jets::list::util::zing;
@@ -16,18 +16,20 @@ use sword::jets::warm::Warm;
 use sword::mem::NockStack;
 use sword::mug::met3_usize;
 use sword::noun::{Atom, Cell, DirectAtom, IndirectAtom, Noun, Slots, D, T};
-use sword::persist::pma_open;
 use sword::trace::{path_to_cord, write_serf_trace_safe, TraceInfo};
 use sword_macros::tas;
 use tracing::info;
 
 use crate::kernel::checkpoint::JamPaths;
+use crate::noun::slam;
 use crate::utils::slogger::CrownSlogger;
 use crate::utils::{current_da, NOCK_STACK_SIZE};
 use crate::{AtomExt, CrownError, NounExt, Result, ToBytesExt};
 
 use super::checkpoint::{Checkpoint, JammedCheckpoint};
 
+pub(crate) const STATE_AXIS: u64 = 6;
+const LOAD_AXIS: u64 = 4;
 const PEEK_AXIS: u64 = 22;
 const POKE_AXIS: u64 = 23;
 
@@ -72,12 +74,6 @@ impl Kernel {
         hot_state: &[HotEntry],
         trace: bool,
     ) -> Self {
-        let mut pma_path = pma_dir.clone();
-        pma_path.push(".crown");
-        pma_path.push("chk");
-        std::fs::create_dir_all(&pma_path).unwrap();
-        pma_open(pma_path).expect("serf: pma open failed");
-
         std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
 
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
@@ -118,12 +114,6 @@ impl Kernel {
     ///
     /// A new `Kernel` instance.
     pub fn load(pma_dir: PathBuf, jam_paths: JamPaths, kernel: &[u8], trace: bool) -> Self {
-        let mut pma_path = pma_dir.clone();
-        pma_path.push(".crown");
-        pma_path.push("chk");
-        std::fs::create_dir_all(&pma_path).unwrap();
-        pma_open(pma_path).expect("serf: pma open failed");
-
         std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
 
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
@@ -158,7 +148,7 @@ impl Kernel {
         let version = serf.version;
         let ker_hash = serf.ker_hash;
         let event_num = serf.event_num;
-        let arvo = serf.arvo.clone();
+        let ker_state = serf.arvo.slot(STATE_AXIS).unwrap();
         let cold = serf.context.cold;
         let buff_index = self.buffer_toggle.load(Ordering::SeqCst);
         JammedCheckpoint::new(
@@ -168,7 +158,7 @@ impl Kernel {
             ker_hash,
             event_num,
             &cold,
-            &arvo,
+            &ker_state,
         )
     }
 
@@ -252,14 +242,7 @@ impl Kernel {
     /// Result containing the slammed result or an error.
     pub fn slam(&mut self, axis: u64, ovo: Noun) -> Result<Noun> {
         let arvo = self.serf.arvo;
-        let stack = &mut self.serf.context.stack;
-        let pul = T(stack, &[D(9), D(axis), D(0), D(2)]);
-        let sam = T(stack, &[D(6), D(0), D(7)]);
-        let fol = T(stack, &[D(8), pul, D(9), D(2), D(10), sam, D(0), D(2)]);
-        let sub = T(stack, &[arvo, ovo]);
-
-        let res = interpret(&mut self.serf.context, sub, fol).map_err(CrownError::from);
-        res
+        slam(&mut self.serf.context, arvo, axis, ovo)
     }
 
     /// Performs a "soft" computation, handling errors gracefully.
@@ -539,24 +522,6 @@ impl Serf {
             trace_info,
         };
 
-        let arvo = checkpoint.as_ref().map_or_else(
-            || {
-                let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes)
-                    .expect("invalid kernel jam");
-                let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
-                let arvo = if context.trace_info.is_some() {
-                    let start = Instant::now();
-                    let arvo = interpret(&mut context, kernel_trap, fol).unwrap(); // TODO better error
-                    write_serf_trace_safe(&mut context, "boot", start);
-                    arvo
-                } else {
-                    interpret(&mut context, kernel_trap, fol).unwrap() // TODO better error
-                };
-                arvo
-            },
-            |snapshot| snapshot.arvo,
-        );
-
         let version = checkpoint
             .as_ref()
             .map_or_else(|| 0, |snapshot| snapshot.version);
@@ -565,11 +530,27 @@ impl Serf {
         hasher.update(kernel_bytes);
         let mut ker_hash = hasher.finalize();
 
+        let mut arvo = {
+            let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes)
+                .expect("invalid kernel jam");
+            let fol = T(&mut context.stack, &[D(9), D(2), D(0), D(1)]);
+            let arvo = if context.trace_info.is_some() {
+                let start = Instant::now();
+                let arvo = interpret(&mut context, kernel_trap, fol).unwrap(); // TODO better error
+                write_serf_trace_safe(&mut context, "boot", start);
+                arvo
+            } else {
+                interpret(&mut context, kernel_trap, fol).unwrap() // TODO better error
+            };
+            arvo
+        };
+
         if let Some(checkpoint) = checkpoint {
             if ker_hash != checkpoint.ker_hash {
-                info!("TODO: Kernel hash mismatch, upgrade necessary");
+                info!("Kernel hash mismatch, upgrading kernel");
                 ker_hash = checkpoint.ker_hash;
             }
+            arvo = Serf::load(&mut context, arvo, checkpoint.ker_state).unwrap();
         }
 
         let mut serf = Self {
@@ -585,6 +566,29 @@ impl Serf {
             serf.preserve_event_update_leftovers();
         }
         serf
+    }
+
+    /// Performs a load operation, transferring the state from a snapshot kernel to a new kernel.
+    ///
+    /// # Arguments
+    ///
+    /// * `new_kernel` - The new kernel boot jam.
+    /// * `state` - The kernel state from a snapshot.
+    ///
+    /// # Returns
+    ///
+    /// Loaded kernel
+    pub fn load(context: &mut Context, new_kernel: Noun, state: Noun) -> Result<Noun> {
+        let new_arvo = if context.trace_info.is_some() {
+            let start = Instant::now();
+            let new_arvo = slam(context, new_kernel, LOAD_AXIS, state);
+            write_serf_trace_safe(context, "load", start);
+            new_arvo
+        } else {
+            slam(context, new_kernel, LOAD_AXIS, state)
+        };
+
+        new_arvo
     }
 
     /// Updates the Serf's state after an event.
