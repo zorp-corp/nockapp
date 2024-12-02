@@ -7,21 +7,15 @@ use sword::jets::list::util::lent;
 use sword::mem::NockStack;
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
 use sword_macros::tas;
+
+#[cfg(feature = "tracing")]
 use tracing::{debug, error, info, warn};
 
-pub struct CrownSlogger {
-    use_tracing: bool,
-}
+pub struct CrownSlogger;
 
 impl Default for CrownSlogger {
     fn default() -> Self {
-        Self { use_tracing: true }
-    }
-}
-
-impl CrownSlogger {
-    pub fn new(use_tracing: bool) -> Self {
-        Self { use_tracing }
+        Self {}
     }
 }
 
@@ -33,25 +27,23 @@ impl Slogger for CrownSlogger {
                 Ok(_) => {
                     let message = String::from_utf8_lossy(&buffer).trim_matches('\0').to_string();
                     if !message.is_empty() {
-                        if self.use_tracing {
-                            match pri {
-                                0 => info!(target: "slogger", "{}", message),
-                                1 => debug!(target: "slogger", "{}", message),
-                                2 => warn!(target: "slogger", "{}", message),
-                                _ => error!(target: "slogger", "{}", message),
-                            }
-                        } else {
-                            let _ = writeln!(stderr(), "{}", message);
+                        #[cfg(feature = "tracing")]
+                        match pri {
+                            0 => info!(target: "slogger", "{}", message),
+                            1 => debug!(target: "slogger", "{}", message),
+                            2 => warn!(target: "slogger", "{}", message),
+                            _ => error!(target: "slogger", "{}", message),
                         }
+                        #[cfg(not(feature = "tracing"))]
+                        let _ = writeln!(stderr(), "{}", message);
                     }
                 }
                 Err(e) => {
                     let err_msg = format!("Failed to slog tank: {}", e);
-                    if self.use_tracing {
-                        error!(target: "slogger", "{}", err_msg);
-                    } else {
-                        let _ = writeln!(stderr(), "{}", err_msg);
-                    }
+                    #[cfg(feature = "tracing")]
+                    error!(target: "slogger", "{}", err_msg);
+                    #[cfg(not(feature = "tracing"))]
+                    let _ = writeln!(stderr(), "{}", err_msg);
                 }
             }
         });
@@ -65,20 +57,18 @@ impl Slogger for CrownSlogger {
                 Ok(_) => {
                     let message = String::from_utf8_lossy(&buffer).trim_matches('\0').to_string();
                     if !message.is_empty() {
-                        if self.use_tracing {
-                            info!(target: "slogger", "{}", message);
-                        } else {
-                            let _ = writeln!(stderr(), "{}", message);
-                        }
+                        #[cfg(feature = "tracing")]
+                        info!(target: "slogger", "{}", message);
+                        #[cfg(not(feature = "tracing"))]
+                        let _ = writeln!(stderr(), "{}", message);
                     }
                 }
                 Err(e) => {
                     let err_msg = format!("Failed to flog cord: {}", e);
-                    if self.use_tracing {
-                        error!(target: "slogger", "{}", err_msg);
-                    } else {
-                        let _ = writeln!(stderr(), "{}", err_msg);
-                    }
+                    #[cfg(feature = "tracing")]
+                    error!(target: "slogger", "{}", err_msg);
+                    #[cfg(not(feature = "tracing"))]
+                    let _ = writeln!(stderr(), "{}", err_msg);
                 }
             }
         });
