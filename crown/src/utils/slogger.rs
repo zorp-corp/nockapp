@@ -7,26 +7,66 @@ use sword::jets::list::util::lent;
 use sword::mem::NockStack;
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
 use sword_macros::tas;
+use tracing::{debug, error, info, warn};
 
-pub struct CrownSlogger {}
+pub struct CrownSlogger;
 
 impl Slogger for CrownSlogger {
-    // XX todo: restore pretty colors?
-    fn slog(&mut self, stack: &mut NockStack, _pri: u64, tank: Noun) {
+    fn slog(&mut self, stack: &mut NockStack, pri: u64, tank: Noun) {
         permit_alloc(|| {
-            let mut err_handle = stderr().lock();
-            slog_tank(stack, tank, &mut err_handle).unwrap();
-            err_handle.write(b"\n").unwrap();
+            let mut buffer = Vec::new();
+            match slog_tank(stack, tank, &mut buffer) {
+                Ok(_) => {
+                    let message = String::from_utf8_lossy(&buffer).trim_matches('\0').to_string();
+                    if !message.is_empty() {
+                        if cfg!(feature = "slog-tracing") {
+                            match pri {
+                                0 => info!(target: "slogger", "{}", message),
+                                1 => debug!(target: "slogger", "{}", message),
+                                2 => warn!(target: "slogger", "{}", message),
+                                _ => error!(target: "slogger", "{}", message),
+                            }
+                        } else {
+                            let _ = writeln!(stderr(), "{}", message);
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err_msg = format!("Failed to slog tank: {}", e);
+                    if cfg!(feature = "slog-tracing") {
+                        error!(target: "slogger", "{}", err_msg);
+                    } else {
+                        let _ = writeln!(stderr(), "{}", err_msg);
+                    }
+                }
+            }
         });
     }
 
     fn flog(&mut self, _stack: &mut NockStack, cord: Noun) {
         let cord_atom = cord.as_atom().unwrap();
         permit_alloc(|| {
-            let mut err_handle = stderr().lock();
-            err_handle.write(b"crown: ").unwrap();
-            slog_cord(cord_atom, &mut err_handle).unwrap();
-            err_handle.write(b"\n").unwrap();
+            let mut buffer = Vec::new();
+            match slog_cord(cord_atom, &mut buffer) {
+                Ok(_) => {
+                    let message = String::from_utf8_lossy(&buffer).trim_matches('\0').to_string();
+                    if !message.is_empty() {
+                        if cfg!(feature = "slog-tracing") {
+                            info!(target: "slogger", "{}", message);
+                        } else {
+                            let _ = writeln!(stderr(), "{}", message);
+                        }
+                    }
+                }
+                Err(e) => {
+                    let err_msg = format!("Failed to flog cord: {}", e);
+                    if cfg!(feature = "slog-tracing") {
+                        error!(target: "slogger", "{}", err_msg);
+                    } else {
+                        let _ = writeln!(stderr(), "{}", err_msg);
+                    }
+                }
+            }
         });
     }
 }

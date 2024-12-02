@@ -33,10 +33,10 @@ pub struct Cli {
         default_value = "info",
         help = "Set the log level"
     )]
-    log_level: String,
+    pub log_level: String,
 
     #[arg(long, help = "Control colored output", value_enum, default_value_t = ColorChoice::Auto)]
-    color: ColorChoice,
+    pub color: ColorChoice,
 }
 
 pub fn setup(
@@ -47,13 +47,15 @@ pub fn setup(
 ) -> Result<NockApp, Box<dyn std::error::Error>> {
     let cli = cli.unwrap_or_else(|| Cli::parse());
 
-    tracing_subscriber::registry()
-        .with(
-            fmt::layer()
-                .with_ansi(cli.color == ColorChoice::Auto || cli.color == ColorChoice::Always),
-        )
-        .with(EnvFilter::new(&cli.log_level))
-        .init();
+    if !cfg!(feature = "skip-subscriber") {
+        tracing_subscriber::registry()
+            .with(
+                fmt::layer()
+                    .with_ansi(cli.color == ColorChoice::Auto || cli.color == ColorChoice::Always),
+            )
+            .with(EnvFilter::new(&cli.log_level))
+            .init();
+    }
 
     let data_dir = default_data_dir(name);
     let pma_dir = data_dir.join("pma");

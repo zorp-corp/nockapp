@@ -4,6 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [features]
+default = ["slog-tracing"]
+slog-tracing = []
 trait-alias = []
 
 [dependencies]
