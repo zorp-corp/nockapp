@@ -37,9 +37,6 @@ pub struct Cli {
 
     #[arg(long, help = "Control colored output", value_enum, default_value_t = ColorChoice::Auto)]
     pub color: ColorChoice,
-
-    #[arg(skip)]
-    pub skip_subscriber: bool,
 }
 
 pub fn setup(
@@ -50,7 +47,7 @@ pub fn setup(
 ) -> Result<NockApp, Box<dyn std::error::Error>> {
     let cli = cli.unwrap_or_else(|| Cli::parse());
 
-    if !cli.skip_subscriber {
+    if !cfg!(feature = "skip-subscriber") {
         tracing_subscriber::registry()
             .with(
                 fmt::layer()
