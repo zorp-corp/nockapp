@@ -8,7 +8,7 @@ use sword::mem::NockStack;
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
 use sword_macros::tas;
 
-#[cfg(feature = "tracing")]
+#[cfg(feature = "slog-tracing")]
 use tracing::{debug, error, info, warn};
 
 pub struct CrownSlogger;
@@ -27,22 +27,22 @@ impl Slogger for CrownSlogger {
                 Ok(_) => {
                     let message = String::from_utf8_lossy(&buffer).trim_matches('\0').to_string();
                     if !message.is_empty() {
-                        #[cfg(feature = "tracing")]
+                        #[cfg(feature = "slog-tracing")]
                         match pri {
                             0 => info!(target: "slogger", "{}", message),
                             1 => debug!(target: "slogger", "{}", message),
                             2 => warn!(target: "slogger", "{}", message),
                             _ => error!(target: "slogger", "{}", message),
                         }
-                        #[cfg(not(feature = "tracing"))]
+                        #[cfg(not(feature = "slog-tracing"))]
                         let _ = writeln!(stderr(), "{}", message);
                     }
                 }
                 Err(e) => {
                     let err_msg = format!("Failed to slog tank: {}", e);
-                    #[cfg(feature = "tracing")]
+                    #[cfg(feature = "slog-tracing")]
                     error!(target: "slogger", "{}", err_msg);
-                    #[cfg(not(feature = "tracing"))]
+                    #[cfg(not(feature = "slog-tracing"))]
                     let _ = writeln!(stderr(), "{}", err_msg);
                 }
             }
@@ -57,17 +57,17 @@ impl Slogger for CrownSlogger {
                 Ok(_) => {
                     let message = String::from_utf8_lossy(&buffer).trim_matches('\0').to_string();
                     if !message.is_empty() {
-                        #[cfg(feature = "tracing")]
+                        #[cfg(feature = "slog-tracing")]
                         info!(target: "slogger", "{}", message);
-                        #[cfg(not(feature = "tracing"))]
+                        #[cfg(not(feature = "slog-tracing"))]
                         let _ = writeln!(stderr(), "{}", message);
                     }
                 }
                 Err(e) => {
                     let err_msg = format!("Failed to flog cord: {}", e);
-                    #[cfg(feature = "tracing")]
+                    #[cfg(feature = "slog-tracing")]
                     error!(target: "slogger", "{}", err_msg);
-                    #[cfg(not(feature = "tracing"))]
+                    #[cfg(not(feature = "slog-tracing"))]
                     let _ = writeln!(stderr(), "{}", err_msg);
                 }
             }
