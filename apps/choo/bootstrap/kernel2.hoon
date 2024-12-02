@@ -322,7 +322,9 @@
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
   =/  ns  (make-node-set entry dir)
+  =/  c-ns  (compile-node-set ns ~)
   ~&  >>  gra+ns
+  ~&  >>  compiled+c-ns
   |.(42)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
   ::=;  ker-gen
@@ -469,15 +471,15 @@
       deps.n
     |=  [raut next=(map path node)]
     ::  if we don't have the entry in gv, already visited
-    ?.  (~(has by gv) pat)
+    ?.  (~(has by gv) pax)
       next
     ::
     :: if a node has no out edges, don't add it to next
-    ?.  .=(~ (~(got by gv) pat))
+    ?.  .=(~ (~(got by gv) pax))
       next
     %+  ~(put by next)
-      pat
-    (~(got by map.ns) pat)
+      pax
+    (~(got by map.ns) pax)
 ::
   ++  update-graph-view
     |=  [gv=graph-view p=path n=node]
@@ -494,7 +496,7 @@
       =/  target=(trap vase)
         ?:  (~(has by bc) hash)
           (~(got by bc) hash)
-        (swet vaz-deps hoon.rile.n)
+        (swet vaz-deps hoon.n)
       :*  (label-vase target face.n)
           (~(put by tc) path.n [hash target])
           (~(put by bc) hash target)
@@ -504,7 +506,7 @@
     |=  [raut vaz=_honc hash=_hash.n]
     =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
     =/  v  (slew vaz (label-vase dep-vaz face))
-    =/  h  (shax hash dep-hash)
+    =/  h  (shax (rep 8 ~[hash dep-hash]))
     [v h]
 ::
   ++  label-vase
