@@ -8,6 +8,7 @@ use sword::mem::NockStack;
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
 use sword_macros::tas;
 
+#[allow(unused_imports)]
 #[cfg(feature = "slog-tracing")]
 use tracing::{debug, error, info, warn};
 
