@@ -1,6 +1,7 @@
 use crate::{CrownError, Result};
 use assert_no_alloc::permit_alloc;
 use either::Either::*;
+#[allow(unused_imports)]
 use std::io::{stderr, Write};
 use sword::interpreter::Slogger;
 use sword::jets::list::util::lent;
@@ -8,7 +9,6 @@ use sword::mem::NockStack;
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
 use sword_macros::tas;
 
-#[allow(unused_imports)]
 #[cfg(feature = "slog-tracing")]
 use tracing::{debug, error, info, warn};
 
