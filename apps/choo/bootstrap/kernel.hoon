@@ -323,17 +323,14 @@
   ~&  dir-hash+dir-hash
   =/  ns  (make-node-set entry dir)
   =/  c-ns  (compile-node-set ns ~)
-  ~&  >>  gra+ns
-  ~&  >>  compiled+c-ns
-  |.(42)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
-  ::=;  ker-gen
-  ::  =>  %+  shot  ker-gen
-  ::      =>  d=!>(dir-hash)
-  ::      |.(d)
-  ::  |.(+:^$)
-  ::%-  head
-  ::(compile-graph (head graph) ~)
+  =;  ker-gen
+    =>  %+  shot  ker-gen
+        =>  d=!>(dir-hash)
+        |.(d)
+    |.(+:^$)
+  %-  head
+  c-ns
 ++  create-arbitrary
   |=  [=entry dir=(map path cord)]
   ^-  (trap)
