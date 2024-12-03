@@ -255,8 +255,8 @@
   ::  turn fits into resolved path suffixes
   |=  [=pile dir=(map path cord)]
   ;:  weld
-      (turn sur.pile |=(taut ^-(raut [face (need (get-fit %sur pax dir))])))
       (turn lib.pile |=(taut ^-(raut [face (need (get-fit %lib pax dir))])))
+      (turn sur.pile |=(taut ^-(raut [face (need (get-fit %sur pax dir))])))
     ::
       %+  turn  raw.pile
       |=  [face=term pax=path]
@@ -295,10 +295,9 @@
 ::
 ::  $node: entry of adjacency matrix with metadata
 ::
-::  A rile holds the outgoing edges
+::  Dpes holds the outgoing edges
 +$  node
   $:  =path
-      face=(unit @tas)
       hash=@
       deps=(list raut)
       =hoon
@@ -322,7 +321,6 @@
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
   =/  ns  (make-node-set entry dir)
-  =/  c-ns  (compile-node-set ns ~)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
   =;  ker-gen
     =>  %+  shot  ker-gen
@@ -330,19 +328,19 @@
         |.(d)
     |.(+:^$)
   %-  head
-  c-ns
+  (compile-node-set ns ~)
+::
 ++  create-arbitrary
   |=  [=entry dir=(map path cord)]
   ^-  (trap)
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
-  =/  graph  (make-node-set entry dir)
-  |.(42)
-  ::=/  tase
-  ::  %-  head
-  ::  (compile-graph (head graph) ~)
-  ::=>  tase
-  ::|.(+:^$)
+  =/  ns  (make-node-set entry dir)
+  =/  tase
+    %-  head
+      (compile-node-set ns ~)
+  =>  tase
+  |.(+:^$)
 ::
 ++  get-file
   |=  [suf=entry dir=(map path cord)]
@@ -401,7 +399,6 @@
       deps
     |=  [[pat=path tex=cord] [ns=_ns deps=(list [path cord])]]
     =/  n=node  (make-node pat tex dir)
-    ~&  >>  node+n
     =.  ns  ns(map (~(put by map.ns) path.n n))
     =?  ns  (is-leaf n)
       ns(leaves (~(put by leaves.ns) path.n n))
@@ -415,12 +412,10 @@
   ~&  building-graph-for+pat
   =/  pile  (parse-pile pat (trip file))
   =/  deps=(list raut)  (resolve-pile pile dir)
-  ~&  >>  rile+rile
   :*  path=pat
       ::
       ::  what is this for??? maybe delete laterr
       ::
-      face=`%no-cache-entry-face
       hash=(hash file)
       deps=deps
       hoon=hoon.pile
@@ -439,6 +434,8 @@
   ::
   ::  bopological sort
   |-
+  ~&  >>  traversing+~(val by next)
+  ~&  >>  graph-view+graph
   ?:  .=(~ next)
     (compile-node target.ns tc bc)
   =-
@@ -451,7 +448,7 @@
     ==
   ^-  [next=(map path node) graph=(map path (set path)) vaz=(trap vase) tc=temp-cache bc=build-cache]
   %+  roll
-    ^-((list [path node]) ~(tap by next))
+    ~(tap by next)
   :: do we need the vaz?
   |=  [[p=path n=node] next=(map path node) graph=_graph vaz=_vaz tc=_tc bc=_bc]
   =.  graph  (update-graph-view graph p n)
@@ -489,22 +486,24 @@
   ++  compile-node
     |=  [n=node tc=temp-cache bc=build-cache]
     ^-  [(trap vase) temp-cache build-cache]
+    ~&  >>  compiling-node+path.n
     =;  [vaz-deps=(trap vase) hash=@]
+      =.  vaz-deps  (slew vaz-deps honc)
       =/  target=(trap vase)
         ?:  (~(has by bc) hash)
           (~(got by bc) hash)
         (swet vaz-deps hoon.n)
-      :*  (label-vase target face.n)
+      :*  target
           (~(put by tc) path.n [hash target])
           (~(put by bc) hash target)
       ==
     %+  roll
       deps.n
-    |=  [raut vaz=_honc hash=_hash.n]
+    |=  [raut vaz=(trap vase) hash=_hash.n]
     =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
-    =/  v  (slew vaz (label-vase dep-vaz face))
-    =/  h  (shax (rep 8 ~[hash dep-hash]))
-    [v h]
+    ~&  >>  compiling-dep+pax
+    :-  (slew vaz (label-vase dep-vaz face))
+    (shax (rep 8 ~[hash dep-hash]))
 ::
   ++  label-vase
     |=  [vaz=(trap vase) face=(unit @tas)]
@@ -612,6 +611,7 @@
   =/  [typ=type gen=hoon]
     :-  [%cell p:$:gat p:$:sam]
     [%cnsg [%$ ~] [%$ 2] [%$ 3] ~]
+  ~&  >>  "shot calling mint"
   =+  gun=(~(mint ut typ) %noun gen)
   =>  [typ=p.gun +<.$]
   |.

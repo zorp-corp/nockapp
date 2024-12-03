@@ -12,6 +12,7 @@
 --
 ::
 %-  moat
+~&  %test-kernel
 ^-  fort:moat
 |_  k=test-state
 ::
