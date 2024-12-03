@@ -10,7 +10,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::time::Duration;
 use tokio::{fs, select};
-use tracing::{debug, error, info, trace};
+use tracing::{error, info, trace};
 
 pub struct NockApp {
     // Nock kernel

@@ -7,7 +7,7 @@ use sword::jets::list::util::lent;
 use sword::mem::NockStack;
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
 use sword_macros::tas;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, warn, trace};
 
 pub struct CrownSlogger;
 
