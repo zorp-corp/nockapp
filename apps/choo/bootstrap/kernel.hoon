@@ -360,8 +360,7 @@
     ^-  (unit [path cord])
     ::  Note: if it has been seen in the BFS, maybe that means there has been a cycle?
     ?:  (~(has by seen) pax)
-    ~&  >>  "Cycle detected for {<pax>} inside of dependencies for {<path.n>}"
-      !!
+      ~
     ?.  (~(has by dir) pax)
       ~&  "Could not find dependency {<pax>} for {<path.n>}"  !!
     `[pax (~(got by dir) pax)]
@@ -398,6 +397,8 @@
     %+  roll
       deps
     |=  [[pat=path tex=cord] [ns=_ns deps=(list [path cord])]]
+    ?:  (~(has by map.ns) pat)
+      [ns deps]
     =/  n=node  (make-node pat tex dir)
     =.  ns  ns(map (~(put by map.ns) path.n n))
     =?  ns  (is-leaf n)
@@ -416,7 +417,7 @@
       ::
       ::  what is this for??? maybe delete laterr
       ::
-      hash=(hash file)
+      hash=(shax file)
       deps=deps
       hoon=hoon.pile
   ==
@@ -434,49 +435,46 @@
   ::
   ::  bopological sort
   |-
-  ~&  >>  traversing+~(val by next)
+  ~&  >>  traversing+~(key by next)
   ~&  >>  graph-view+graph
   ?:  .=(~ next)
     (compile-node target.ns tc bc)
   =-
     %=  $
-      next   next
+      next   (update-next ns graph)
       graph  graph
       vaz    vaz
       tc     tc
       bc     bc
     ==
-  ^-  [next=(map path node) graph=(map path (set path)) vaz=(trap vase) tc=temp-cache bc=build-cache]
+  ^-  [graph=(map path (set path)) vaz=(trap vase) tc=temp-cache bc=build-cache]
   %+  roll
     ~(tap by next)
   :: do we need the vaz?
-  |=  [[p=path n=node] next=(map path node) graph=_graph vaz=_vaz tc=_tc bc=_bc]
-  =.  graph  (update-graph-view graph p n)
-  :+  (~(uni by next) (update-next ns graph n))
-    graph
+  |=  [[p=path n=node] graph=_graph vaz=_vaz tc=_tc bc=_bc]
+  =.  graph  (update-graph-view graph p)
+  :-  graph
   ::  returns vaz, temp-cache, build-cache
   (compile-node n tc bc)
 ::
   ::  TODO clean up the wuts
   ++  update-next
-    |=  [ns=node-set gv=graph-view n=node]
+    |=  [ns=node-set gv=graph-view]
     ^-  (map path node)
     %+  roll
-      deps.n
-    |=  [raut next=(map path node)]
+      ~(tap by gv)
+    |=  [[pax=path edges=(set path)] next=(map path node)]
     ::  if we don't have the entry in gv, already visited
-    ?.  (~(has by gv) pax)
-      next
     ::
-    :: if a node has no out edges, don't add it to next
-    ?.  .=(~ (~(got by gv) pax))
+    :: if a node has out edges, do not add it to next
+    ?.  =(*(set path) edges)
       next
     %+  ~(put by next)
       pax
     (~(got by map.ns) pax)
 ::
   ++  update-graph-view
-    |=  [gv=graph-view p=path n=node]
+    |=  [gv=graph-view p=path]
     ^-  graph-view
     =.  gv  (~(del by gv) p)
     %-  ~(urn by gv)
@@ -500,8 +498,8 @@
     %+  roll
       deps.n
     |=  [raut vaz=(trap vase) hash=_hash.n]
-    =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
     ~&  >>  compiling-dep+pax
+    =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
     :-  (slew vaz (label-vase dep-vaz face))
     (shax (rep 8 ~[hash dep-hash]))
 ::
@@ -611,7 +609,6 @@
   =/  [typ=type gen=hoon]
     :-  [%cell p:$:gat p:$:sam]
     [%cnsg [%$ ~] [%$ 2] [%$ 3] ~]
-  ~&  >>  "shot calling mint"
   =+  gun=(~(mint ut typ) %noun gen)
   =>  [typ=p.gun +<.$]
   |.
