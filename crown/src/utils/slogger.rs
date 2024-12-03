@@ -21,9 +21,10 @@ impl Slogger for CrownSlogger {
                     if !message.is_empty() {
                         if cfg!(feature = "slog-tracing") {
                             match pri {
-                                0 => info!(target: "slogger", "{}", message),
+                                0 => trace!(target: "slogger", "{}", message),
                                 1 => debug!(target: "slogger", "{}", message),
-                                2 => warn!(target: "slogger", "{}", message),
+                                2 => info!(target: "slogger", "{}", message),
+                                3 => warn!(target: "slogger", "{}", message),
                                 _ => error!(target: "slogger", "{}", message),
                             }
                         } else {
