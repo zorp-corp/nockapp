@@ -7,7 +7,7 @@ use sword::jets::list::util::lent;
 use sword::mem::NockStack;
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
 use sword_macros::tas;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, warn, trace};
 
 pub struct CrownSlogger;
 
@@ -21,9 +21,10 @@ impl Slogger for CrownSlogger {
                     if !message.is_empty() {
                         if cfg!(feature = "slog-tracing") {
                             match pri {
-                                0 => info!(target: "slogger", "{}", message),
+                                0 => trace!(target: "slogger", "{}", message),
                                 1 => debug!(target: "slogger", "{}", message),
-                                2 => warn!(target: "slogger", "{}", message),
+                                2 => info!(target: "slogger", "{}", message),
+                                3 => warn!(target: "slogger", "{}", message),
                                 _ => error!(target: "slogger", "{}", message),
                             }
                         } else {

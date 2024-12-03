@@ -10,7 +10,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::time::Duration;
 use tokio::{fs, select};
-use tracing::{debug, error, info, trace};
+use tracing::{error, info, trace};
 
 pub struct NockApp {
     // Nock kernel
@@ -127,7 +127,7 @@ impl NockApp {
                 .await
                 .map_err(|e| NockAppError::SaveError(e))?;
 
-            debug!(
+            trace!(
                 "Write to {:?} successful, checksum: {}, event: {}",
                 path.display(),
                 checkpoint.checksum,
@@ -241,7 +241,6 @@ impl NockApp {
                         },
                         IOAction::Peek { path, result_channel } => {
                             let path_noun = path.copy_to_stack(self.kernel.serf.stack());
-                            info!("path_noun: {:?}", path_noun);
                             let peek_res = self.kernel.peek(path_noun);
 
                             match peek_res {
