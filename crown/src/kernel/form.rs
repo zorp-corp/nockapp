@@ -449,6 +449,23 @@ impl Kernel {
 
         self.do_poke(poke)
     }
+
+    /// Loads a kernel with state from jammed bytes
+    pub fn load_with_kernel_state(
+        pma_dir: PathBuf,
+        jam_paths: JamPaths,
+        kernel_jam: &[u8],
+        state_jam: &[u8],
+        hot_state: &[HotEntry],
+        trace: bool,
+    ) -> Result<Self> {
+        let mut kernel = Self::load_with_hot_state(pma_dir, jam_paths, kernel_jam, hot_state, trace);
+        let state_noun = <Noun as NounExt>::cue_bytes_slice(&mut kernel.serf.stack(), state_jam)?;
+        let kernel_noun = kernel.serf.arvo;
+        let new_arvo = Serf::load(&mut kernel.serf.context, kernel_noun, state_noun)?;
+        kernel.serf.arvo = new_arvo;
+        Ok(kernel)
+    }
 }
 
 /// Represents the Serf, which maintains context and provides an interface to
