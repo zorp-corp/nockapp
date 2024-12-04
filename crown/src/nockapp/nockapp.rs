@@ -1,59 +1,62 @@
 use super::driver::{IOAction, IODriverFn, NockAppHandle, PokeResult, TaskJoinSet};
 use super::NockAppError;
-use crate::kernel::form::Kernel;
+use crate::kernel::checkpoint::JamPaths;
+use crate::kernel::form::{Kernel, KernelArgs};
 use crate::noun::slab::NounSlab;
+use crate::utils::NOCK_STACK_SIZE;
 use crate::NounExt;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+use sword::mem::NockStack;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::{broadcast, mpsc, AcquireError, Mutex, OwnedSemaphorePermit};
-use tokio::time::Duration;
+use tokio::sync::{broadcast, mpsc, oneshot, Mutex};
+use tokio::task::JoinSet;
+use tokio::time::{interval, Duration, Interval};
 use tokio::{fs, select};
-use tracing::{error, info, trace};
+use tracing::{error, info, trace, warn};
 
 pub struct NockApp {
-    // Nock kernel
-    pub kernel: Kernel,
-    // Current join handles for IO drivers (parallel to `drivers`)
+    /// Current join handles for IO drivers (parallel to `drivers`)
     pub tasks: Arc<Mutex<tokio::task::JoinSet<Result<(), NockAppError>>>>,
-    // Exit signal sender
+    /// Exit signal sender
     pub exit_send: mpsc::Sender<usize>,
-    // Exit signal receiver
+    /// Exit signal receiver
     pub exit_recv: mpsc::Receiver<usize>,
-    // Exit status
-    pub exit_status: AtomicBool,
-    // Save event num sender
-    pub watch_send: Arc<Mutex<tokio::sync::watch::Sender<u64>>>,
-    // Save event num receiver
-    pub watch_recv: tokio::sync::watch::Receiver<u64>,
-    // IO action channel
-    pub action_channel: mpsc::Receiver<IOAction>,
-    // IO action channel sender
+    /// IO action channel sender
     pub action_channel_sender: mpsc::Sender<IOAction>,
-    // Effect broadcast channel
+    /// Effect broadcast channel
     pub effect_broadcast: broadcast::Sender<NounSlab>,
-    // Save semaphore
-    pub save_sem: Arc<tokio::sync::Semaphore>,
-    // Save interval
-    pub save_interval: Duration,
-    // Cancel token
+    /// Save interval
+    pub save_interval: Interval,
+    /// Jam persistence buffer paths.
+    pub jam_paths: JamPaths,
+    ///
+    pub save_mutex: Arc<Mutex<()>>,
+    /// Cancel token
     pub cancel_token: tokio_util::sync::CancellationToken,
 }
 
 impl NockApp {
-    pub fn new(kernel: Kernel, save_interval: Duration) -> Self {
+    pub async fn new(args: KernelArgs, save_duration: Duration) -> Self {
+        let jam_paths = args.jam_paths.clone();
         let (action_channel_sender, action_channel) = mpsc::channel(100);
         let (effect_broadcast, _) = broadcast::channel(100);
         let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
         let (exit_send, exit_recv) = mpsc::channel(1);
-        let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
-        let (watch_send, watch_recv) = tokio::sync::watch::channel(kernel.serf.event_num);
-        let watch_send = Arc::new(Mutex::new(watch_send.clone()));
-        let exit_status = AtomicBool::new(false);
+        let mut save_interval = interval(save_duration);
+        save_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+        let save_mutex = Arc::new(Mutex::new(()));
 
         let ctrl_c = tokio::signal::ctrl_c();
         let cancel_token = tokio_util::sync::CancellationToken::new();
+
+        spawn_worker(
+            tasks.clone(),
+            args,
+            action_channel,
+            effect_broadcast.clone(),
+        )
+        .await;
 
         tokio::task::spawn(async move {
             let _ = ctrl_c.await;
@@ -62,18 +65,14 @@ impl NockApp {
         });
 
         Self {
-            kernel,
             tasks,
             exit_send,
             exit_recv,
-            exit_status,
-            watch_send,
-            watch_recv,
-            action_channel,
             action_channel_sender,
             effect_broadcast,
-            save_sem,
             save_interval,
+            jam_paths,
+            save_mutex,
             cancel_token,
         }
     }
@@ -101,21 +100,23 @@ impl NockApp {
         let _ = self.tasks.clone().lock_owned().await.spawn(fut);
     }
 
-    pub async fn save(
-        &mut self,
-        save: Result<OwnedSemaphorePermit, AcquireError>,
-    ) -> Result<(), NockAppError> {
-        let toggle = self.kernel.buffer_toggle.clone();
-        let jam_paths = self.kernel.jam_paths.clone();
-        let checkpoint = self.kernel.checkpoint();
-        let bytes = checkpoint.encode()?;
-        let send_lock = self.watch_send.clone();
+    pub async fn save(&mut self, exit_after: Option<i32>) -> Result<(), NockAppError> {
+        let save_mutex = self.save_mutex.clone();
+        let jam_paths = self.jam_paths.clone();
+        let (checkpoint_sender, checkpoint_future) = oneshot::channel();
+        let sender = self.action_channel_sender.clone();
         self.tasks.lock().await.spawn(async move {
-            let path = if toggle.load(Ordering::SeqCst) {
-                jam_paths.1
-            } else {
-                jam_paths.0
-            };
+            sender
+                .send(IOAction::Checkpoint {
+                    result_channel: checkpoint_sender,
+                })
+                .await
+                .expect("Could not request checkpoint from kernel thread");
+            let guard = save_mutex.lock().await;
+            let checkpoint = checkpoint_future.await.expect("Failed to get checkpoint");
+            let buff_index = checkpoint.buff_index;
+            let bytes = checkpoint.encode()?;
+            let path = if buff_index { jam_paths.1 } else { jam_paths.0 };
             let mut file = fs::File::create(&path)
                 .await
                 .map_err(|e| NockAppError::SaveError(e))?;
@@ -135,13 +136,12 @@ impl NockApp {
             );
 
             // Flip toggle after successful write
-            toggle.store(!toggle.load(Ordering::SeqCst), Ordering::SeqCst);
-            let send = send_lock.lock().await;
-            send.send(checkpoint.event_num)?;
-            drop(save);
+            if let Some(code) = exit_after {
+                std::process::exit(code);
+            }
+            drop(guard);
             Ok(())
         });
-
         Ok(())
     }
 
@@ -172,92 +172,94 @@ impl NockApp {
                     _ => {Ok(())},
                 }
             },
-            permit = self.save_sem.clone().acquire_owned() => {
-                //  Check if we should write in the first place
-                let curr_event_num = self.kernel.serf.event_num;
-                let saved_event_num = self.watch_recv.borrow();
-                if curr_event_num <= *saved_event_num {
-                    trace!("Skipping save, event number has not changed from: {}", curr_event_num);
-                    return Ok(())
-                }
-                drop(saved_event_num);
-
-                // Get the current time so we can lower bound elapsed time of save
-                // If we are currently exiting, do not enforce the lower bound.
-                let now = std::time::Instant::now();
-                let res = self.save(permit).await;
-                let elapsed = now.elapsed();
-
-                if elapsed < self.save_interval && !self.exit_status.load(Ordering::SeqCst) {
-                    tokio::time::sleep(self.save_interval - elapsed).await;
-                }
-                return res
+            _instant = self.save_interval.tick() => {
+                self.save(None).await;
+              Ok(())
             },
             exit = self.exit_recv.recv() => {
                 if let Some(code) = exit {
-                    self.action_channel.close();
-                    self.exit_status.store(true, Ordering::SeqCst);
-                    let exit_event_num = self.kernel.serf.event_num;
-                    info!("Exit request received, waiting for save checkpoint with event_num {}", exit_event_num);
-
-                    let mut recv = self.watch_recv.clone();
-                    tokio::task::spawn(async move {
-                        loop {
-                            let _ = recv.changed().await;
-                            let new = *(recv.borrow());
-                            assert!(new <= exit_event_num);
-                            if new == exit_event_num {
-                                info!("Save event_num reached, exiting with code {}", code);
-                                std::process::exit(code as i32);
-                            }
-                        }
-                    });
-                    Ok(())
-                }
-                else {
-                    error!("Exit signal channel closed prematurely");
-                    Err(NockAppError::ChannelClosedError)
-                }
-            }
-            action_res = self.action_channel.recv() => {
-                if let Some(action) = action_res {
-                    match action {
-                        IOAction::Poke { poke, ack_channel } => {
-                            let poke_noun = poke.copy_to_stack(self.kernel.serf.stack());
-                            let effects_res = self.kernel.poke(poke_noun);
-                            match effects_res {
-                                Ok(effects) => {
-                                    let _ = ack_channel.send(PokeResult::Ack);
-                                    for effect in effects.list_iter() {
-                                        let mut effect_slab = NounSlab::new();
-                                        effect_slab.copy_into(effect);
-                                        let _ = self.effect_broadcast.send(effect_slab);
-                                    }
-                                },
-                                Err(_) => {
-                                    let _ = ack_channel.send(PokeResult::Nack);
-                                },
-                            }
-                        },
-                        IOAction::Peek { path, result_channel } => {
-                            let path_noun = path.copy_to_stack(self.kernel.serf.stack());
-                            let peek_res = self.kernel.peek(path_noun);
-
-                            match peek_res {
-                                Ok(res_noun) => {
-                                    let mut res_slab = NounSlab::new();
-                                    res_slab.copy_into(res_noun);
-                                    let _ = result_channel.send(Some(res_slab));
-                                },
-                                Err(_) => {
-                                    let _ = result_channel.send(None);
-                                }
-                            }
-                        },
-                    }
+                    self.save(Some(code as i32)).await;
+                } else {
+                    warn!("Exit channel closed prematurely!");
                 }
                 Ok(())
             }
         )
     }
+}
+
+async fn spawn_worker(
+    joinset: Arc<Mutex<JoinSet<Result<(), NockAppError>>>>,
+    args: KernelArgs,
+    mut io_receiver: mpsc::Receiver<IOAction>,
+    effect_broadcast: broadcast::Sender<NounSlab>,
+) {
+    joinset.lock_owned().await.spawn_blocking(move || {
+        let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
+        let checkpoint = if args.jam_paths.checkpoint_exists() {
+            info!("Checkpoint file(s) found, validating and loading from jam");
+            args.jam_paths.load_checkpoint(&mut stack).ok()
+        } else {
+            info!("No checkpoint file found, starting from scratch");
+            None
+        };
+
+        let mut buffer_toggle = checkpoint
+            .as_ref()
+            .map_or_else(|| false, |snapshot| !snapshot.buff_index);
+        let mut kernel = Kernel::load(args, stack, checkpoint);
+        while let Some(action) = io_receiver.blocking_recv() {
+            match action {
+                IOAction::Poke { poke, ack_channel } => {
+                    let poke_noun = poke.copy_to_stack(kernel.serf.stack());
+                    let effects_res = kernel.poke(poke_noun);
+                    match effects_res {
+                        Ok(effects) => {
+                            ack_channel
+                                .send(PokeResult::Ack)
+                                .unwrap_or_else(|_err| warn!("Could not send poke ack."));
+                            for effect in effects.list_iter() {
+                                let mut effect_slab = NounSlab::new();
+                                effect_slab.copy_into(effect);
+                                let _sent =
+                                    effect_broadcast.send(effect_slab).unwrap_or_else(|_err| {
+                                        warn!("Could not send effect.");
+                                        0
+                                    });
+                            }
+                        }
+                        Err(err) => {
+                            trace!("Poke error: {err}");
+                            ack_channel
+                                .send(PokeResult::Nack)
+                                .unwrap_or_else(|_err| warn!("Could not send poke nack."));
+                        }
+                    }
+                }
+                IOAction::Peek {
+                    path,
+                    result_channel,
+                } => {
+                    let path_noun = path.copy_to_stack(kernel.serf.stack());
+                    let peek_res = kernel.peek(path_noun);
+                    match peek_res {
+                        Ok(res_noun) => {
+                            let mut res_slab = NounSlab::new();
+                            res_slab.copy_into(res_noun);
+                            let _ = result_channel.send(Some(res_slab));
+                        }
+                        Err(err) => {
+                            trace!("Peek error: {err}");
+                            let _ = result_channel.send(None);
+                        }
+                    }
+                }
+                IOAction::Checkpoint { result_channel } => {
+                    let checkpoint = kernel.checkpoint(&mut buffer_toggle);
+                    result_channel.send(checkpoint);
+                }
+            }
+        }
+        Ok(())
+    });
 }

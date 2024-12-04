@@ -1,3 +1,4 @@
+use crate::kernel::checkpoint::JammedCheckpoint;
 use crate::noun::slab::NounSlab;
 use futures::future::Future;
 use std::pin::Pin;
@@ -51,6 +52,9 @@ pub enum IOAction {
     Peek {
         path: NounSlab,
         result_channel: oneshot::Sender<Option<NounSlab>>,
+    },
+    Checkpoint {
+        result_channel: oneshot::Sender<JammedCheckpoint>,
     },
 }
 

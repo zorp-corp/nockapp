@@ -2,7 +2,6 @@
 use blake3::{Hash, Hasher};
 use byteorder::{LittleEndian, WriteBytesExt};
 use std::fs::File;
-use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
@@ -22,8 +21,8 @@ use tracing::info;
 
 use crate::kernel::checkpoint::JamPaths;
 use crate::noun::slam;
+use crate::utils::current_da;
 use crate::utils::slogger::CrownSlogger;
-use crate::utils::{current_da, NOCK_STACK_SIZE};
 use crate::{AtomExt, CrownError, NounExt, Result, ToBytesExt};
 
 use super::checkpoint::{Checkpoint, JammedCheckpoint};
@@ -40,22 +39,23 @@ enum BTMetaField {
     Snapshot = 1,
 }
 
+pub struct KernelArgs {
+    pub jam_paths: JamPaths,
+    pub kernel: &'static [u8],
+    pub hot_state: Option<&'static [HotEntry]>,
+    pub trace: bool,
+}
+
 /// Represents a Sword kernel, containing a Serf and snapshot location.
 pub struct Kernel {
     /// The Serf managing the interface to the Sword.
     pub serf: Serf,
-    /// Directory path for storing pma snapshots.
-    pma_dir: PathBuf,
-    /// Jam persistence buffer paths.
-    pub jam_paths: JamPaths,
-    /// Buffer toggle for writing to the jam buffer.
-    pub buffer_toggle: Arc<AtomicBool>,
     /// Atomic flag for terminating the kernel.
     terminator: Arc<AtomicBool>,
 }
 
 impl Kernel {
-    /// Loads a kernel with a custom hot state.
+    /// Loads a kernel, possibly with a custom hot state.
     ///
     /// # Arguments
     ///
@@ -67,90 +67,26 @@ impl Kernel {
     /// # Returns
     ///
     /// A new `Kernel` instance.
-    pub fn load_with_hot_state(
-        pma_dir: PathBuf,
-        jam_paths: JamPaths,
-        kernel: &[u8],
-        hot_state: &[HotEntry],
-        trace: bool,
-    ) -> Self {
-        std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
+    pub fn load(args: KernelArgs, stack: NockStack, checkpoint: Option<Checkpoint>) -> Self {
+        std::fs::create_dir_all(args.jam_paths.0.parent().unwrap()).unwrap();
 
-        let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
+        let hot_state = args.hot_state.unwrap_or(URBIT_HOT_STATE);
 
-        let checkpoint = if jam_paths.checkpoint_exists() {
-            info!("Checkpoint file(s) found, validating and loading from jam");
-            jam_paths.load_checkpoint(&mut stack).ok()
-        } else {
-            info!("No checkpoint file found, starting from scratch");
-            None
-        };
-
-        let buffer_toggle = checkpoint.as_ref().map_or_else(
-            || Arc::new(AtomicBool::new(false)),
-            |snapshot| Arc::new(AtomicBool::new(!snapshot.buff_index)),
-        );
-
-        let serf = Serf::new(stack, checkpoint, kernel, hot_state, trace);
+        let serf = Serf::new(stack, checkpoint, args.kernel, hot_state, args.trace);
         let terminator = Arc::new(AtomicBool::new(false));
-        Self {
-            serf,
-            pma_dir,
-            jam_paths,
-            terminator,
-            buffer_toggle,
-        }
-    }
-
-    /// Loads a kernel with default hot state.
-    ///
-    /// # Arguments
-    ///
-    /// * `snap_dir` - Directory for storing snapshots.
-    /// * `kernel` - Byte slice containing the kernel code.
-    /// * `trace` - Whether to enable tracing.
-    ///
-    /// # Returns
-    ///
-    /// A new `Kernel` instance.
-    pub fn load(pma_dir: PathBuf, jam_paths: JamPaths, kernel: &[u8], trace: bool) -> Self {
-        std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
-
-        let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
-
-        let checkpoint = if jam_paths.checkpoint_exists() {
-            info!("Checkpoint file(s) found, validating and loading from jam");
-            jam_paths.load_checkpoint(&mut stack).ok()
-        } else {
-            info!("No checkpoint file found, starting from scratch");
-            None
-        };
-
-        let buffer_toggle = checkpoint.as_ref().map_or_else(
-            || Arc::new(AtomicBool::new(false)),
-            |snapshot| Arc::new(AtomicBool::new(!snapshot.buff_index)),
-        );
-
-        let serf = Serf::new(stack, checkpoint, kernel, &[], trace);
-        let terminator = Arc::new(AtomicBool::new(false));
-        Self {
-            serf,
-            pma_dir,
-            jam_paths,
-            terminator,
-            buffer_toggle,
-        }
+        Self { serf, terminator }
     }
 
     /// Produces a checkpoint of the kernel state.
-    pub fn checkpoint(&mut self) -> JammedCheckpoint {
+    pub fn checkpoint(&mut self, buffer_toggle: &mut bool) -> JammedCheckpoint {
         let serf = &self.serf;
         let version = serf.version;
         let ker_hash = serf.ker_hash;
         let event_num = serf.event_num;
         let ker_state = serf.arvo.slot(STATE_AXIS).unwrap();
         let cold = serf.context.cold;
-        let buff_index = self.buffer_toggle.load(Ordering::SeqCst);
+        let buff_index = *buffer_toggle;
+        *buffer_toggle = !buff_index;
         JammedCheckpoint::new(
             &mut self.serf.stack(),
             version,
@@ -673,26 +609,37 @@ fn slot(noun: Noun, axis: u64) -> Result<Noun> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
-    use std::path::Path;
+    use crate::utils::NOCK_STACK_SIZE;
     use tempfile::TempDir;
 
-    fn setup_kernel(jam: &str) -> (Kernel, TempDir) {
+    static KERNEL_JAM: &[u8] =
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/dumb.jam"));
+
+    fn setup_kernel() -> (Kernel, TempDir) {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let snap_dir = temp_dir.path().to_path_buf();
         let jam_paths = JamPaths::new(&snap_dir);
-        let jam_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("assets")
-            .join(jam);
-        let jam_bytes = fs::read(jam_path).expect(&format!("Failed to read {} file", jam));
-        let kernel = Kernel::load(snap_dir, jam_paths, &jam_bytes, false);
+        let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);
+        let checkpoint = if jam_paths.checkpoint_exists() {
+            info!("Checkpoint file(s) found, validating and loading from jam");
+            jam_paths.load_checkpoint(&mut stack).ok()
+        } else {
+            info!("No checkpoint file found, starting from scratch");
+            None
+        };
+        let args = KernelArgs {
+            jam_paths,
+            kernel: KERNEL_JAM,
+            hot_state: None,
+            trace: false,
+        };
+        let kernel = Kernel::load(args, stack, checkpoint);
         (kernel, temp_dir)
     }
 
     #[test]
     fn test_kernel_boot() {
-        let _ = setup_kernel("dumb.jam");
+        let _ = setup_kernel();
     }
 
     // To test your own kernel, place a `kernel.jam` file in the `assets` directory

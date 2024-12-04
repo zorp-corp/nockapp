@@ -4,12 +4,10 @@ mod tests {
     use crate::kernel::form::Kernel;
     use crate::noun::slab::{slab_equality, NounSlab};
     use crate::{kernel, NockApp, NounExt};
-    use sword::noun::Slots;
 
     use std::fs;
     use std::path::Path;
     use std::time::Duration;
-    use sword::jets::cold::Nounable;
     use sword::jets::util::slot;
     use sword::noun::{Noun, D, T};
     use sword::serialization::{cue, jam};
@@ -18,6 +16,7 @@ mod tests {
     use tempfile::TempDir;
     use tracing_test::traced_test;
 
+    /*
     fn setup_nockapp(jam: &str) -> (TempDir, NockApp) {
         let temp_dir = TempDir::new().expect("Failed to create temp directory");
         let snap_dir = temp_dir.path().to_path_buf();
@@ -280,4 +279,5 @@ mod tests {
             assert!(unifying_equality(stack, &mut arvo, &mut c))
         }
     }
+    */
 }

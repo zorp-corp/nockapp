@@ -16,7 +16,7 @@ struct TestCli {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = TestCli::parse();
     debug!("KERNEL_JAM len: {:?}", KERNEL_JAM.to_vec().len());
-    let mut http_app = boot::setup(KERNEL_JAM, Some(cli.boot), &[], "choo")?;
+    let mut http_app = boot::setup(KERNEL_JAM, Some(cli.boot), &[], "choo").await?;
     http_app.add_io_driver(crown::http_driver()).await;
 
     loop {

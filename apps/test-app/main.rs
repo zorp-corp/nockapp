@@ -23,7 +23,7 @@ struct TestCli {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = TestCli::parse();
     debug!("KERNEL_JAM len: {:?}", KERNEL_JAM.to_vec().len());
-    let mut test_app = boot::setup(KERNEL_JAM, Some(cli.boot), &[], "test")?;
+    let mut test_app = boot::setup(KERNEL_JAM, Some(cli.boot), &[], "test").await?;
     let poke = if cli.exit {
         D(tas!(b"inc-exit"))
     } else {
