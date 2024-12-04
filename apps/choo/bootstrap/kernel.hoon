@@ -255,8 +255,8 @@
   ::  turn fits into resolved path suffixes
   |=  [=pile dir=(map path cord)]
   ;:  weld
-      (turn lib.pile |=(taut ^-(raut [face (need (get-fit %lib pax dir))])))
       (turn sur.pile |=(taut ^-(raut [face (need (get-fit %sur pax dir))])))
+      (turn lib.pile |=(taut ^-(raut [face (need (get-fit %lib pax dir))])))
     ::
       %+  turn  raw.pile
       |=  [face=term pax=path]
@@ -430,7 +430,6 @@
   |^
   =/  graph  (build-graph-view ns)
   =|  tc=temp-cache
-  =|  vaz=(trap vase)
   =/  next=(map path node)  leaves.ns
   ::
   ::  bopological sort
@@ -443,19 +442,17 @@
     %=  $
       next   (update-next ns graph)
       graph  graph
-      vaz    vaz
       tc     tc
       bc     bc
     ==
-  ^-  [graph=(map path (set path)) vaz=(trap vase) tc=temp-cache bc=build-cache]
+  ^-  [graph=(map path (set path)) tc=temp-cache bc=build-cache]
   %+  roll
     ~(tap by next)
-  :: do we need the vaz?
-  |=  [[p=path n=node] graph=_graph vaz=_vaz tc=_tc bc=_bc]
+  |=  [[p=path n=node] graph=_graph tc=_tc bc=_bc]
   =.  graph  (update-graph-view graph p)
   :-  graph
-  ::  returns vaz, temp-cache, build-cache
-  (compile-node n tc bc)
+  ::  returns temp-cache, build-cache
+  +:(compile-node n tc bc)
 ::
   ::  TODO clean up the wuts
   ++  update-next
@@ -498,8 +495,8 @@
     %+  roll
       deps.n
     |=  [raut vaz=(trap vase) hash=_hash.n]
-    ~&  >>  compiling-dep+pax
     =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
+    ~&  >>  [compiling-dep+pax face+face]
     :-  (slew vaz (label-vase dep-vaz face))
     (shax (rep 8 ~[hash dep-hash]))
 ::
