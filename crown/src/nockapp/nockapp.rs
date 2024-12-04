@@ -189,7 +189,7 @@ impl NockApp {
                 let curr_event_num = self.kernel.serf.event_num;
                 let saved_event_num = self.watch_recv.borrow();
                 if curr_event_num <= *saved_event_num {
-                    trace!("Skipping save, event number has not changed from: {}", curr_event_num);
+                    //trace!("Skipping save, event number has not changed from: {}", curr_event_num);
                     return Ok(())
                 }
                 drop(saved_event_num);
