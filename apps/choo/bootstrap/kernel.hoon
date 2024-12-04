@@ -437,7 +437,8 @@
   ~&  >>  traversing+~(key by next)
   ~&  >>  graph-view+graph
   ?:  .=(~ next)
-    (compile-node target.ns tc bc)
+    ~&  >>  "sc"
+    (compile-node-sc target.ns tc bc)
   =-
     %=  $
       next   (update-next ns graph)
@@ -478,6 +479,27 @@
     |=  [* edges=(set path)]
     (~(del in edges) p)
 ::
+  ++  compile-node-sc
+    |=  [n=node tc=temp-cache bc=build-cache]
+    ^-  [(trap vase) temp-cache build-cache]
+    ~&  >>  compiling-node+path.n
+    =;  [vaz-deps=(trap vase) hash=@]
+      =/  target=(trap vase)
+        ?:  (~(has by bc) hash)
+          (~(got by bc) hash)
+        (swet vaz-deps hoon.n)
+      :*  target
+          (~(put by tc) path.n [hash target])
+          (~(put by bc) hash target)
+      ==
+    %+  roll
+      deps.n
+    |=  [raut vaz=(trap vase) hash=_hash.n]
+    =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
+    ~&  >>  [compiling-dep+pax face+face]
+    :-  (slew vaz (label-vase dep-vaz face))
+    (shax (rep 8 ~[hash dep-hash]))
+  ::
   ++  compile-node
     |=  [n=node tc=temp-cache bc=build-cache]
     ^-  [(trap vase) temp-cache build-cache]
