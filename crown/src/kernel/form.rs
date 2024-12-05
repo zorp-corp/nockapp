@@ -646,10 +646,20 @@ impl Serf {
     ///
     /// A noun representing the poke swap.
     pub fn poke_swap(&mut self, eve: u64, mug: u64, ovo: Noun, fec: Noun) -> Noun {
-        T(
+        let eve_noun = Atom::new(self.stack(), eve);
+        let mug_noun = Atom::new(self.stack(), mug);
+        let fec = T(
             self.stack(),
-            &[D(tas!(b"poke")), D(tas!(b"swap")), D(eve), D(mug), ovo, fec],
-        )
+            &[
+                D(tas!(b"poke")),
+                D(tas!(b"swap")),
+                eve_noun.as_noun(),
+                mug_noun.as_noun(),
+                ovo,
+                fec,
+            ],
+        );
+        T(self.stack(), &[fec, D(0)])
     }
 
     /// Creates a poke bail noun.

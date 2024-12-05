@@ -12,6 +12,7 @@ use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
 use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
 use sword::serialization::{met0_u64_to_usize, met0_usize};
 use thiserror::Error;
+use tracing::info;
 
 const CELL_MEM_WORD_SIZE: usize = (size_of::<CellMemory>() + 7) >> 3;
 
@@ -40,7 +41,7 @@ impl NounAllocator for NounSlab {
 
         // Make sure we have enough space
         if self.allocation_start.is_null()
-            || self.allocation_start.add(raw_size) > self.allocation_stop
+            || (self.allocation_start as usize) + (8 * raw_size) > (self.allocation_stop as usize)
         {
             let next_idx = std::cmp::max(self.slabs.len(), min_idx_for_size(raw_size));
             self.slabs
@@ -60,7 +61,7 @@ impl NounAllocator for NounSlab {
     }
     unsafe fn alloc_cell(&mut self) -> *mut CellMemory {
         if self.allocation_start.is_null()
-            || self.allocation_start.add(CELL_MEM_WORD_SIZE) > self.allocation_stop
+            || (self.allocation_start as usize) + (8 * CELL_MEM_WORD_SIZE) > (self.allocation_stop as usize)
         {
             let next_idx = std::cmp::max(self.slabs.len(), min_idx_for_size(CELL_MEM_WORD_SIZE));
             self.slabs
@@ -83,7 +84,7 @@ impl NounAllocator for NounSlab {
         let word_size = (layout.size() + 7) >> 3;
         assert!(layout.align() <= std::mem::size_of::<u64>());
         if self.allocation_start.is_null()
-            || self.allocation_start.add(word_size) > self.allocation_stop
+            || (self.allocation_start as usize) + (8 * word_size) > (self.allocation_stop as usize)
         {
             let next_idx = std::cmp::max(self.slabs.len(), min_idx_for_size(word_size));
             self.slabs

@@ -10,7 +10,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::time::Duration;
 use tokio::{fs, select};
-use tracing::{error, info, trace};
+use tracing::{debug, error, info, trace};
 
 pub struct NockApp {
     // Nock kernel
@@ -177,7 +177,6 @@ impl NockApp {
                 let curr_event_num = self.kernel.serf.event_num;
                 let saved_event_num = self.watch_recv.borrow();
                 if curr_event_num <= *saved_event_num {
-                    trace!("Skipping save, event number has not changed from: {}", curr_event_num);
                     return Ok(())
                 }
                 drop(saved_event_num);
@@ -230,6 +229,8 @@ impl NockApp {
                                     let _ = ack_channel.send(PokeResult::Ack);
                                     for effect in effects.list_iter() {
                                         let mut effect_slab = NounSlab::new();
+                                //        debug!("processing effect: {:?}", effect);
+                                        //debug!("effect: {:?}", effect.as_cell().expect("not cell").head());
                                         effect_slab.copy_into(effect);
                                         let _ = self.effect_broadcast.send(effect_slab);
                                     }
