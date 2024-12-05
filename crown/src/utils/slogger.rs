@@ -7,7 +7,7 @@ use sword::jets::list::util::lent;
 use sword::mem::NockStack;
 use sword::noun::{Atom, DirectAtom, IndirectAtom, Noun, Slots};
 use sword_macros::tas;
-use tracing::{debug, error, info, warn, trace};
+use tracing::{debug, error, info, trace, warn};
 
 pub struct CrownSlogger;
 
@@ -17,7 +17,9 @@ impl Slogger for CrownSlogger {
             let mut buffer = Vec::new();
             match slog_tank(stack, tank, &mut buffer) {
                 Ok(_) => {
-                    let message = String::from_utf8_lossy(&buffer).trim_matches('\0').to_string();
+                    let message = String::from_utf8_lossy(&buffer)
+                        .trim_matches('\0')
+                        .to_string();
                     if !message.is_empty() {
                         if cfg!(feature = "slog-tracing") {
                             match pri {
@@ -50,7 +52,9 @@ impl Slogger for CrownSlogger {
             let mut buffer = Vec::new();
             match slog_cord(cord_atom, &mut buffer) {
                 Ok(_) => {
-                    let message = String::from_utf8_lossy(&buffer).trim_matches('\0').to_string();
+                    let message = String::from_utf8_lossy(&buffer)
+                        .trim_matches('\0')
+                        .to_string();
                     if !message.is_empty() {
                         if cfg!(feature = "slog-tracing") {
                             info!(target: "slogger", "{}", message);
