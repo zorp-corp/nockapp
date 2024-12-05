@@ -655,6 +655,7 @@ mod tests {
     use sword_macros::tas;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_jam() {
         let mut slab = NounSlab::new();
         let test_noun = T(
@@ -764,6 +765,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_cue_from_file() {
         use bytes::Bytes;
         use std::fs::File;

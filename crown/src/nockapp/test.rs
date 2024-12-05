@@ -47,6 +47,7 @@ mod tests {
     // Test nockapp save
     #[tokio::test]
     #[traced_test]
+    #[cfg_attr(miri, ignore)]
     async fn test_nockapp_save() {
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
         let mut arvo = nockapp
@@ -101,6 +102,7 @@ mod tests {
     // Test nockapp poke
     #[tokio::test]
     #[traced_test]
+    #[cfg_attr(miri, ignore)]
     async fn test_nockapp_poke_save() {
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
         assert_eq!(nockapp.kernel.serf.event_num, 0);
@@ -163,6 +165,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_nockapp_save_multiple() {
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
         assert_eq!(nockapp.kernel.serf.event_num, 0);
@@ -202,6 +205,7 @@ mod tests {
     // Tests for fallback to previous checkpoint if checkpoint is corrupt
     #[tokio::test]
     #[traced_test]
+    #[cfg_attr(miri, ignore)]
     async fn test_nockapp_corrupt_check() {
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
         assert_eq!(nockapp.kernel.serf.event_num, 0);
@@ -241,6 +245,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_jam_equality_stack() {
         let (_temp, nockapp) = setup_nockapp("test-ker.jam");
         let mut kernel = nockapp.kernel;
@@ -252,11 +257,11 @@ mod tests {
         unsafe { assert!(unifying_equality(stack, &mut arvo, &mut c)) }
     }
 
+    // This actually gets used to test with miri
+    // but when it was successful it took too long.
     #[test]
+    // #[cfg_attr(miri, ignore)]
     fn test_jam_equality_slab_no_driver() {
-        // let (_temp, nockapp) = setup_nockapp("test-ker.jam");
-        // let kernel = nockapp.kernel;
-        // Read bytes from test-ker.jam
         let bytes = include_bytes!("../../tests/test-ker.jam");
         let mut slab1 = NounSlab::new();
         slab1.cue_into(Bytes::from(Vec::from(bytes))).unwrap();
@@ -280,6 +285,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_jam_equality_slab_stack() {
         let (_temp, nockapp) = setup_nockapp("test-ker.jam");
         let mut kernel = nockapp.kernel;
