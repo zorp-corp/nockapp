@@ -650,14 +650,7 @@ impl Serf {
         let mug_noun = Atom::new(self.stack(), mug);
         let fec = T(
             self.stack(),
-            &[
-                D(tas!(b"poke")),
-                D(tas!(b"swap")),
-                eve_noun.as_noun(),
-                mug_noun.as_noun(),
-                ovo,
-                fec,
-            ],
+            &[D(tas!(b"poke")), D(tas!(b"swap")), eve_noun.as_noun(), mug_noun.as_noun(), ovo, fec],
         );
         T(self.stack(), &[fec, D(0)])
     }

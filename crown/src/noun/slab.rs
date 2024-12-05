@@ -61,7 +61,8 @@ impl NounAllocator for NounSlab {
     }
     unsafe fn alloc_cell(&mut self) -> *mut CellMemory {
         if self.allocation_start.is_null()
-            || (self.allocation_start as usize) + (8 * CELL_MEM_WORD_SIZE) > (self.allocation_stop as usize)
+            || (self.allocation_start as usize) + (8 * CELL_MEM_WORD_SIZE)
+                > (self.allocation_stop as usize)
         {
             let next_idx = std::cmp::max(self.slabs.len(), min_idx_for_size(CELL_MEM_WORD_SIZE));
             self.slabs
