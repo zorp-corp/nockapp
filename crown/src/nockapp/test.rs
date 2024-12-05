@@ -4,6 +4,7 @@ mod tests {
     use crate::kernel::form::Kernel;
     use crate::noun::slab::{slab_equality, NounSlab};
     use crate::{kernel, NockApp, NounExt};
+    use bytes::Bytes;
     use sword::noun::Slots;
 
     use std::fs;
@@ -251,7 +252,22 @@ mod tests {
         unsafe { assert!(unifying_equality(stack, &mut arvo, &mut c)) }
     }
 
+    #[test]
+    fn test_jam_equality_slab_no_driver() {
+        // let (_temp, nockapp) = setup_nockapp("test-ker.jam");
+        // let kernel = nockapp.kernel;
+        // Read bytes from test-ker.jam
+        let bytes = include_bytes!("../../tests/test-ker.jam");
+        let mut slab1 = NounSlab::new();
+        slab1.cue_into(Bytes::from(Vec::from(bytes))).unwrap();
+        let jammed_bytes = slab1.jam();
+        let mut slab2 = NounSlab::new();
+        let c = slab2.cue_into(jammed_bytes).unwrap();
+        unsafe { assert!(slab_equality(slab1.root(), c)) }
+    }
+
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_jam_equality_slab() {
         let (_temp, nockapp) = setup_nockapp("test-ker.jam");
         let kernel = nockapp.kernel;

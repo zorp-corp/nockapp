@@ -691,6 +691,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_kernel_boot() {
         let _ = setup_kernel("dumb.jam");
     }
