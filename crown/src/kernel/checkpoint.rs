@@ -130,7 +130,7 @@ impl JamPaths {
     pub fn load_checkpoint<'a>(
         &'a self,
         stack: &'a mut NockStack,
-    ) -> Result<Checkpoint, CheckpointError> {
+    ) -> Result<Checkpoint, CheckpointError<'a>> {
         let (chk_0, chk_1) = [&self.0, &self.1].map(Self::decode_jam).into();
 
         match (chk_0, chk_1) {

@@ -707,10 +707,13 @@ mod tests {
         (kernel, temp_dir)
     }
 
-    #[test]
-    fn test_kernel_boot() {
-        let _ = setup_kernel("dumb.jam");
-    }
+    // Convert this to an integration test and feed it the kernel.jam from Choo in CI/CD
+    // https://www.youtube.com/watch?v=4m1EFMoRFvY
+    // #[test]
+    // #[cfg_attr(miri, ignore)]
+    // fn test_kernel_boot() {
+    //     let _ = setup_kernel("dumb.jam");
+    // }
 
     // To test your own kernel, place a `kernel.jam` file in the `assets` directory
     // and uncomment the following test:

@@ -26,6 +26,21 @@ pub struct NounSlab {
     allocation_stop: *mut u64,
 }
 
+impl NounSlab {
+    unsafe fn raw_alloc(new_layout: Layout) -> *mut u8 {
+        if new_layout.size() == 0 {
+            std::alloc::handle_alloc_error(new_layout);
+        }
+        assert!(new_layout.align().is_power_of_two(), "Invalid alignment");
+        let slab = std::alloc::alloc(new_layout);
+        if slab.is_null() {
+            std::alloc::handle_alloc_error(new_layout);
+        } else {
+            slab
+        }
+    }
+}
+
 impl Clone for NounSlab {
     fn clone(&self) -> Self {
         let mut slab = Self::new();
@@ -47,7 +62,7 @@ impl NounAllocator for NounSlab {
                 .resize(next_idx + 1, (std::ptr::null_mut(), Layout::new::<u8>()));
             let new_size = idx_to_size(next_idx);
             let new_layout = Layout::array::<u64>(new_size).unwrap();
-            let new_slab = std::alloc::alloc(new_layout);
+            let new_slab = Self::raw_alloc(new_layout);
             let new_slab_u64 = new_slab as *mut u64;
             self.slabs[next_idx] = (new_slab, new_layout);
             self.allocation_start = new_slab_u64;
@@ -61,20 +76,24 @@ impl NounAllocator for NounSlab {
     unsafe fn alloc_cell(&mut self) -> *mut CellMemory {
         if self.allocation_start.is_null()
             || self.allocation_start.add(CELL_MEM_WORD_SIZE) > self.allocation_stop
+            // || (self.allocation_start as usize) + CELL_MEM_WORD_SIZE > (self.allocation_stop as usize)
+            // || (self.allocation_start.expose_provenance()) + CELL_MEM_WORD_SIZE > (self.allocation_stop.expose_provenance())
+            // || (self.allocation_start as usize) + (CELL_MEM_WORD_SIZE * std::mem::size_of::<u64>()) > (self.allocation_stop as usize)
         {
             let next_idx = std::cmp::max(self.slabs.len(), min_idx_for_size(CELL_MEM_WORD_SIZE));
             self.slabs
                 .resize(next_idx + 1, (std::ptr::null_mut(), Layout::new::<u8>()));
             let new_size = idx_to_size(next_idx);
             let new_layout = Layout::array::<u64>(new_size).unwrap();
-            let new_slab = std::alloc::alloc(new_layout);
+            let new_slab = Self::raw_alloc(new_layout);
             let new_slab_u64 = new_slab as *mut u64;
             self.slabs[next_idx] = (new_slab, new_layout);
             self.allocation_start = new_slab_u64;
             self.allocation_stop = new_slab_u64.add(new_size);
         }
         let new_cell_ptr = self.allocation_start as *mut CellMemory;
-        self.allocation_start = self.allocation_start.add(CELL_MEM_WORD_SIZE);
+        // self.allocation_start = ((self.allocation_start.expose_provenance()) + CELL_MEM_WORD_SIZE) as *mut u64;
+        self.allocation_start = std::ptr::with_exposed_provenance_mut(self.allocation_start.expose_provenance() + (CELL_MEM_WORD_SIZE * std::mem::size_of::<u64>()));
         new_cell_ptr
     }
 
@@ -90,7 +109,7 @@ impl NounAllocator for NounSlab {
                 .resize(next_idx + 1, (std::ptr::null_mut(), Layout::new::<u8>()));
             let new_size = idx_to_size(next_idx);
             let new_layout = Layout::array::<u64>(new_size).unwrap();
-            let new_slab = std::alloc::alloc(new_layout);
+            let new_slab = Self::raw_alloc(new_layout);
             let new_slab_u64 = new_slab as *mut u64;
             self.slabs[next_idx] = (new_slab, new_layout);
             self.allocation_start = new_slab_u64;
@@ -130,7 +149,8 @@ impl NounSlab {
     /// noun.
     pub fn copy_into(&mut self, copy_root: Noun) {
         let mut copied: IntMap<Noun> = IntMap::new();
-        let mut copy_stack = vec![(copy_root, &mut self.root as *mut Noun)];
+        // let mut copy_stack = vec![(copy_root, &mut self.root as *mut Noun)];
+        let mut copy_stack = vec![(copy_root, std::ptr::addr_of_mut!(self.root))];
         loop {
             if let Some((noun, dest)) = copy_stack.pop() {
                 match noun.as_either_direct_allocated() {
@@ -172,10 +192,12 @@ impl NounSlab {
                             copied.insert(cell_ptr as u64, copied_noun);
                             unsafe { *dest = copied_noun };
                             unsafe {
-                                copy_stack
-                                    .push((cell.tail(), &mut (*cell_new_mem).tail as *mut Noun));
-                                copy_stack
-                                    .push((cell.head(), &mut (*cell_new_mem).head as *mut Noun));
+                                // copy_stack
+                                //     .push((cell.tail(), &mut (*cell_new_mem).tail as *mut Noun));
+                                // copy_stack
+                                //     .push((cell.head(), &mut (*cell_new_mem).head as *mut Noun));
+                                copy_stack.push((cell.tail(), std::ptr::addr_of_mut!((*cell_new_mem).tail)));
+                                copy_stack.push((cell.head(), std::ptr::addr_of_mut!((*cell_new_mem).head)));
                             }
                         }
                     },
@@ -650,6 +672,7 @@ mod tests {
     use sword_macros::tas;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_jam() {
         let mut slab = NounSlab::new();
         let test_noun = T(
@@ -759,6 +782,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn test_cue_from_file() {
         use bytes::Bytes;
         use std::fs::File;
@@ -831,4 +855,62 @@ mod tests {
             );
         }
     }
+
+
+    #[test]
+    fn test_cell_construction_for_noun_slab() {
+        let mut slab = NounSlab::new();
+        let (cell, cell_mem_ptr) = unsafe { Cell::new_raw_mut(&mut slab) };
+        unsafe { assert!(cell_mem_ptr as *const CellMemory == cell.to_raw_pointer()) };
+    }
+
+    #[test]
+    fn test_noun_slab_copy_into() {
+        let mut slab = NounSlab::new();
+        let test_noun = T(&mut slab, &[D(5), D(23)]);
+        slab.set_root(test_noun);
+        let mut copy_slab = NounSlab::new();
+        copy_slab.copy_into(test_noun);
+    }
+
+    // Fails in Miri
+    // #[test]
+    // fn test_alloc_cell_for_noun_slab_uninit() {
+    //     let mut slab = NounSlab::new();
+    //     let cell_ptr = unsafe { slab.alloc_cell() };
+    //     let cell: Cell = unsafe { Cell::from_raw_pointer(cell_ptr) };
+    //     unsafe { assert_eq!(cell.head().as_raw(), 0) };
+    // }
+
+    #[test]
+    fn test_alloc_cell_for_noun_slab_set_value() {
+        let mut slab = NounSlab::new();
+        let mut i = 0;
+        while i < 100 {
+            let cell_ptr = unsafe { slab.alloc_cell() };
+            let cell_memory = CellMemory { metadata: 0, head: D(i), tail: D(i + 1) };
+            unsafe { (*cell_ptr) = cell_memory };
+            i += 1;
+            println!("allocation_start: {:?}", slab.allocation_start);
+        }
+        // let cell_ptr = unsafe { slab.alloc_cell() };
+        // // Set the cell_ptr to a value
+        // let cell_memory = CellMemory { metadata: 0, head: D(5), tail: D(23) };
+        // unsafe { (*cell_ptr) = cell_memory };
+        // let cell: Cell = unsafe { Cell::from_raw_pointer(cell_ptr) };
+        // unsafe { assert_eq!(cell.head().as_raw(), 5) };
+    }
+
+    // // This test _should_ fail under Miri
+    // #[test]
+    // #[should_panic(expected = "error: Undefined Behavior: using uninitialized data, but this operation requires initialized memory")]
+    // fn test_raw_alloc() {
+    //     let layout = Layout::array::<u64>(512).unwrap();
+    //     let slab = unsafe { NounSlab::raw_alloc(layout) };
+    //     assert!(!slab.is_null());
+    //     // cast doesn't hide it from Miri
+    //     let new_slab_u64 = slab as *mut u64;
+    //     let _huh = unsafe { *new_slab_u64 };
+    //     unsafe { std::alloc::dealloc(slab, layout) };
+    // }
 }

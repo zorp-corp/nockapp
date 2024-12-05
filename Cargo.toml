@@ -7,9 +7,9 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace.dependencies]
-sword = { git = "https://github.com/zorp-corp/sword.git", rev = "f9915a75eac532a746b208b0c652e2f07a2142ab" }
-sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev = "f9915a75eac532a746b208b0c652e2f07a2142ab" }
-assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev = "f9915a75eac532a746b208b0c652e2f07a2142ab" }
+sword = { git = "https://github.com/zorp-corp/sword.git", rev = "980533198b957fd1d84a9aca77e092dd9ea9677a" }
+sword_macros = { git = "https://github.com/zorp-corp/sword.git", rev = "980533198b957fd1d84a9aca77e092dd9ea9677a" }
+assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev = "980533198b957fd1d84a9aca77e092dd9ea9677a" }
 
 # Uncomment for local dev of sword and comment out above
 # assert_no_alloc.path = "../sword/rust/assert_no_alloc"
@@ -55,11 +55,8 @@ tracing-subscriber = { version = "0.3.18", features = [
 ] }
 yaque = "0.6.6"
 
-[profile.dev]
-# opt-level = 3
-
 [profile.dev.package."*"]
-# opt-level = 3
+opt-level = 3
 
 [profile.release]
 opt-level = 3
