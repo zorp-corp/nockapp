@@ -139,7 +139,7 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 [[package]]
 name = "assert_no_alloc"
 version = "1.1.2"
-source = "git+https://github.com/zorp-corp/sword.git?rev=9472ea0ec3dcc12e05636d223c037bd021009f2f#9472ea0ec3dcc12e05636d223c037bd021009f2f"
+source = "git+https://github.com/zorp-corp/sword.git?rev=6e1b1c13197ad8bc3a1ce4573226628c1cb89096#6e1b1c13197ad8bc3a1ce4573226628c1cb89096"
 
 [[package]]
 name = "async-trait"
@@ -1104,7 +1104,7 @@ dependencies = [
 [[package]]
 name = "ibig"
 version = "0.3.6"
-source = "git+https://github.com/zorp-corp/sword.git?rev=9472ea0ec3dcc12e05636d223c037bd021009f2f#9472ea0ec3dcc12e05636d223c037bd021009f2f"
+source = "git+https://github.com/zorp-corp/sword.git?rev=6e1b1c13197ad8bc3a1ce4573226628c1cb89096#6e1b1c13197ad8bc3a1ce4573226628c1cb89096"
 dependencies = [
  "cfg-if",
  "num-traits",
@@ -1309,12 +1309,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
-name = "memmap"
-version = "0.7.0"
-source = "git+https://github.com/bitemyapp/memmap-rs.git?rev=7307f432a5871fb98e3e9bc9b238b553e68c3276#7307f432a5871fb98e3e9bc9b238b553e68c3276"
+name = "memmap2"
+version = "0.9.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd3f7eed9d3848f8b98834af67102b720745c4ec028fcd0aa0239277e7de374f"
 dependencies = [
  "libc",
- "winapi",
 ]
 
 [[package]]
@@ -1369,7 +1369,7 @@ dependencies = [
 [[package]]
 name = "murmur3"
 version = "0.5.2"
-source = "git+https://github.com/zorp-corp/sword.git?rev=9472ea0ec3dcc12e05636d223c037bd021009f2f#9472ea0ec3dcc12e05636d223c037bd021009f2f"
+source = "git+https://github.com/zorp-corp/sword.git?rev=6e1b1c13197ad8bc3a1ce4573226628c1cb89096#6e1b1c13197ad8bc3a1ce4573226628c1cb89096"
 
 [[package]]
 name = "notify"
@@ -1906,7 +1906,7 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sword"
 version = "0.1.0"
-source = "git+https://github.com/zorp-corp/sword.git?rev=9472ea0ec3dcc12e05636d223c037bd021009f2f#9472ea0ec3dcc12e05636d223c037bd021009f2f"
+source = "git+https://github.com/zorp-corp/sword.git?rev=6e1b1c13197ad8bc3a1ce4573226628c1cb89096#6e1b1c13197ad8bc3a1ce4573226628c1cb89096"
 dependencies = [
  "assert_no_alloc",
  "autotools",
@@ -1919,7 +1919,7 @@ dependencies = [
  "json",
  "lazy_static",
  "libc",
- "memmap",
+ "memmap2",
  "murmur3",
  "num-derive",
  "num-traits",
@@ -1934,7 +1934,7 @@ dependencies = [
 [[package]]
 name = "sword_crypto"
 version = "0.1.0"
-source = "git+https://github.com/zorp-corp/sword.git?rev=9472ea0ec3dcc12e05636d223c037bd021009f2f#9472ea0ec3dcc12e05636d223c037bd021009f2f"
+source = "git+https://github.com/zorp-corp/sword.git?rev=6e1b1c13197ad8bc3a1ce4573226628c1cb89096#6e1b1c13197ad8bc3a1ce4573226628c1cb89096"
 dependencies = [
  "aes",
  "aes-siv",
@@ -1950,7 +1950,7 @@ dependencies = [
 [[package]]
 name = "sword_macros"
 version = "0.1.0"
-source = "git+https://github.com/zorp-corp/sword.git?rev=9472ea0ec3dcc12e05636d223c037bd021009f2f#9472ea0ec3dcc12e05636d223c037bd021009f2f"
+source = "git+https://github.com/zorp-corp/sword.git?rev=6e1b1c13197ad8bc3a1ce4573226628c1cb89096#6e1b1c13197ad8bc3a1ce4573226628c1cb89096"
 dependencies = [
  "quote",
  "syn 1.0.109",
