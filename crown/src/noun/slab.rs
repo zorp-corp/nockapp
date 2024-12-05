@@ -135,7 +135,8 @@ impl NounSlab {
     /// noun.
     pub fn copy_into(&mut self, copy_root: Noun) {
         let mut copied: IntMap<Noun> = IntMap::new();
-        let mut copy_stack = vec![(copy_root, &mut self.root as *mut Noun)];
+        // let mut copy_stack = vec![(copy_root, &mut self.root as *mut Noun)];
+        let mut copy_stack = vec![(copy_root, std::ptr::addr_of_mut!(self.root))];
         loop {
             if let Some((noun, dest)) = copy_stack.pop() {
                 match noun.as_either_direct_allocated() {
@@ -177,10 +178,12 @@ impl NounSlab {
                             copied.insert(cell_ptr as u64, copied_noun);
                             unsafe { *dest = copied_noun };
                             unsafe {
-                                copy_stack
-                                    .push((cell.tail(), &mut (*cell_new_mem).tail as *mut Noun));
-                                copy_stack
-                                    .push((cell.head(), &mut (*cell_new_mem).head as *mut Noun));
+                                // copy_stack
+                                //     .push((cell.tail(), &mut (*cell_new_mem).tail as *mut Noun));
+                                // copy_stack
+                                //     .push((cell.head(), &mut (*cell_new_mem).head as *mut Noun));
+                                copy_stack.push((cell.tail(), std::ptr::addr_of_mut!((*cell_new_mem).tail)));
+                                copy_stack.push((cell.head(), std::ptr::addr_of_mut!((*cell_new_mem).head)));
                             }
                         }
                     },
@@ -845,5 +848,14 @@ mod tests {
         let mut slab = NounSlab::new();
         let (cell, cell_mem_ptr) = unsafe { Cell::new_raw_mut(&mut slab) };
         unsafe { assert!(cell_mem_ptr as *const CellMemory == cell.to_raw_pointer()) };
+    }
+
+    #[test]
+    fn test_noun_slab_copy_into() {
+        let mut slab = NounSlab::new();
+        let test_noun = T(&mut slab, &[D(5), D(23)]);
+        slab.set_root(test_noun);
+        let mut copy_slab = NounSlab::new();
+        copy_slab.copy_into(test_noun);
     }
 }
