@@ -28,6 +28,12 @@ jobs:
     - uses: zorp-corp/rust-cache@v2
       with:
         workspaces: ". -> target"
+    - name: Run tests
+      run: cargo test
+    - name: Install Miri
+      run: rustup component add miri
+    - name: Test with Miri
+      run: cargo miri test
     - name: Build all
       run: cargo build --release
     - name: Compile choo kernel with bootstrap choo
@@ -42,4 +48,3 @@ jobs:
       with:
         files: |
           target/release/choo
-
