@@ -254,28 +254,33 @@
 ++  resolve-pile
   ::  turn fits into resolved path suffixes
   |=  [=pile dir=(map path cord)]
-  ;:  weld
-      (turn sur.pile |=(taut ^-(raut [face (need (get-fit %sur pax dir))])))
-      (turn lib.pile |=(taut ^-(raut [face (need (get-fit %lib pax dir))])))
+  ^-  rile
+  %=    pile
+      sur
+    (turn sur.pile |=(taut ^-(raut [face (need (get-fit %sur pax dir))])))
+      lib
+    (turn lib.pile |=(taut ^-(raut [face (need (get-fit %lib pax dir))])))
     ::
-      %+  turn  raw.pile
-      |=  [face=term pax=path]
+      raw
+    %+  turn  raw.pile
+    |=  [face=term pax=path]
+    =/  pax-snip  (snip pax)
+    =/  pax-rear  (rear pax)
+    ^-  raut
+    [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' %hoon]))]
+    ::
+      bar
+    %+  turn  bar.pile
+    |=  [face=term mark=@tas pax=path]
+    ?:  =(mark %hoon)
       =/  pax-snip  (snip pax)
       =/  pax-rear  (rear pax)
       ^-  raut
       [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' %hoon]))]
-    ::
-      %+  turn  bar.pile
-      |=  [face=term mark=@tas pax=path]
-      ?:  =(mark %hoon)
-        =/  pax-snip  (snip pax)
-        =/  pax-rear  (rear pax)
-        ^-  raut
-        [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' %hoon]))]
-      =/  pax-snip  (snip pax)
-      =/  pax-rear  (rear pax)
-      ^-  raut
-      [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' mark]))]
+    =/  pax-snip  (snip pax)
+    =/  pax-rear  (rear pax)
+    ^-  raut
+    [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' mark]))]
   ==
 --
 ::
@@ -299,7 +304,7 @@
 +$  node
   $:  =path
       hash=@
-      deps=(list raut)
+      deps=rile
       =hoon
   ==
 ::
@@ -353,7 +358,12 @@
   |=  [n=node dir=(map path cord) seen=(map path node)]
   ^-  (list [path cord])
   |^
-  (murn deps.n take)
+  ;:  weld
+    (murn sur.deps.n take)
+    (murn lib.deps.n take)
+    (murn raw.deps.n take)
+    (murn bar.deps.n take)
+  ==
   ::
   ++  take
     |=  raut
@@ -366,11 +376,25 @@
     `[pax (~(got by dir) pax)]
   --
 ::
+++  get-rauts
+  |=  n=node
+  ^-  (list raut)
+  ;:  weld
+    sur.deps.n
+    lib.deps.n
+    raw.deps.n
+    bar.deps.n
+  ==
+::
 ::  +is-leaf: Checks if a rile has no dependencies
 ::
 ++  is-leaf
   |=  node
-  =(~ deps)
+  ?&  .=(sur.deps ~)
+      .=(lib.deps ~)
+      .=(raw.deps ~)
+      .=(bar.deps ~)
+  ==
 ::
 ++  build-graph-view
   |=  ns=node-set
@@ -378,7 +402,7 @@
   %-  ~(urn by map.ns)
   |=  [* n=node]
   %-  silt
-  (turn deps.n |=(raut pax))
+  (turn (get-rauts n) |=(raut pax))
 ::  Returns an augmented adjacency graph made from all the files required
 ::  to build the suf. Does this via BFS.
 ::
@@ -412,11 +436,8 @@
   ^-  node
   ~&  building-graph-for+pat
   =/  pile  (parse-pile pat (trip file))
-  =/  deps=(list raut)  (resolve-pile pile dir)
+  =/  deps=rile  (resolve-pile pile dir)
   :*  path=pat
-      ::
-      ::  what is this for??? maybe delete laterr
-      ::
       hash=(shax file)
       deps=deps
       hoon=hoon.pile
@@ -437,8 +458,7 @@
   ~&  >>  traversing+~(key by next)
   ~&  >>  graph-view+graph
   ?:  .=(~ next)
-    ~&  >>  "sc"
-    (compile-node-sc target.ns tc bc)
+    (compile-node target.ns tc bc)
   =-
     %=  $
       next   (update-next ns graph)
@@ -479,31 +499,11 @@
     |=  [* edges=(set path)]
     (~(del in edges) p)
 ::
-  ++  compile-node-sc
-    |=  [n=node tc=temp-cache bc=build-cache]
-    ^-  [(trap vase) temp-cache build-cache]
-    ~&  >>  compiling-node+path.n
-    =;  [vaz-deps=(trap vase) hash=@]
-      =/  target=(trap vase)
-        ?:  (~(has by bc) hash)
-          (~(got by bc) hash)
-        (swet vaz-deps hoon.n)
-      :*  target
-          (~(put by tc) path.n [hash target])
-          (~(put by bc) hash target)
-      ==
-    %+  roll
-      deps.n
-    |=  [raut vaz=(trap vase) hash=_hash.n]
-    =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
-    ~&  >>  [compiling-dep+pax face+face]
-    :-  (slew vaz (label-vase dep-vaz face))
-    (shax (rep 8 ~[hash dep-hash]))
-  ::
   ++  compile-node
     |=  [n=node tc=temp-cache bc=build-cache]
     ^-  [(trap vase) temp-cache build-cache]
     ~&  >>  compiling-node+path.n
+    ~&  >>  cache-keys+~(key by tc)
     =;  [vaz-deps=(trap vase) hash=@]
       =.  vaz-deps  (slew vaz-deps honc)
       =/  target=(trap vase)
@@ -515,10 +515,16 @@
           (~(put by bc) hash target)
       ==
     %+  roll
-      deps.n
-    |=  [raut vaz=(trap vase) hash=_hash.n]
+      `(list (list raut))`~[sur.deps.n lib.deps.n raw.deps.n bar.deps.n]
+    |=  [rauts=(list raut) vaz=(trap vase) hash=_hash.n]
+    =;  [v=(trap vase) hash=@]
+      [(slew vaz v) hash]
+    %+  roll
+      rauts
+    |=  [raut vaz=(trap vase) hash=_hash]
+    ~&  >>  grabbing+pax
     =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
-    ~&  >>  [compiling-dep+pax face+face]
+    ~&  >>  grabbed+pax
     :-  (slew vaz (label-vase dep-vaz face))
     (shax (rep 8 ~[hash dep-hash]))
 ::
