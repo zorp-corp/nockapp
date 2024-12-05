@@ -1,3 +1,5 @@
+#![feature(exposed_provenance)]
+
 //! # Crown
 //!
 //! The Crown library provides a set of modules and utilities for working with

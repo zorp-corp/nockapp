@@ -61,7 +61,9 @@ impl NounAllocator for NounSlab {
     unsafe fn alloc_cell(&mut self) -> *mut CellMemory {
         if self.allocation_start.is_null()
             // || self.allocation_start.add(CELL_MEM_WORD_SIZE) > self.allocation_stop
-            || (self.allocation_start as usize) + CELL_MEM_WORD_SIZE > (self.allocation_stop as usize)
+            // || (self.allocation_start as usize) + CELL_MEM_WORD_SIZE > (self.allocation_stop as usize)
+            // || (self.allocation_start.expose_provenance()) + CELL_MEM_WORD_SIZE > (self.allocation_stop.expose_provenance())
+            || (self.allocation_start as usize) + (CELL_MEM_WORD_SIZE * std::mem::size_of::<u64>()) > (self.allocation_stop as usize)
 
         {
             let next_idx = std::cmp::max(self.slabs.len(), min_idx_for_size(CELL_MEM_WORD_SIZE));
@@ -76,7 +78,8 @@ impl NounAllocator for NounSlab {
             self.allocation_stop = new_slab_u64.add(new_size);
         }
         let new_cell_ptr = self.allocation_start as *mut CellMemory;
-        self.allocation_start = self.allocation_start.add(CELL_MEM_WORD_SIZE);
+        // self.allocation_start = ((self.allocation_start.expose_provenance()) + CELL_MEM_WORD_SIZE) as *mut u64;
+        self.allocation_start = std::ptr::with_exposed_provenance_mut(self.allocation_start.expose_provenance() + (CELL_MEM_WORD_SIZE * std::mem::size_of::<u64>()));
         new_cell_ptr
     }
 
@@ -832,5 +835,13 @@ mod tests {
                 "Cued noun should equal [1 0]"
             );
         }
+    }
+
+
+    #[test]
+    fn test_cell_construction_for_noun_slab() {
+        let mut slab = NounSlab::new();
+        let (cell, cell_mem_ptr) = unsafe { Cell::new_raw_mut(&mut slab) };
+        unsafe { assert!(cell_mem_ptr as *const CellMemory == cell.to_raw_pointer()) };
     }
 }
