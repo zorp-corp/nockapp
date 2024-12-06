@@ -7,6 +7,7 @@ use bincode::{Decode, Encode};
 use bytes::Bytes;
 use core::str;
 use std::iter::Iterator;
+use std::pin::Pin;
 use sword::noun::{Atom, IndirectAtom, NounAllocator, D};
 use sword::serialization::{cue, jam};
 
@@ -221,14 +222,14 @@ impl FromAtom for Noun {
 }
 
 pub trait IntoSlab {
-    fn into_slab(self) -> NounSlab;
+    fn into_slab(self) -> Pin<Box<NounSlab>>;
 }
 
 impl IntoSlab for &str {
-    fn into_slab(self) -> NounSlab {
+    fn into_slab(self) -> Pin<Box<NounSlab>> {
         let mut slab = NounSlab::new();
         let noun = self.into_noun();
-        slab.set_root(noun);
+        slab.as_mut().set_root(noun);
         slab
     }
 }
