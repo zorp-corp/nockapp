@@ -28,6 +28,10 @@ pub struct NounSlab {
 
 impl NounSlab {
     unsafe fn raw_alloc(new_layout: Layout) -> *mut u8 {
+        if new_layout.size() == 0 {
+            std::alloc::handle_alloc_error(new_layout);
+        }
+        assert!(new_layout.align().is_power_of_two(), "Invalid alignment");
         let slab = std::alloc::alloc(new_layout);
         if slab.is_null() {
             std::alloc::handle_alloc_error(new_layout);
@@ -867,5 +871,13 @@ mod tests {
         slab.set_root(test_noun);
         let mut copy_slab = NounSlab::new();
         copy_slab.copy_into(test_noun);
+    }
+
+    #[test]
+    fn test_raw_alloc() {
+        let layout = Layout::array::<u64>(1).unwrap();
+        let slab = unsafe { NounSlab::raw_alloc(layout) };
+        assert!(!slab.is_null());
+        unsafe { std::alloc::dealloc(slab, layout) };
     }
 }
