@@ -109,7 +109,8 @@ pub fn http() -> IODriverFn {
                 }
                 effect = handle.next_effect() => {
                     debug!("effect: {:?}", effect);
-                    let effect = unsafe{ effect.unwrap().root() };
+                    let effect = effect.unwrap();
+                    let effect = unsafe{ effect.root() };
                     let res_list = effect.as_cell()?;
                     let mut res = res_list.tail().as_cell()?;
                     let id = res.head().as_atom()?.as_u64().unwrap();

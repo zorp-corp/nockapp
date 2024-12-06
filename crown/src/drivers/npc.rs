@@ -102,7 +102,8 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                     match peek_res {
                                         Some(mut bind_slab) => {
                                             let peek_res = unsafe { bind_slab.root() };
-                                            let bind_noun = T(&mut bind_slab, &[D(pid), D(tas!(b"bind")), peek_res]);
+                                            let peek_res_owned = *peek_res;
+                                            let bind_noun = T(&mut bind_slab, &[D(pid), D(tas!(b"bind")), peek_res_owned]);
                                             bind_slab.set_root(bind_noun);
                                             if !write_message(&mut stream_write, bind_slab).await? {
                                                 break 'driver;
@@ -171,9 +172,9 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
     })
 }
 
-async fn read_message(
+async fn read_message<'a>(
     stream_arc: Arc<Mutex<ReadHalf<UnixStream>>>,
-) -> Result<Option<NounSlab>, NockAppError> {
+) -> Result<Option<NounSlab<'a>>, NockAppError> {
     let mut stream = stream_arc.lock_owned().await;
     let mut size_bytes = [0u8; 8];
     debug!("Attempting to read message size...");
@@ -218,9 +219,9 @@ async fn read_message(
     Ok(Some(slab))
 }
 
-async fn write_message(
+async fn write_message<'a>(
     stream: &mut WriteHalf<UnixStream>,
-    msg_slab: NounSlab,
+    msg_slab: NounSlab<'a>,
 ) -> Result<bool, NockAppError> {
     let msg_bytes = msg_slab.jam();
     let msg_len = msg_bytes.len();

@@ -32,7 +32,7 @@ pub struct NockApp {
     // IO action channel sender
     pub action_channel_sender: mpsc::Sender<IOAction>,
     // Effect broadcast channel
-    pub effect_broadcast: broadcast::Sender<NounSlab>,
+    pub effect_broadcast: broadcast::Sender<NounSlab<'static>>,
     // Save semaphore
     pub save_sem: Arc<tokio::sync::Semaphore>,
     // Save interval

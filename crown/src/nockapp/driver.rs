@@ -11,8 +11,8 @@ pub type IODriverFn = Box<dyn FnOnce(NockAppHandle) -> IODriverFuture>;
 pub type TaskJoinSet = JoinSet<Result<(), NockAppError>>;
 pub type ActionSender = mpsc::Sender<IOAction>;
 pub type ActionReceiver = mpsc::Receiver<IOAction>;
-pub type EffectSender = broadcast::Sender<NounSlab>;
-pub type EffectReceiver = broadcast::Receiver<NounSlab>;
+pub type EffectSender = broadcast::Sender<NounSlab<'static>>;
+pub type EffectReceiver = broadcast::Receiver<NounSlab<'static>>;
 
 /// Result of a poke: either Ack if it succeeded or Nack if it failed
 #[derive(Debug)]
@@ -45,17 +45,17 @@ pub struct NockAppHandle {
 #[derive(Debug)]
 pub enum IOAction {
     Poke {
-        poke: NounSlab,
+        poke: NounSlab<'static>,
         ack_channel: oneshot::Sender<PokeResult>,
     },
     Peek {
-        path: NounSlab,
-        result_channel: oneshot::Sender<Option<NounSlab>>,
+        path: NounSlab<'static>,
+        result_channel: oneshot::Sender<Option<NounSlab<'static>>>,
     },
 }
 
 impl NockAppHandle {
-    pub async fn poke(&self, poke: NounSlab) -> Result<PokeResult, NockAppError> {
+    pub async fn poke(&self, poke: NounSlab<'static>) -> Result<PokeResult, NockAppError> {
         let (ack_channel, ack_future) = oneshot::channel();
         self.io_sender
             .send(IOAction::Poke { poke, ack_channel })
@@ -63,7 +63,7 @@ impl NockAppHandle {
         Ok(ack_future.await?)
     }
 
-    pub async fn peek(&self, path: NounSlab) -> Result<Option<NounSlab>, NockAppError> {
+    pub async fn peek<'a>(&self, path: NounSlab<'static>) -> Result<Option<NounSlab<'a>>, NockAppError> {
         let (result_channel, result_future) = oneshot::channel();
         self.io_sender
             .send(IOAction::Peek {

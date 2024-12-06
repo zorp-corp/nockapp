@@ -221,11 +221,11 @@ impl FromAtom for Noun {
 }
 
 pub trait IntoSlab {
-    fn into_slab(self) -> NounSlab;
+    fn into_slab<'a>(self) -> NounSlab<'a>;
 }
 
 impl IntoSlab for &str {
-    fn into_slab(self) -> NounSlab {
+    fn into_slab<'a>(self) -> NounSlab<'a> {
         let mut slab = NounSlab::new();
         let noun = self.into_noun();
         slab.set_root(noun);

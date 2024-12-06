@@ -6,8 +6,8 @@ use sword::noun::D;
 use sword_macros::tas;
 use tracing::{debug, error, info};
 
-pub fn one_punch_man(data: NounSlab, op: Operation) -> IODriverFn {
-    make_driver(|handle| async move {
+pub fn one_punch_man(data: NounSlab<'static>, op: Operation) -> IODriverFn {
+    make_driver(move |handle| async move {
         let result = match op {
             Operation::Poke => {
                 debug!("poke_once_driver: poking with {:?}", data);
@@ -50,8 +50,8 @@ pub fn one_punch_man(data: NounSlab, op: Operation) -> IODriverFn {
 /// # Returns
 ///
 /// A Result indicating success or failure of the operation.
-async fn handle_result(
-    result: Either<PokeResult, Option<NounSlab>>,
+async fn handle_result<'a>(
+    result: Either<PokeResult, Option<NounSlab<'a>>>,
     op: &Operation,
 ) -> Result<(), NockAppError> {
     match op {
@@ -96,8 +96,8 @@ async fn handle_result(
 /// # Returns
 ///
 /// A Result indicating success or failure of handling the effect.
-async fn handle_effect(
-    eff: Result<NounSlab, NockAppError>,
+async fn handle_effect<'a>(
+    eff: Result<NounSlab<'a>, NockAppError>,
     _handle: &NockAppHandle,
 ) -> Result<(), NockAppError> {
     let eff = eff?;
