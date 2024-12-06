@@ -85,6 +85,7 @@ impl NounAllocator for NounSlab {
                 .resize(next_idx + 1, (std::ptr::null_mut(), Layout::new::<u8>()));
             let new_size = idx_to_size(next_idx);
             let new_layout = Layout::array::<u64>(new_size).unwrap();
+            println!("{new_layout:?}");
             let new_slab = Self::raw_alloc(new_layout);
             let new_slab_u64 = new_slab as *mut u64;
             self.slabs[next_idx] = (new_slab, new_layout);
