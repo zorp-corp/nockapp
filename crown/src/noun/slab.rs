@@ -31,6 +31,8 @@ impl NounSlab {
         let slab = std::alloc::alloc(new_layout);
         if slab.is_null() {
             std::alloc::handle_alloc_error(new_layout);
+        } else {
+            slab
         }
     }
 }
