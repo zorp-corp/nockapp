@@ -26,6 +26,15 @@ pub struct NounSlab {
     allocation_stop: *mut u64,
 }
 
+impl NounSlab {
+    unsafe fn raw_alloc(new_layout: Layout) -> *mut u8 {
+        let slab = std::alloc::alloc(new_layout);
+        if slab.is_null() {
+            std::alloc::handle_alloc_error(new_layout);
+        }
+    }
+}
+
 impl Clone for NounSlab {
     fn clone(&self) -> Self {
         let mut slab = Self::new();
@@ -47,7 +56,7 @@ impl NounAllocator for NounSlab {
                 .resize(next_idx + 1, (std::ptr::null_mut(), Layout::new::<u8>()));
             let new_size = idx_to_size(next_idx);
             let new_layout = Layout::array::<u64>(new_size).unwrap();
-            let new_slab = std::alloc::alloc(new_layout);
+            let new_slab = Self::raw_alloc(new_layout);
             let new_slab_u64 = new_slab as *mut u64;
             self.slabs[next_idx] = (new_slab, new_layout);
             self.allocation_start = new_slab_u64;
@@ -64,14 +73,13 @@ impl NounAllocator for NounSlab {
             // || (self.allocation_start as usize) + CELL_MEM_WORD_SIZE > (self.allocation_stop as usize)
             // || (self.allocation_start.expose_provenance()) + CELL_MEM_WORD_SIZE > (self.allocation_stop.expose_provenance())
             || (self.allocation_start as usize) + (CELL_MEM_WORD_SIZE * std::mem::size_of::<u64>()) > (self.allocation_stop as usize)
-
         {
             let next_idx = std::cmp::max(self.slabs.len(), min_idx_for_size(CELL_MEM_WORD_SIZE));
             self.slabs
                 .resize(next_idx + 1, (std::ptr::null_mut(), Layout::new::<u8>()));
             let new_size = idx_to_size(next_idx);
             let new_layout = Layout::array::<u64>(new_size).unwrap();
-            let new_slab = std::alloc::alloc(new_layout);
+            let new_slab = Self::raw_alloc(new_layout);
             let new_slab_u64 = new_slab as *mut u64;
             self.slabs[next_idx] = (new_slab, new_layout);
             self.allocation_start = new_slab_u64;
@@ -95,7 +103,7 @@ impl NounAllocator for NounSlab {
                 .resize(next_idx + 1, (std::ptr::null_mut(), Layout::new::<u8>()));
             let new_size = idx_to_size(next_idx);
             let new_layout = Layout::array::<u64>(new_size).unwrap();
-            let new_slab = std::alloc::alloc(new_layout);
+            let new_slab = Self::raw_alloc(new_layout);
             let new_slab_u64 = new_slab as *mut u64;
             self.slabs[next_idx] = (new_slab, new_layout);
             self.allocation_start = new_slab_u64;
