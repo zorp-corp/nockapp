@@ -33,6 +33,7 @@ impl NounSlab {
         }
         assert!(new_layout.align().is_power_of_two(), "Invalid alignment");
         let slab = std::alloc::alloc(new_layout);
+        println!("{slab:?}");
         if slab.is_null() {
             std::alloc::handle_alloc_error(new_layout);
         } else {
@@ -876,9 +877,12 @@ mod tests {
 
     #[test]
     fn test_raw_alloc() {
-        let layout = Layout::array::<u64>(1).unwrap();
+        let layout = Layout::array::<u64>(512).unwrap();
         let slab = unsafe { NounSlab::raw_alloc(layout) };
+        println!("{:?}", &slab);
+        println!("{slab:?}");
         assert!(!slab.is_null());
+        let huh = unsafe { *slab };
         unsafe { std::alloc::dealloc(slab, layout) };
     }
 }
