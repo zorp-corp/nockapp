@@ -254,22 +254,18 @@
 ++  resolve-pile
   ::  turn fits into resolved path suffixes
   |=  [=pile dir=(map path cord)]
-  ^-  rile
-  %=    pile
-      sur
+  ^-  (list raut)
+  ;:  weld
     (turn sur.pile |=(taut ^-(raut [face (need (get-fit %sur pax dir))])))
-      lib
     (turn lib.pile |=(taut ^-(raut [face (need (get-fit %lib pax dir))])))
-    ::
-      raw
+  ::
     %+  turn  raw.pile
     |=  [face=term pax=path]
     =/  pax-snip  (snip pax)
     =/  pax-rear  (rear pax)
     ^-  raut
     [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' %hoon]))]
-    ::
-      bar
+  ::
     %+  turn  bar.pile
     |=  [face=term mark=@tas pax=path]
     ?:  =(mark %hoon)
@@ -304,7 +300,7 @@
 +$  node
   $:  =path
       hash=@
-      deps=rile
+      deps=(list raut)
       =hoon
   ==
 ::
@@ -358,12 +354,7 @@
   |=  [n=node dir=(map path cord) seen=(map path node)]
   ^-  (list [path cord])
   |^
-  ;:  weld
-    (murn sur.deps.n take)
-    (murn lib.deps.n take)
-    (murn raw.deps.n take)
-    (murn bar.deps.n take)
-  ==
+  (murn deps.n take)
   ::
   ++  take
     |=  raut
@@ -376,25 +367,11 @@
     `[pax (~(got by dir) pax)]
   --
 ::
-++  get-rauts
-  |=  n=node
-  ^-  (list raut)
-  ;:  weld
-    sur.deps.n
-    lib.deps.n
-    raw.deps.n
-    bar.deps.n
-  ==
-::
 ::  +is-leaf: Checks if a rile has no dependencies
 ::
 ++  is-leaf
   |=  node
-  ?&  .=(sur.deps ~)
-      .=(lib.deps ~)
-      .=(raw.deps ~)
-      .=(bar.deps ~)
-  ==
+  .=(~ deps)
 ::
 ++  build-graph-view
   |=  ns=node-set
@@ -402,7 +379,7 @@
   %-  ~(urn by map.ns)
   |=  [* n=node]
   %-  silt
-  (turn (get-rauts n) |=(raut pax))
+  (turn deps.n |=(raut pax))
 ::  Returns an augmented adjacency graph made from all the files required
 ::  to build the suf. Does this via BFS.
 ::
@@ -436,7 +413,7 @@
   ^-  node
   ~&  building-graph-for+pat
   =/  pile  (parse-pile pat (trip file))
-  =/  deps=rile  (resolve-pile pile dir)
+  =/  deps=(list raut)  (resolve-pile pile dir)
   :*  path=pat
       hash=(shax file)
       deps=deps
@@ -515,13 +492,8 @@
           (~(put by bc) hash target)
       ==
     %+  roll
-      `(list (list raut))`~[sur.deps.n lib.deps.n raw.deps.n bar.deps.n]
-    |=  [rauts=(list raut) vaz=(trap vase) hash=_hash.n]
-    =;  [v=(trap vase) hash=@]
-      [(slew vaz v) hash]
-    %+  roll
-      rauts
-    |=  [raut vaz=(trap vase) hash=_hash]
+      deps.n
+    |=  [raut vaz=(trap vase) hash=_hash.n]
     ~&  >>  grabbing+pax
     =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
     ~&  >>  grabbed+pax
@@ -537,84 +509,6 @@
     =/  vas  $:vaz
     [[%face face p.vas] q.vas]
   --
-::  %+  roll
-::    (range max.ns)
-::  |=  [i=@ [cache=_cache temp=_temp-cache]]
-::  ?.  (~(has by temp) i)
-::    [cache temp]
-::  %+  roll
-::    (~(got by ns) i)
-::  |=  [nod=node [cache=_cache temp=_temp]]
-::  ::  check cache first
-::  ?:  (~(has by cache) path.nod)
-::    [cache temp]
-::  ::  if we need to build, first get dependencies
-::  ::  they should be in temp, keyed by their path if they are not,
-::  ::  CRASH.
-::  ::  slew them all together
-::  ::  build the dependency
-::  ::  add the face that is needed
-::  ::  create the hash to key it by while building the slew
-::  (spin sur.rile.nod)
-::  ::  build the file
-::  ::
-::  ::  store it in the persisted cache, keyed by hash
-::  ::  store it in the temp (within build) cache, keyed by path
-::  ::  STORE IN THE TEMP GRAPH AS FACELESS
-::::
-::++  compile-graph
-::  ::  accepts an import-graph and compiles it down to a vase
-::  ::
-::  |=  [graph=import-graph cache=(map path (trap vase))]
-::  ^-  [(trap vase) cache=(map path (trap vase))]
-::  |^
-::  ::  recursively compile each dependency then cons them all together
-::  ::  (base case is when both sur and lib are ~)
-::  ~&  "processing {<path.graph>}"
-::  ?^  existing=(~(get by cache) path.graph)
-::    ~&  >  "reusing cached vase for {<path.graph>}"
-::    [(label-vase u.existing face.graph) cache]
-::  =^  surs  cache   (spin sur.graph cache compile-graph)
-::  =^  libs  cache   (spin lib.graph cache compile-graph)
-::  =^  raws  cache   (spin raw.graph cache compile-graph)
-::  =^  bars  cache   (spin bar.graph cache compile-graph)
-::  =/  sur-all=(trap vase)  (roll p.surs slew)
-::  =/  lib-all=(trap vase)  (roll p.libs slew)
-::  =/  raw-all=(trap vase)  (roll p.raws slew)
-::  =/  bar-all=(trap vase)  (roll p.bars slew)
-::  =/  deps=(trap vase)
-::    ::  we must always make hoon.hoon available to each `hoon.graph`
-::    ::  in case it's not available on account of being hidden behind a face in other dependencies
-::    ::
-::    ::  TODO make sure there are no bunted vases in here
-::    =-  (roll - |=([v=(trap vase) a=(trap vase)] (slew a v)))
-::    %+  murn  ~[lib-all sur-all raw-all bar-all honc]
-::    |=  dep=(trap vase)
-::    ?:  =(*(trap vase) dep)  ~
-::    `dep
-::  ::  compile the current `hoon.graph` against its compiled dependencies
-::  ::
-::  =/  compiled=(trap vase)
-::    ?:  ?=(%hoon -.leaf.graph)
-::      (swet deps hoon.leaf.graph)
-::    =>  octs=!>(octs.leaf.graph)
-::    |.  octs
-::  ~&  compiled+path.graph
-::  ::  cache the vase before adding the face so that alias can be handled jit when pulling from cache
-::  ::
-::  =.  cache     (~(put by cache) path.graph compiled)
-::  =.  compiled  (label-vase compiled face.graph)
-::  [compiled cache]
-::  ::
-::  ++  label-vase
-::    |=  [vaz=(trap vase) face=(unit @tas)]
-::    ^-  (trap vase)
-::    ?~  face  vaz
-::    =>  [vaz=vaz face=u.face]
-::    |.
-::    =/  vas  $:vaz
-::    [[%face face p.vas] q.vas]
-::  --
 ::
 ++  slew
   |=  [hed=(trap vase) tal=(trap vase)]
