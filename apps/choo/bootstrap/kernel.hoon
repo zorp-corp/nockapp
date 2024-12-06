@@ -70,18 +70,17 @@
       %-  ~(gas by *(map path cord))
       (turn directory.cause |=((pair @t @t) [(stab p) q]))
     ?>  ?=(^ cached-hoon.k)
-    =/  contents=@
-      %-  jam
+    =/  [compiled=* bc=build-cache]
       ?:  arbitrary.cause
-        %-  ~(create-arbitrary builder u.cached-hoon.k)
+        %-  ~(create-arbitrary builder u.cached-hoon.k build-cache.k)
         [entry dir]
-      %-  ~(create builder u.cached-hoon.k)
+      %-  ~(create builder u.cached-hoon.k build-cache.k)
       [entry dir]
-    :_  k
+    :_  k(build-cache bc)
     :~  :*  %file
             %write
             path=(crip "out.jam")
-            contents=contents
+            contents=(jam compiled)
         ==
         [%exit 0]
     ==
@@ -282,7 +281,7 @@
 ::
 ::  builder core
 ::
-|_  honc=(trap vase)
+|_  [honc=(trap vase) bc=build-cache]
 ::
 ++  build-honc
   |=  hoon-txt=cord
@@ -296,7 +295,7 @@
 ::
 ::  $node: entry of adjacency matrix with metadata
 ::
-::  Dpes holds the outgoing edges
+::  Holds the outgoing edges
 +$  node
   $:  =path
       hash=@
@@ -318,29 +317,28 @@
 ::
 ++  create
   |=  [=entry dir=(map path cord)]
-  ^-  (trap)
+  ^-  [(trap) build-cache]
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
   =/  ns  (make-node-set entry dir)
+  =/  compile  (compile-node-set ns)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
-  =;  ker-gen
-    =>  %+  shot  ker-gen
-        =>  d=!>(dir-hash)
-        |.(d)
-    |.(+:^$)
-  %-  head
-  (compile-node-set ns ~)
+  =/  ker-gen  (head compile)
+  :_  +7:compile
+  =>  %+  shot  ker-gen
+      =>  d=!>(dir-hash)
+      |.(d)
+  |.(+:^$)
 ::
 ++  create-arbitrary
   |=  [=entry dir=(map path cord)]
-  ^-  (trap)
+  ^-  [(trap) build-cache]
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
   =/  ns  (make-node-set entry dir)
-  =/  tase
-    %-  head
-      (compile-node-set ns ~)
-  =>  tase
+  =/  compile  (compile-node-set ns)
+  :_  +7:compile
+  =>  (head compile)
   |.(+:^$)
 ::
 ++  get-file
@@ -423,9 +421,10 @@
 ::  To compile a node set, we just need to compile along a topological sorting
 ::  of the nodes
 ++  compile-node-set
-  |=  [ns=node-set bc=build-cache]
+  |=  ns=node-set
   ^-  [(trap vase) temp-cache build-cache]
   |^
+  =|  new-bc=build-cache
   =/  graph  (build-graph-view ns)
   =|  tc=temp-cache
   =/  next=(map path node)  leaves.ns
@@ -435,22 +434,22 @@
   ~&  >>  traversing+~(key by next)
   ~&  >>  graph-view+graph
   ?:  .=(~ next)
-    (compile-node target.ns tc bc)
+    (compile-node target.ns tc new-bc)
   =-
     %=  $
       next   (update-next ns graph)
       graph  graph
       tc     tc
-      bc     bc
+      new-bc     new-bc
     ==
-  ^-  [graph=(map path (set path)) tc=temp-cache bc=build-cache]
+  ^-  [graph=(map path (set path)) tc=temp-cache new-bc=build-cache]
   %+  roll
     ~(tap by next)
-  |=  [[p=path n=node] graph=_graph tc=_tc bc=_bc]
+  |=  [[p=path n=node] graph=_graph tc=_tc new-bc=_new-bc]
   =.  graph  (update-graph-view graph p)
   :-  graph
   ::  returns temp-cache, build-cache
-  +:(compile-node n tc bc)
+  +:(compile-node n tc new-bc)
 ::
   ::  TODO clean up the wuts
   ++  update-next
@@ -476,8 +475,9 @@
     |=  [* edges=(set path)]
     (~(del in edges) p)
 ::
+
   ++  compile-node
-    |=  [n=node tc=temp-cache bc=build-cache]
+    |=  [n=node tc=temp-cache new-bc=build-cache]
     ^-  [(trap vase) temp-cache build-cache]
     ~&  >>  compiling-node+path.n
     ~&  >>  cache-keys+~(key by tc)
@@ -485,11 +485,13 @@
       =.  vaz-deps  (slew vaz-deps honc)
       =/  target=(trap vase)
         ?:  (~(has by bc) hash)
+          ~&  >>  cache-hit+path.n
           (~(got by bc) hash)
+        ~&  >>  cache-miss+path.n
         (swet vaz-deps hoon.n)
       :*  target
           (~(put by tc) path.n [hash target])
-          (~(put by bc) hash target)
+          (~(put by new-bc) hash target)
       ==
     %+  roll
       deps.n
