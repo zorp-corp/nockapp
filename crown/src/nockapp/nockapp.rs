@@ -5,6 +5,7 @@ use crate::noun::slab::NounSlab;
 use crate::NounExt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::path::PathBuf;
 
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, AcquireError, Mutex, OwnedSemaphorePermit};
@@ -39,6 +40,8 @@ pub struct NockApp {
     pub save_interval: Duration,
     // Cancel token
     pub cancel_token: tokio_util::sync::CancellationToken,
+    // Socket path
+    pub npc_socket_path: Option<PathBuf>,
 }
 
 impl NockApp {
@@ -75,6 +78,7 @@ impl NockApp {
             save_sem,
             save_interval,
             cancel_token,
+            npc_socket_path: None,
         }
     }
 
@@ -153,6 +157,14 @@ impl NockApp {
 
         if self.cancel_token.is_cancelled() {
             info!("Cancel token received, exiting");
+            // Clean up npc socket file if it exists
+            if let Some(socket) = &self.npc_socket_path {
+                if socket.exists() {
+                    if let Err(e) = std::fs::remove_file(socket) {
+                        error!("Failed to remove npc socket file before exit: {}", e);
+                    }
+                }
+            }
             std::process::exit(1);
         }
 
@@ -201,12 +213,20 @@ impl NockApp {
                     info!("Exit request received, waiting for save checkpoint with event_num {}", exit_event_num);
 
                     let mut recv = self.watch_recv.clone();
+                    let socket_path = self.npc_socket_path.clone();
                     tokio::task::spawn(async move {
                         loop {
                             let _ = recv.changed().await;
                             let new = *(recv.borrow());
                             assert!(new <= exit_event_num);
                             if new == exit_event_num {
+                                if let Some(path) = socket_path {
+                                    if path.exists() {
+                                        if let Err(e) = std::fs::remove_file(&path) {
+                                            error!("Failed to remove socket file on exit: {}", e);
+                                        }
+                                    }
+                                }
                                 info!("Save event_num reached, exiting with code {}", code);
                                 std::process::exit(code as i32);
                             }
