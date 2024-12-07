@@ -3,6 +3,7 @@ use crate::nockapp::NockAppError;
 use crate::noun::slab::NounSlab;
 use crate::Bytes;
 use bytes::buf::BufMut;
+use std::mem::ManuallyDrop;
 use std::sync::Arc;
 
 use sword::noun::{D, T};
@@ -63,20 +64,27 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                 message = read_message_join_set.join_next() => {
                     match message {
                         Some(Ok(Ok(Some(mut slab)))) => {
-                            let Ok(message_cell) = unsafe { slab.root() }.as_cell() else {
+                            let (slab, root) = unsafe { slab.root() };
+                            let Ok(message_cell) = root.as_cell() else {
+                                unsafe { NounSlab::reconstruct(slab, root) };
                                 continue;
                             };
 
                             let (pid, directive_cell) = match (message_cell.head().as_direct(), message_cell.tail().as_cell()) {
                                 (Ok(direct), Ok(cell)) => (direct.data(), cell),
-                                _ => continue,
+                                _ => {
+                                    unsafe { NounSlab::reconstruct(slab, root) };
+                                    continue
+                                },
                             };
 
                             let Ok(directive_tag) = directive_cell.head().as_direct() else {
+                                unsafe { NounSlab::reconstruct(slab, root) };
                                 continue;
                             };
                             let directive_tag = directive_tag.data();
 
+                            let mut slab = unsafe { NounSlab::reconstruct(slab, root) };
                             match directive_tag {
                                 tas!(b"poke") => {
                                     let poke = T(&mut slab, &[D(tas!(b"npc")), directive_cell.tail()]);
@@ -101,7 +109,7 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                     let peek_res = handle.peek(slab).await?;
                                     match peek_res {
                                         Some(mut bind_slab) => {
-                                            let peek_res = unsafe { bind_slab.root() };
+                                            let (slab, peek_res) = unsafe { bind_slab.root() };
                                             let bind_noun = T(&mut bind_slab, &[D(pid), D(tas!(b"bind")), peek_res]);
                                             bind_slab.set_root(bind_noun);
                                             if !write_message(&mut stream_write, bind_slab).await? {
@@ -153,13 +161,15 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                 },
                 effect_res = handle.next_effect() => {
                     debug!("effect_res: {:?}", effect_res);
-                    let mut slab = effect_res?; // Closed error should error driver
-                    let Ok(effect_cell) = unsafe { slab.root() }.as_cell() else {
+                    let slab = effect_res?; // Closed error should error driver
+                    let (mut slab, root) = unsafe { slab.root() };
+                    let Ok(effect_cell) = root.as_cell() else {
                         continue;
                     };
                     // TODO: distinguish connections
                     if unsafe { effect_cell.head().raw_equals(D(tas!(b"npc"))) } {
                         slab.set_root(effect_cell.tail());
+                        let slab = unsafe { slab.into_inner() };
                         if !write_message(&mut stream_write, slab).await? {
                             break 'driver;
                         }

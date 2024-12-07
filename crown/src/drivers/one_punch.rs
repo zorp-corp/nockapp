@@ -1,3 +1,5 @@
+use std::mem::ManuallyDrop;
+
 use crate::nockapp::driver::*;
 use crate::nockapp::NockAppError;
 use crate::noun::slab::NounSlab;
@@ -103,7 +105,8 @@ async fn handle_effect(
     let eff = eff?;
     debug!("poke_once_driver: effect received: {:?}", eff);
 
-    let effect_cell = unsafe { eff.root() }.as_cell().unwrap();
+    let (slab, root) = unsafe { eff.root() };
+    let effect_cell = root.as_cell().unwrap();
     if unsafe { effect_cell.head().raw_equals(D(tas!(b"npc"))) } {
         let npc_effect = effect_cell.tail();
         if let Ok(npc_effect_cell) = npc_effect.as_cell() {
@@ -122,5 +125,6 @@ async fn handle_effect(
             }
         }
     }
+    ManuallyDrop::new(slab);
     Ok(())
 }

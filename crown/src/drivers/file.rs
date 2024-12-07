@@ -1,3 +1,5 @@
+use std::mem::ManuallyDrop;
+
 use crate::nockapp::driver::{make_driver, IODriverFn};
 use crate::noun::slab::NounSlab;
 use crate::noun::FromAtom;
@@ -30,7 +32,9 @@ pub fn file() -> IODriverFn {
                 }
             };
 
-            let Ok(effect_cell) = unsafe { slab.root() }.as_cell() else {
+            let (slab, root) = unsafe { slab.root() };
+            let Ok(effect_cell) = root.as_cell() else {
+                ManuallyDrop::into_inner(slab);
                 continue;
             };
 

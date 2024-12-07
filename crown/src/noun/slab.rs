@@ -5,7 +5,7 @@ use bytes::Bytes;
 use either::Either;
 use intmap::IntMap;
 use std::alloc::Layout;
-use std::mem::size_of;
+use std::mem::{size_of, ManuallyDrop};
 use std::ptr::copy_nonoverlapping;
 use sword::mem::NockStack;
 use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
@@ -367,11 +367,20 @@ impl NounSlab {
         Ok(res)
     }
 
-    /// Get the root noun
+    /// Get the root noun wrapped in ManuallyDrop to ensure the slab outlives the noun
     ///
-    /// # Safety: The noun must not be used past the lifetime of the slab.
-    pub unsafe fn root(&self) -> Noun {
-        self.root
+    /// # Safety: The caller must ensure the ManuallyDrop<NounSlab> is not dropped while the noun is in use
+    pub unsafe fn root(self) -> (ManuallyDrop<Self>, Noun) {
+        let root = self.root.clone();
+        (ManuallyDrop::new(self), root)
+    }
+
+    pub unsafe fn reconstruct(slab: ManuallyDrop<Self>, noun: Noun) -> Self {
+        if slab.root.raw_equals(noun) {
+            ManuallyDrop::into_inner(slab)
+        } else {
+            panic!("Reconstructing NounSlab with different root noun")
+        }
     }
 }
 
@@ -692,9 +701,10 @@ mod tests {
 
         println!("cued_noun: {:?}", cued_noun);
 
+        let (slab, root) = unsafe { original_slab.root() };
         // Compare the original and cued nouns
         assert!(
-            slab_equality(unsafe { original_slab.root() }, cued_noun),
+            slab_equality(root, cued_noun),
             "Original and cued nouns should be equal"
         );
     }
@@ -712,8 +722,9 @@ mod tests {
         let mut cued_slab = NounSlab::new();
         let cued_noun = cued_slab.cue_into(jammed).expect("Cue should succeed");
 
+        let (slab, root) = unsafe { slab.root() };
         assert!(
-            slab_equality(unsafe { slab.root() }, cued_noun),
+            slab_equality(root, cued_noun),
             "Complex nouns should be equal after jam/cue roundtrip"
         );
     }
@@ -752,8 +763,9 @@ mod tests {
         let mut cued_slab = NounSlab::new();
         let cued_noun = cued_slab.cue_into(jammed).expect("Cue should succeed");
 
+        let (slab, root) = unsafe { slab.root() };
         assert!(
-            slab_equality(unsafe { slab.root() }, cued_noun),
+            slab_equality(root, cued_noun),
             "Nouns with tas! macros should be equal after jam/cue roundtrip"
         );
     }

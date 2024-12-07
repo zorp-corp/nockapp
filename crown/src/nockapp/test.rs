@@ -260,7 +260,8 @@ mod tests {
         slab.copy_into(arvo);
         let bytes = slab.jam();
         let c = slab.cue_into(bytes).unwrap();
-        unsafe { assert!(slab_equality(slab.root(), c)) }
+        let (slab, root) = unsafe { slab.root() };
+        unsafe { assert!(slab_equality(root, c)) }
     }
 
     #[tokio::test]
