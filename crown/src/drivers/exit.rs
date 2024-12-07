@@ -17,20 +17,27 @@ pub fn exit() -> IODriverFn {
                 eff = handle.next_effect() => {
                     match eff {
                         Ok(eff) => {
-                            unsafe {
-                                let noun = eff.root();
-                                if let Ok(cell) = noun.as_cell() {
-                                    if cell.head().eq_bytes(b"exit") && cell.tail().is_atom() {
-                                        // Exit with the code provided in the tail
-                                        if let Ok(exit_code) = cell.tail().as_atom().and_then(|atom| atom.as_u64()) {
-                                            handle.exit.send(exit_code as usize).await.unwrap();
+                                let exit_code = unsafe {
+                                    let noun = eff.root();
+                                    if let Ok(cell) = noun.as_cell() {
+                                        if cell.head().eq_bytes(b"exit") && cell.tail().is_atom() {
+                                            // Exit with the code provided in the tail
+                                            if let Ok(Ok(exit_code)) = cell.tail().as_atom().and_then(|atom| Ok(atom.as_u64())) {
+                                                let exit_code_usize = exit_code as usize;
+                                                Some(exit_code_usize)
+                                            } else {
+                                                // Default to error code 1 if we can't get a valid exit code
+                                                // handle.exit.send(1).await.unwrap();
+                                                None
+                                            }
                                         } else {
-                                            // Default to error code 1 if we can't get a valid exit code
-                                            handle.exit.send(1).await.unwrap();
+                                            None
                                         }
-                                    }
+                                    } else {
+                                        None
                                 }
-                            }
+                            };
+                            handle.exit.send(exit_code.unwrap_or(1)).await.unwrap();
                         }
                         Err(e) => {
                             error!("Error receiving effect: {:?}", e);

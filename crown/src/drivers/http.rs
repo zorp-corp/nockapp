@@ -1,6 +1,6 @@
 use crate::nockapp::driver::{make_driver, IODriverFn, PokeResult};
 use crate::nockapp::NockAppError;
-use crate::noun::slab::NounSlab;
+use crate::noun::slab::{NounRef, NounSlab};
 use crate::{AtomExt, Bytes};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -108,84 +108,108 @@ pub fn http() -> IODriverFn {
                     }
                 }
                 effect = handle.next_effect() => {
-                    debug!("effect: {:?}", effect);
-                    let effect = unsafe{ effect.unwrap().root() };
-                    let res_list = effect.as_cell()?;
-                    let mut res = res_list.tail().as_cell()?;
-                    let id = res.head().as_atom()?.as_u64().unwrap();
-                    res = res.tail().as_cell()?;
-                    let status_code = res
-                        .head()
-                        .as_atom()?
-                        .direct()
-                        .expect("not a valid status code!")
-                        .data();
-                    let mut header_list = res.tail().as_cell()?.head();
-                    let mut header_vec: Vec<(String, String)> = Vec::new();
-                    loop {
-                        if header_list.is_atom() {
-                            break;
-                        } else {
-                            let header = header_list.as_cell()?.head().as_cell()?;
-                            let key_vec = header.head().as_atom()?;
-                            let val_vec = header.tail().as_atom()?;
+                    let (resp, id) = {
+                        debug!("effect: {:?}", effect);
+                        let unwrapped = effect.unwrap();
+                        let effect = unsafe { unwrapped.root() };
+                        let res_list = effect.as_cell()?;
+                        let res_tail = res_list.tail();
+                        let res = res_tail.as_cell()?;
+                        let id = res.head().as_atom()?.as_u64().unwrap();
+                        let next_tail = res.tail();
+                        let mut new_slab = NounSlab::new();
+                        next_tail.as_cell()?.as_noun().copy_into(&mut new_slab);
+                        let new_root_res = unsafe { new_slab.root() };
+                        let res = new_root_res.as_cell()?;
+                        let status_code = res
+                            .head()
+                            .as_atom()?
+                            .direct()
+                            .expect("not a valid status code!")
+                            .data();
+                        let res_tail = res.tail();
+                        let res_tail_cell = res_tail.as_cell()?;
+                        let mut header_list  = res_tail_cell.head();
+                        let mut header_vec: Vec<(String, String)> = Vec::new();
+                        let mut stash = Vec::new();
+                        loop {
+                            if header_list.is_atom() {
+                                break;
+                            } else {
+                                let header_list_cell = header_list.as_cell()?;
+                                let header_list_cell_head = header_list_cell.head();
+                                let header = header_list_cell_head.as_cell()?;
+                                let header_head = header.head();
+                                let header_tail = header.tail();
+                                let key_vec = header_head.as_atom()?;
+                                let val_vec = header_tail.as_atom()?;
 
-                            if let Ok(key) = key_vec.to_bytes_until_nul() {
-                                if let Ok(val) = val_vec.to_bytes_until_nul() {
-                                    header_vec.push((
-                                        String::from_utf8(key)?,
-                                        String::from_utf8(val)?,
-                                    ));
-                                    header_list = header_list.as_cell()?.tail();
+                                if let Ok(key) = key_vec.to_bytes_until_nul() {
+                                    if let Ok(val) = val_vec.to_bytes_until_nul() {
+                                        header_vec.push((
+                                            String::from_utf8(key)?,
+                                            String::from_utf8(val)?,
+                                        ));
+                                        let mut new_slab = NounSlab::new();
+                                        header_list_cell.tail().copy_into(&mut new_slab);
+                                        let root = unsafe { new_slab.root() };
+                                        header_list = root;
+                                        stash.push(new_slab);
+                                    } else {
+                                        break;
+                                    }
                                 } else {
                                     break;
                                 }
-                            } else {
-                                break;
                             }
                         }
-                    }
 
-                    let maybe_body = res.tail().as_cell()?.tail();
+                        let res_tail = res.tail();
+                        let res_tail_cell = res_tail.as_cell()?;
+                        let maybe_body = res_tail_cell.tail();
 
-                    let body: Option<Bytes> = {
-                        if maybe_body.is_cell() {
-                            let body_octs = maybe_body.as_cell()?.tail().as_cell()?;
-                            let body_len = body_octs
-                                .head()
-                                .as_atom()?
-                                .direct()
-                                .expect("body len")
-                                .data();
-                            let mut body_vec: Vec<u8> = b"0".repeat(body_len.try_into().unwrap());
-                            let body_atom = body_octs.tail().as_atom()?;
-                            body_vec.copy_from_slice(&body_atom.to_bytes_until_nul().unwrap());
-                            Some(Bytes::from(body_vec))
-                        } else {
-                            None
-                        }
-                    };
-
-                    let resp = if let Ok(status) = StatusCode::from_u16(status_code as u16) {
-                        let res_builder = ResponseBuilder {
-                            status_code: status,
-                            headers: header_vec,
-                            body: body,
+                        let body: Option<Bytes> = {
+                            if maybe_body.is_cell() {
+                                let maybe_body_cell = maybe_body.as_cell()?;
+                                let maybe_body_tail = maybe_body_cell.tail();
+                                let body_octs = maybe_body_tail.as_cell()?;
+                                let body_len = body_octs
+                                    .head()
+                                    .as_atom()?
+                                    .direct()
+                                    .expect("body len")
+                                    .data();
+                                let mut body_vec: Vec<u8> = b"0".repeat(body_len.try_into().unwrap());
+                                let body_tail = body_octs.tail();
+                                let body_atom = body_tail.as_atom()?;
+                                body_vec.copy_from_slice(&body_atom.to_bytes_until_nul().unwrap());
+                                Some(Bytes::from(body_vec))
+                            } else {
+                                None
+                            }
                         };
 
-                        let mut res = Response::builder().status(res_builder.status_code);
+                        let resp = if let Ok(status) = StatusCode::from_u16(status_code as u16) {
+                            let res_builder = ResponseBuilder {
+                                status_code: status,
+                                headers: header_vec,
+                                body: body,
+                            };
 
-                        for (k, v) in res_builder.headers {
-                            res = res.header(k, v);
-                        }
+                            let mut res = Response::builder().status(res_builder.status_code);
 
-                        let bod = res_builder.body.ok_or("invalid response").unwrap();
-                        Ok(res.body(Body::from(bod)).unwrap())
-                    } else {
-                        debug!("statuscode internal server error");
-                        Err(StatusCode::INTERNAL_SERVER_ERROR)
+                            for (k, v) in res_builder.headers {
+                                res = res.header(k, v);
+                            }
+
+                            let bod = res_builder.body.ok_or("invalid response").unwrap();
+                            Ok(res.body(Body::from(bod)).unwrap())
+                        } else {
+                            debug!("statuscode internal server error");
+                            Err(StatusCode::INTERNAL_SERVER_ERROR)
+                        };
+                        (resp, id)
                     };
-
                     let resp_tx = channel_map.write().await.remove(&id).unwrap();
                     let _ = resp_tx.send(resp);
                 }

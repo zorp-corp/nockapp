@@ -2,7 +2,7 @@
 mod tests {
     use crate::kernel::checkpoint::JamPaths;
     use crate::kernel::form::Kernel;
-    use crate::noun::slab::{slab_equality, NounSlab};
+    use crate::noun::slab::{SlabEquality, NounSlab};
     use crate::{kernel, NockApp, NounExt};
     use sword::noun::Slots;
 
@@ -260,7 +260,7 @@ mod tests {
         slab.copy_into(arvo);
         let bytes = slab.jam();
         let c = slab.cue_into(bytes).unwrap();
-        unsafe { assert!(slab_equality(slab.root(), c)) }
+        unsafe { assert!(slab.root().slab_equality(c)) }
     }
 
     #[tokio::test]

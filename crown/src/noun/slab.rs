@@ -5,6 +5,7 @@ use bytes::Bytes;
 use either::Either;
 use intmap::IntMap;
 use std::alloc::Layout;
+use std::marker::PhantomData;
 use std::mem::size_of;
 use std::ptr::copy_nonoverlapping;
 use sword::mem::NockStack;
@@ -12,6 +13,11 @@ use sword::mug::{calc_atom_mug_u32, calc_cell_mug_u32, get_mug, set_mug};
 use sword::noun::{Atom, Cell, CellMemory, DirectAtom, IndirectAtom, Noun, NounAllocator, D};
 use sword::serialization::{met0_u64_to_usize, met0_usize};
 use thiserror::Error;
+
+use crate::nockapp::NockAppError;
+use crate::CrownError;
+
+use super::{AtomExt, NounExt};
 
 const CELL_MEM_WORD_SIZE: usize = (size_of::<CellMemory>() + 7) >> 3;
 
@@ -370,8 +376,125 @@ impl NounSlab {
     /// Get the root noun
     ///
     /// # Safety: The noun must not be used past the lifetime of the slab.
-    pub unsafe fn root(&self) -> Noun {
-        self.root
+    pub unsafe fn root<'a>(&'a self) -> NounRef<'a> {
+        NounRef {
+            noun: self.root,
+            slab: PhantomData,
+        }
+    }
+}
+
+// pub struct SlabbedNoun {
+//     slab: NounSlab,
+//     noun: Noun,
+// }
+
+#[derive(Copy, Clone)]
+pub struct NounRef<'a> {
+    slab: PhantomData<&'a NounSlab>,
+    noun: Noun,
+}
+
+impl <'a>std::fmt::Debug for NounRef<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.noun)
+    }
+}
+
+impl <'a>NounRef<'a> {
+    pub fn copy_into<'b>(&self, slab: &'b mut NounSlab) {
+        slab.copy_into(self.noun.clone());
+    }
+    pub fn is_cell(&self) -> bool {
+        self.noun.is_cell()
+    }
+    pub fn as_cell(&'a self) -> Result<CellRef<'a>, sword::noun::Error> {
+        if let Ok(cell) = self.noun.as_cell() {
+            Ok(CellRef {
+                slab: PhantomData,
+                cell,
+            })
+        } else {
+            Err(sword::noun::Error::NotCell)
+        }
+    }
+
+    pub fn is_atom(&self) -> bool {
+        self.noun.is_atom()
+    }
+
+    pub fn as_atom(&'a self) -> Result<AtomRef<'a>, sword::noun::Error> {
+        if let Ok(atom) = self.noun.as_atom() {
+            Ok(AtomRef {
+                slab: PhantomData,
+                atom,
+            })
+        } else {
+            Err(sword::noun::Error::NotAtom)
+        }
+    }
+
+    pub unsafe fn raw_equals(&self, other: Noun) -> bool {
+        self.noun.raw_equals(other)
+    }
+
+    pub fn eq_bytes(&self, other: &[u8]) -> bool {
+        self.noun.eq_bytes(other)
+    }
+}
+
+pub struct AtomRef<'a> {
+    slab: PhantomData<&'a NounSlab>,
+    atom: Atom,
+}
+
+impl <'a>AtomRef<'a> {
+    pub fn as_u64(&self) -> Result<u64, sword::noun::Error> {
+        self.atom.as_u64()
+    }
+
+    pub fn as_noun(&'a self) -> NounRef<'a> {
+        NounRef {
+            slab: PhantomData,
+            noun: self.atom.as_noun(),
+        }
+    }
+
+    pub fn to_bytes_until_nul(&self) -> Result<Vec<u8>, CrownError> {
+        self.atom.to_bytes_until_nul()
+    }
+
+    pub fn direct(&self) -> Result<DirectAtom, sword::noun::Error> {
+        match self.atom.direct() {
+            Some(direct) => Ok(direct),
+            None => Err(sword::noun::Error::NotDirectAtom),
+        }
+    }
+}
+
+pub struct CellRef<'a> {
+    slab: PhantomData<&'a NounSlab>,
+    cell: Cell,
+}
+
+impl <'a>CellRef<'a> {
+    pub fn head(&'a self) -> NounRef<'a> {
+        NounRef {
+            slab: PhantomData,
+            noun: self.cell.head(),
+        }
+    }
+    pub fn tail(&'a self) -> NounRef<'a> {
+        NounRef {
+            slab: PhantomData,
+            noun: self.cell.tail(),
+        }
+    }
+    pub fn as_noun(&'a self) -> NounRef<'a> {
+        NounRef {
+            slab: PhantomData,
+            noun: self.cell.as_noun(),
+        }
     }
 }
 
@@ -532,7 +655,7 @@ impl<V> NounMap<V> {
         let key_mug = slab_mug(key) as u64;
         if let Some(vec) = self.0.get_mut(key_mug) {
             let mut chain_iter = vec[..].iter_mut();
-            if let Some(entry) = chain_iter.find(|entry| slab_equality(key, entry.0)) {
+            if let Some(entry) = chain_iter.find(|entry| key.slab_equality(entry.0)) {
                 entry.1 = value;
             } else {
                 vec.push((key, value))
@@ -546,7 +669,7 @@ impl<V> NounMap<V> {
         let key_mug = slab_mug(key) as u64;
         if let Some(vec) = self.0.get(key_mug) {
             let mut chain_iter = vec[..].iter();
-            if let Some(entry) = chain_iter.find(|entry| slab_equality(key as Noun, entry.0)) {
+            if let Some(entry) = chain_iter.find(|entry| key.slab_equality(entry.0)) {
                 Some(&entry.1)
             } else {
                 None
@@ -557,8 +680,34 @@ impl<V> NounMap<V> {
     }
 }
 
-// Does not unify: slabs are collected all-at-once so there's no point.
-pub fn slab_equality(a: Noun, b: Noun) -> bool {
+// pub fn slab_equality(a: &NounSlab, b: &NounSlab) -> bool {
+//     unsafe { a.root.as_raw() == b.root.as_raw() }
+// }
+
+pub trait SlabEquality<Other> {
+    fn slab_equality(&self, other: Other) -> bool;
+}
+
+impl SlabEquality<Noun> for Noun {
+    fn slab_equality(&self, other: Noun) -> bool {
+        noun_slab_equality(*self, other)
+    }
+}
+
+impl <'a>SlabEquality<&NounRef<'a>> for NounRef<'a> {
+    fn slab_equality(&self, other: &NounRef<'a>) -> bool {
+        noun_slab_equality(self.noun, other.noun)
+    }
+}
+
+impl <'a>SlabEquality<Noun> for NounRef<'a> {
+    fn slab_equality(&self, other: Noun) -> bool {
+        noun_slab_equality(self.noun, other)
+    }
+}
+
+// // Does not unify: slabs are collected all-at-once so there's no point.
+fn noun_slab_equality(a: Noun, b: Noun) -> bool {
     let mut stack = vec![(a, b)];
     loop {
         if let Some((a, b)) = stack.pop() {
@@ -693,8 +842,9 @@ mod tests {
         println!("cued_noun: {:?}", cued_noun);
 
         // Compare the original and cued nouns
+        let noun_ref = unsafe { original_slab.root() };
         assert!(
-            slab_equality(unsafe { original_slab.root() }, cued_noun),
+            noun_ref.slab_equality(cued_noun),
             "Original and cued nouns should be equal"
         );
     }
@@ -711,9 +861,9 @@ mod tests {
         let jammed = slab.jam();
         let mut cued_slab = NounSlab::new();
         let cued_noun = cued_slab.cue_into(jammed).expect("Cue should succeed");
-
+        let root = unsafe { slab.root() };
         assert!(
-            slab_equality(unsafe { slab.root() }, cued_noun),
+            root.slab_equality(cued_noun),
             "Complex nouns should be equal after jam/cue roundtrip"
         );
     }
@@ -734,7 +884,7 @@ mod tests {
         println!("cued_noun: {:?}", cued_noun);
 
         assert!(
-            slab_equality(noun_with_indirect, cued_noun),
+            noun_with_indirect.slab_equality(cued_noun),
             "Nouns with indirect atoms should be equal after jam/cue roundtrip"
         );
     }
@@ -751,9 +901,9 @@ mod tests {
         let jammed = slab.jam();
         let mut cued_slab = NounSlab::new();
         let cued_noun = cued_slab.cue_into(jammed).expect("Cue should succeed");
-
+        let root = unsafe { slab.root() };
         assert!(
-            slab_equality(unsafe { slab.root() }, cued_noun),
+            root.slab_equality(cued_noun),
             "Nouns with tas! macros should be equal after jam/cue roundtrip"
         );
     }
@@ -826,7 +976,7 @@ mod tests {
         if let Ok(cued_noun) = result {
             let expected_noun = T(&mut slab, &[D(1), D(0)]);
             assert!(
-                slab_equality(cued_noun, expected_noun),
+                cued_noun.slab_equality(expected_noun),
                 "Cued noun should equal [1 0]"
             );
         }

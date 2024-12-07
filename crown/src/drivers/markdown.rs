@@ -13,7 +13,8 @@ pub fn markdown() -> IODriverFn {
         loop {
             match handle.next_effect().await {
                 Ok(effect) => {
-                    let Ok(effect_cell) = unsafe { effect.root() }.as_cell() else {
+                    let root = unsafe { effect.root() };
+                    let Ok(effect_cell) = root.as_cell() else {
                         continue;
                     };
                     if unsafe { effect_cell.head().raw_equals(D(tas!(b"markdown"))) } {
