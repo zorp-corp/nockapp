@@ -280,6 +280,36 @@ impl NounSlab {
         self.root = root;
     }
 
+    pub fn set_root_from_ref(&mut self, root: NounRef<'_>) {
+        if let Ok(allocated) = root.noun.as_allocated() {
+            match allocated.as_either() {
+                Either::Left(indirect) => {
+                    let ptr = unsafe { indirect.to_raw_pointer() };
+                    let u8_ptr = ptr as *const u8;
+                    for slab in &self.slabs {
+                        if unsafe { u8_ptr >= slab.0 && u8_ptr < slab.0.add(slab.1.size()) } {
+                            self.root = root.noun;
+                            return;
+                        }
+                    }
+                    panic!("Set root of NounSlab to noun from outside slab");
+                }
+                Either::Right(cell) => {
+                    let ptr = unsafe { cell.to_raw_pointer() };
+                    let u8_ptr = ptr as *const u8;
+                    for slab in &self.slabs {
+                        if unsafe { u8_ptr >= slab.0 && u8_ptr < slab.0.add(slab.1.size()) } {
+                            self.root = root.noun;
+                            return;
+                        }
+                    }
+                    panic!("Set root of NounSlab to noun from outside slab");
+                }
+            }
+        }
+        self.root = root.noun;
+    }
+
     pub fn jam(&self) -> Bytes {
         let mut backref_map = NounMap::<usize>::new();
         let mut stack = vec![self.root];
@@ -384,11 +414,6 @@ impl NounSlab {
     }
 }
 
-// pub struct SlabbedNoun {
-//     slab: NounSlab,
-//     noun: Noun,
-// }
-
 #[derive(Copy, Clone)]
 pub struct NounRef<'a> {
     slab: PhantomData<&'a NounSlab>,
@@ -402,6 +427,9 @@ impl <'a>std::fmt::Debug for NounRef<'a> {
 }
 
 impl <'a>NounRef<'a> {
+    pub unsafe fn into_inner(self) -> (Noun, PhantomData<&'a NounSlab>) {
+        (self.noun, self.slab)
+    }
     pub fn copy_into<'b>(&self, slab: &'b mut NounSlab) {
         slab.copy_into(self.noun.clone());
     }
@@ -432,6 +460,10 @@ impl <'a>NounRef<'a> {
         } else {
             Err(sword::noun::Error::NotAtom)
         }
+    }
+
+    pub fn as_direct(&self) -> Result<DirectAtom, sword::noun::Error> {
+        self.noun.as_direct()
     }
 
     pub unsafe fn raw_equals(&self, other: Noun) -> bool {

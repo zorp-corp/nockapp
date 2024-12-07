@@ -129,14 +129,15 @@ pub fn http() -> IODriverFn {
                             .data();
                         let res_tail = res.tail();
                         let res_tail_cell = res_tail.as_cell()?;
-                        let mut header_list  = res_tail_cell.head();
                         let mut header_vec: Vec<(String, String)> = Vec::new();
-                        let mut stash = Vec::new();
+                        let mut current_slab = NounSlab::new();
+                        res_tail_cell.head().copy_into(&mut current_slab);
                         loop {
-                            if header_list.is_atom() {
+                            let root = unsafe { current_slab.root() };
+                            if root.is_atom() {
                                 break;
                             } else {
-                                let header_list_cell = header_list.as_cell()?;
+                                let header_list_cell = root.as_cell()?;
                                 let header_list_cell_head = header_list_cell.head();
                                 let header = header_list_cell_head.as_cell()?;
                                 let header_head = header.head();
@@ -152,9 +153,7 @@ pub fn http() -> IODriverFn {
                                         ));
                                         let mut new_slab = NounSlab::new();
                                         header_list_cell.tail().copy_into(&mut new_slab);
-                                        let root = unsafe { new_slab.root() };
-                                        header_list = root;
-                                        stash.push(new_slab);
+                                        current_slab = new_slab;
                                     } else {
                                         break;
                                     }

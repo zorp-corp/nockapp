@@ -79,7 +79,8 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
 
                             match directive_tag {
                                 tas!(b"poke") => {
-                                    let poke = T(&mut slab, &[D(tas!(b"npc")), directive_cell.tail()]);
+                                    let (directive_cell_noun, slab_guard) = unsafe { directive_cell.tail().into_inner() };
+                                    let poke = T(&mut slab, &[D(tas!(b"npc")), directive_cell_noun]);
                                     slab.set_root(poke);
 
                                     let result = handle.poke(slab).await?;
@@ -97,12 +98,13 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                 },
                                 tas!(b"peek") => {
                                     let path = directive_cell.tail();
-                                    slab.set_root(path);
+                                    slab.set_root_from_ref(path);
                                     let peek_res = handle.peek(slab).await?;
                                     match peek_res {
                                         Some(mut bind_slab) => {
                                             let peek_res = unsafe { bind_slab.root() };
-                                            let bind_noun = T(&mut bind_slab, &[D(pid), D(tas!(b"bind")), peek_res]);
+                                            let (peeked_noun, slab_guard) = unsafe { peek_res.into_inner() };
+                                            let bind_noun = T(&mut bind_slab, &[D(pid), D(tas!(b"bind")), peeked_noun]);
                                             bind_slab.set_root(bind_noun);
                                             if !write_message(&mut stream_write, bind_slab).await? {
                                                 break 'driver;
@@ -121,7 +123,8 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                         _ => unreachable!(),
                                     };
                                     let poke = if tag == tas!(b"npc-bind") {
-                                        T(&mut slab, &[D(tag), D(pid), directive_cell.tail()])
+                                        let (noun, slab_guard) = unsafe { directive_cell.tail().into_inner() };
+                                        T(&mut slab, &[D(tag), D(pid), noun])
                                     } else {
                                         T(&mut slab, &[D(tag), D(pid)])
                                     };
@@ -159,7 +162,7 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                     };
                     // TODO: distinguish connections
                     if unsafe { effect_cell.head().raw_equals(D(tas!(b"npc"))) } {
-                        slab.set_root(effect_cell.tail());
+                        slab.set_root_from_ref(effect_cell.tail());
                         if !write_message(&mut stream_write, slab).await? {
                             break 'driver;
                         }
