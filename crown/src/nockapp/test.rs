@@ -260,7 +260,7 @@ mod tests {
     // This actually gets used to test with miri
     // but when it was successful it took too long.
     #[test]
-    // #[cfg_attr(miri, ignore)]
+    #[cfg_attr(miri, ignore)]
     fn test_jam_equality_slab_no_driver() {
         let bytes = include_bytes!("../../tests/test-ker.jam");
         let mut slab1 = NounSlab::new();

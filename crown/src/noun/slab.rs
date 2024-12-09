@@ -33,7 +33,6 @@ impl NounSlab {
         }
         assert!(new_layout.align().is_power_of_two(), "Invalid alignment");
         let slab = std::alloc::alloc(new_layout);
-        println!("{slab:?}");
         if slab.is_null() {
             std::alloc::handle_alloc_error(new_layout);
         } else {
@@ -86,7 +85,6 @@ impl NounAllocator for NounSlab {
                 .resize(next_idx + 1, (std::ptr::null_mut(), Layout::new::<u8>()));
             let new_size = idx_to_size(next_idx);
             let new_layout = Layout::array::<u64>(new_size).unwrap();
-            println!("{new_layout:?}");
             let new_slab = Self::raw_alloc(new_layout);
             let new_slab_u64 = new_slab as *mut u64;
             self.slabs[next_idx] = (new_slab, new_layout);
@@ -875,14 +873,15 @@ mod tests {
         copy_slab.copy_into(test_noun);
     }
 
+    // This test _should_ fail under Miri
     #[test]
     fn test_raw_alloc() {
         let layout = Layout::array::<u64>(512).unwrap();
         let slab = unsafe { NounSlab::raw_alloc(layout) };
-        println!("{:?}", &slab);
-        println!("{slab:?}");
         assert!(!slab.is_null());
-        let huh = unsafe { *slab };
+        // cast doesn't hide it from Miri
+        let new_slab_u64 = slab as *mut u64;
+        let _huh = unsafe { *new_slab_u64 };
         unsafe { std::alloc::dealloc(slab, layout) };
     }
 }
