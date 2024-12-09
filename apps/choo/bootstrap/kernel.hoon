@@ -1,9 +1,14 @@
 /+  *wrapper
 =>
 |%
-+$  choo-state  [%0 cached-hoon=(unit (trap vase)) =build-cache]
++$  state-0  [%0 cached-hoon=(unit (trap vase)) bc=build-cache]
++$  state-1  [%1 cached-hoon=(unit (trap vase)) bc=build-cache pc=parse-cache]
++$  choo-state
+  $%  state-0
+      state-1
+  ==
 ::
-++  moat  (keep choo-state)
+++  moat  (keep state-1)
 +$  cause
   $%  [%build pat=cord tex=cord directory=(list [cord cord]) arbitrary=?]
       [%file %write path=@t contents=@ success=?]
@@ -22,20 +27,43 @@
 ::
 +$  hash  @
 +$  build-cache  (map hash (trap vase))
+::
+::  $taut: file import from /lib or /sur
+::
++$  taut  [face=(unit term) pax=term]
+::
+::  $pile:  preprocessed hoon file
+::
++$  pile
+  $:  sur=(list taut)  ::  /-
+      lib=(list taut)  ::  /+
+      raw=(list [face=term =path])
+      bar=(list [face=term mark=@tas =path])
+      =hoon
+  ==
++$  parse-cache  (map hash pile)
 --
 ::
 =<
 ~&  %choo-choo
 %-  moat
 ^-  fort:moat
-|_  k=choo-state
+|_  k=state-1
 +*  builder  +>
 ::
 ::  +load: upgrade from previous state
 ::
 ++  load
   |=  arg=choo-state
-  arg
+  ^-  state-1
+  ?+    -.arg    arg
+      %0
+    :*  %1
+        cached-hoon.arg
+        bc.arg
+        *parse-cache
+    ==
+  ==
 ::
 ::  +peek: external inspect
 ::
@@ -48,7 +76,7 @@
 ::
 ++  poke
   |=  [eny=@ our=@ux now=@da dat=*]
-  ^-  [(list effect) choo-state]
+  ^-  [(list effect) state-1]
   =/  cause=(unit cause)  ((soft cause) dat)
   ?~  cause
     ~&  >>  "input is not a proper cause"
@@ -69,14 +97,15 @@
     =/  dir
       %-  ~(gas by *(map path cord))
       (turn directory.cause |=((pair @t @t) [(stab p) q]))
+    ~&  >>  parse-cache+pc.k
     ?>  ?=(^ cached-hoon.k)
-    =/  [compiled=* bc=build-cache]
+    =/  [compiled=* new-bc=build-cache new-pc=parse-cache]
       ?:  arbitrary.cause
-        %-  ~(create-arbitrary builder u.cached-hoon.k build-cache.k)
+        %-  ~(create-arbitrary builder u.cached-hoon.k bc.k pc.k)
         [entry dir]
-      %-  ~(create builder u.cached-hoon.k build-cache.k)
+      %-  ~(create builder u.cached-hoon.k bc.k pc.k)
       [entry dir]
-    :_  k(build-cache bc)
+    :_  k(bc new-bc, pc new-pc)
     :~  :*  %file
             %write
             path=(crip "out.jam")
@@ -203,9 +232,6 @@
     (cook |=(a=term [`a a]) sym)            ::  foo    -> [[~ %foo] %foo]
   ==
 ::
-::  $taut: file import from /lib or /sur
-::
-+$  taut  [face=(unit term) pax=term]
 ++  segments
   |=  suffix=@tas
   ^-  (list path)
@@ -240,15 +266,6 @@
   ?^  (~(get by dir) puz)
     `puz
   $(paz t.paz)
-::  preprocessed hoon file
-::  +$  taut  [face=(unit term) pax=term]
-++  pile
-  $:  sur=(list taut)  ::  /-
-      lib=(list taut)  ::  /+
-      raw=(list [face=term =path])
-      bar=(list [face=term mark=@tas =path])
-      =hoon
-  ==
 ::
 ++  resolve-pile
   ::  turn fits into resolved path suffixes
@@ -281,7 +298,7 @@
 ::
 ::  builder core
 ::
-|_  [honc=(trap vase) bc=build-cache]
+|_  [honc=(trap vase) bc=build-cache pc=parse-cache]
 ::
 ++  build-honc
   |=  hoon-txt=cord
@@ -317,14 +334,14 @@
 ::
 ++  create
   |=  [=entry dir=(map path cord)]
-  ^-  [(trap) build-cache]
+  ^-  [(trap) build-cache parse-cache]
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
-  =/  ns  (make-node-set entry dir)
+  =/  [pc=parse-cache ns=node-set]  (make-node-set entry dir)
   =/  compile  (compile-node-set ns)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
   =/  ker-gen  (head compile)
-  :_  +7:compile
+  :_  [+7:compile pc]
   =>  %+  shot  ker-gen
       =>  d=!>(dir-hash)
       |.(d)
@@ -332,12 +349,12 @@
 ::
 ++  create-arbitrary
   |=  [=entry dir=(map path cord)]
-  ^-  [(trap) build-cache]
+  ^-  [(trap) build-cache parse-cache]
   =/  dir-hash  `@uvI`(mug dir)
   ~&  dir-hash+dir-hash
-  =/  ns  (make-node-set entry dir)
+  =/  [pc=parse-cache ns=node-set]  (make-node-set entry dir)
   =/  compile  (compile-node-set ns)
-  :_  +7:compile
+  :_  [+7:compile pc]
   =>  (head compile)
   |.(+:^$)
 ::
@@ -383,38 +400,49 @@
 ::
 ++  make-node-set
   |=  [suf=entry dir=(map path cord)]
-  ^-  node-set
+  ^-  [parse-cache node-set]
   ?~  tex.suf  !!
-  =/  target  (make-node pat.suf u.tex.suf dir)
+  =|  new-pc=parse-cache
+  =^  target  new-pc
+    (make-node pat.suf u.tex.suf dir new-pc)
   =/  curr  target
   =/  deps=(list [path cord])  (get-deps target dir ~)
   =/  ns=node-set  [target ~ ~]
   |-
   ?:  =((lent deps) 0)
-    ns
-  =/  [ns=node-set deps=_deps]
+    [new-pc ns]
+  =/  [ns=node-set deps=_deps new-pc=_new-pc]
     %+  roll
       deps
-    |=  [[pat=path tex=cord] [ns=_ns deps=(list [path cord])]]
+    |=  [[pat=path tex=cord] [ns=_ns deps=(list [path cord]) new-pc=_new-pc]]
     ?:  (~(has by map.ns) pat)
-      [ns deps]
-    =/  n=node  (make-node pat tex dir)
+      [ns deps new-pc]
+    =^  n=node  new-pc
+      (make-node pat tex dir new-pc)
     =.  ns  ns(map (~(put by map.ns) path.n n))
     =?  ns  (is-leaf n)
       ns(leaves (~(put by leaves.ns) path.n n))
-    :-  ns
-    (weld deps (get-deps n dir map.ns))
-  $(ns ns, deps deps)
+    :+  ns
+      (weld deps (get-deps n dir map.ns))
+    new-pc
+  $(ns ns, deps deps, new-pc new-pc)
 ::
+
 ++  make-node
-  |=  [pat=path file=cord dir=(map path cord)]
-  ^-  node
+  |=  [pat=path file=cord dir=(map path cord) new-pc=parse-cache]
+  ^-  [node parse-cache]
   ~&  building-graph-for+pat
-  =/  pile  (parse-pile pat (trip file))
-  =/  deps=(list raut)  (resolve-pile pile dir)
+  =/  hash=@  (shax file)
+  =/  =pile
+    ?:  (~(has by pc) hash)
+     ~&  >>  parse-cache-hit+pat
+      (~(got by pc) hash)
+    ~&  >>  parse-cache-miss+pat
+    (parse-pile pat (trip file))
+  :_  (~(put by new-pc) hash pile)
   :*  path=pat
       hash=(shax file)
-      deps=deps
+      deps=(resolve-pile pile dir)
       hoon=hoon.pile
   ==
 ::
@@ -485,9 +513,9 @@
       =.  vaz-deps  (slew vaz-deps honc)
       =/  target=(trap vase)
         ?:  (~(has by bc) hash)
-          ~&  >>  cache-hit+path.n
+          ~&  >>  build-cache-hit+path.n
           (~(got by bc) hash)
-        ~&  >>  cache-miss+path.n
+        ~&  >>  build-cache-miss+path.n
         (swet vaz-deps hoon.n)
       :*  target
           (~(put by tc) path.n [hash target])

@@ -15,7 +15,7 @@ use clap::{arg, command, ColorChoice, Parser};
 use crown::kernel::boot::Cli as BootCli;
 
 static KERNEL_JAM: &[u8] =
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/choo3.jam"));
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/bootstrap/choo4.jam"));
 
 static HOON_TXT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
