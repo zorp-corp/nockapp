@@ -1,14 +1,15 @@
 /+  *wrapper
 =>
 |%
-+$  state-0  [%0 cached-hoon=(unit (trap vase)) bc=build-cache]
++$  state-0  [%0 cached-hoon=(unit (trap vase)) ~]
 +$  state-1  [%1 cached-hoon=(unit (trap vase)) bc=build-cache pc=parse-cache]
-+$  choo-state
++$  versioned-state
   $%  state-0
       state-1
   ==
++$  choo-state  state-1
 ::
-++  moat  (keep state-1)
+++  moat  (keep choo-state)
 +$  cause
   $%  [%build pat=cord tex=cord directory=(list [cord cord]) arbitrary=?]
       [%file %write path=@t contents=@ success=?]
@@ -48,19 +49,21 @@
 ~&  %choo-choo
 %-  moat
 ^-  fort:moat
-|_  k=state-1
+|_  k=choo-state
 +*  builder  +>
 ::
 ::  +load: upgrade from previous state
 ::
+::
 ++  load
-  |=  arg=choo-state
-  ^-  state-1
-  ?+    -.arg    arg
+  |=  arg=versioned-state
+  ^-  choo-state
+  ?+    -.arg    ~&  >>  %no-upgrade  arg
       %0
+    ~&  >>  %upgrade-0-to-1
     :*  %1
         cached-hoon.arg
-        bc.arg
+        *build-cache
         *parse-cache
     ==
   ==
@@ -76,7 +79,7 @@
 ::
 ++  poke
   |=  [eny=@ our=@ux now=@da dat=*]
-  ^-  [(list effect) state-1]
+  ^-  [(list effect) choo-state]
   =/  cause=(unit cause)  ((soft cause) dat)
   ?~  cause
     ~&  >>  "input is not a proper cause"
@@ -97,7 +100,6 @@
     =/  dir
       %-  ~(gas by *(map path cord))
       (turn directory.cause |=((pair @t @t) [(stab p) q]))
-    ~&  >>  parse-cache+pc.k
     ?>  ?=(^ cached-hoon.k)
     =/  [compiled=* new-bc=build-cache new-pc=parse-cache]
       ?:  arbitrary.cause
