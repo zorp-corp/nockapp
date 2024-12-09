@@ -6,6 +6,7 @@ use sword::jets::hot::HotEntry;
 use tracing::{debug, info};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{fmt, EnvFilter};
+use std::fs;
 
 #[derive(Parser, Debug, Clone)]
 #[command(about = "boot a nockapp", author, version, color = ColorChoice::Auto)]
@@ -37,6 +38,12 @@ pub struct Cli {
 
     #[arg(long, help = "Control colored output", value_enum, default_value_t = ColorChoice::Auto)]
     pub color: ColorChoice,
+
+    #[arg(
+        long,
+        help = "Path to a jam file containing existing kernel state"
+    )]
+    pub state_jam: Option<String>,
 }
 
 pub fn setup(
@@ -80,7 +87,14 @@ pub fn setup(
         "kernel: jam buffer paths: {:?}, {:?}",
         jam_paths.0, jam_paths.1
     );
-    let kernel = Kernel::load_with_hot_state(pma_dir, jam_paths, jam, hot_state, cli.trace);
+
+    let kernel = if let Some(state_path) = cli.state_jam {
+        let state_jam = fs::read(&state_path)?;
+        debug!("kernel: loading state from jam file: {:?}", state_path);
+        Kernel::load_with_kernel_state(pma_dir, jam_paths, jam, &state_jam, hot_state, cli.trace)?
+    } else {
+        Kernel::load_with_hot_state(pma_dir, jam_paths, jam, hot_state, cli.trace)
+    };
 
     let save_interval = std::time::Duration::from_millis(cli.save_interval);
 
