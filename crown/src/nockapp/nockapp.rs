@@ -55,10 +55,16 @@ impl NockApp {
         let ctrl_c = tokio::signal::ctrl_c();
         let cancel_token = tokio_util::sync::CancellationToken::new();
 
+        // tokio::task::spawn(async move {
+        //     let _ = ctrl_c.await;
+        //     info!("ctrl_c registered");
+        //     std::process::exit(0);
+        // });
+        let cancel_token_clone = cancel_token.clone();
         tokio::task::spawn(async move {
             let _ = ctrl_c.await;
             info!("ctrl_c registered");
-            std::process::exit(0);
+            cancel_token_clone.cancel();
         });
 
         Self {
@@ -153,7 +159,8 @@ impl NockApp {
 
         if self.cancel_token.is_cancelled() {
             info!("Cancel token received, exiting");
-            std::process::exit(1);
+            return Err(NockAppError::CancelTokenTriggered);
+            // std::process::exit(1);
         }
 
         select!(

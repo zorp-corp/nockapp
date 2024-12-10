@@ -139,7 +139,6 @@ checksum = "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50"
 [[package]]
 name = "assert_no_alloc"
 version = "1.1.2"
-source = "git+https://github.com/zorp-corp/sword.git?rev=dbde2624d205deafc82a19f8c2a6dcdd868507d1#dbde2624d205deafc82a19f8c2a6dcdd868507d1"
 
 [[package]]
 name = "async-trait"
@@ -1104,7 +1103,6 @@ dependencies = [
 [[package]]
 name = "ibig"
 version = "0.3.6"
-source = "git+https://github.com/zorp-corp/sword.git?rev=dbde2624d205deafc82a19f8c2a6dcdd868507d1#dbde2624d205deafc82a19f8c2a6dcdd868507d1"
 dependencies = [
  "cfg-if",
  "num-traits",
@@ -1369,7 +1367,6 @@ dependencies = [
 [[package]]
 name = "murmur3"
 version = "0.5.2"
-source = "git+https://github.com/zorp-corp/sword.git?rev=dbde2624d205deafc82a19f8c2a6dcdd868507d1#dbde2624d205deafc82a19f8c2a6dcdd868507d1"
 
 [[package]]
 name = "notify"
@@ -1906,7 +1903,6 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 [[package]]
 name = "sword"
 version = "0.1.0"
-source = "git+https://github.com/zorp-corp/sword.git?rev=dbde2624d205deafc82a19f8c2a6dcdd868507d1#dbde2624d205deafc82a19f8c2a6dcdd868507d1"
 dependencies = [
  "assert_no_alloc",
  "autotools",
@@ -1934,7 +1930,6 @@ dependencies = [
 [[package]]
 name = "sword_crypto"
 version = "0.1.0"
-source = "git+https://github.com/zorp-corp/sword.git?rev=dbde2624d205deafc82a19f8c2a6dcdd868507d1#dbde2624d205deafc82a19f8c2a6dcdd868507d1"
 dependencies = [
  "aes",
  "aes-siv",
@@ -1950,7 +1945,6 @@ dependencies = [
 [[package]]
 name = "sword_macros"
 version = "0.1.0"
-source = "git+https://github.com/zorp-corp/sword.git?rev=dbde2624d205deafc82a19f8c2a6dcdd868507d1#dbde2624d205deafc82a19f8c2a6dcdd868507d1"
 dependencies = [
  "quote",
  "syn 1.0.109",

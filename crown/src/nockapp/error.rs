@@ -30,6 +30,8 @@ pub enum NockAppError {
     CrownError(#[from] CrownError),
     #[error("Channel closed error")]
     ChannelClosedError,
+    #[error("Cancel token triggered, shutting down")]
+    CancelTokenTriggered,
     #[error("Other error")]
     OtherError,
     #[error("Peek failed")]
