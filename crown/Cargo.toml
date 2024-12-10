@@ -7,6 +7,7 @@ edition.workspace = true
 default = ["slog-tracing"]
 slog-tracing = []
 trait-alias = []
+skip-subscriber = []
 
 [dependencies]
 anyhow = { workspace = true }
