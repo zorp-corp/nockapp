@@ -1,7 +1,13 @@
 /+  *wrapper
 =>
 |%
-+$  choo-state  [%0 cached-hoon=(unit (trap vase)) ~]
++$  state-0  [%0 cached-hoon=(unit (trap vase)) ~]
++$  state-1  [%1 cached-hoon=(unit (trap vase)) bc=build-cache pc=parse-cache]
++$  versioned-state
+  $%  state-0
+      state-1
+  ==
++$  choo-state  state-1
 ::
 ++  moat  (keep choo-state)
 +$  cause
@@ -19,6 +25,27 @@
 ::    If unit is null, the path must exist inside of the dir map.
 ::
 +$  entry  [pat=path tex=(unit cord)]
+::
++$  hash  @
++$  build-cache  (map hash (trap vase))
+::
+::  $taut: file import from /lib or /sur
+::
++$  taut  [face=(unit term) pax=term]
+::
+::  $pile:  preprocessed hoon file
+::
++$  pile
+  $:  sur=(list taut)  ::  /-
+      lib=(list taut)  ::  /+
+      raw=(list [face=term =path])
+      bar=(list [face=term mark=@tas =path])
+      =hoon
+  ==
+::
+::  $parse-cache: content addressed cache of preprocessed hoon files.
+::
++$  parse-cache  (map hash pile)
 --
 ::
 =<
@@ -30,9 +57,19 @@
 ::
 ::  +load: upgrade from previous state
 ::
+::
 ++  load
-  |=  arg=choo-state
-  arg
+  |=  arg=versioned-state
+  ^-  choo-state
+  ?+    -.arg    ~&  >>  %no-upgrade  arg
+      %0
+    ~&  >>  %upgrade-0-to-1
+    :*  %1
+        cached-hoon.arg
+        *build-cache
+        *parse-cache
+    ==
+  ==
 ::
 ::  +peek: external inspect
 ::
@@ -48,7 +85,7 @@
   ^-  [(list effect) choo-state]
   =/  cause=(unit cause)  ((soft cause) dat)
   ?~  cause
-    ~&  >>  "input is not a proper cause"
+    ~&  >>>  "input is not a proper cause"
     !!
   =/  cause  u.cause
   ?-    -.cause
@@ -56,7 +93,7 @@
     [~ k]
   ::
       %boot
-    ~&  hoon-version+hoon-version
+    ~&  >>  hoon-version+hoon-version
     ?:  ?=(^ cached-hoon.k)
       [~ k]
    [~ k(cached-hoon `(build-honc hoon-txt.cause))]
@@ -67,18 +104,17 @@
       %-  ~(gas by *(map path cord))
       (turn directory.cause |=((pair @t @t) [(stab p) q]))
     ?>  ?=(^ cached-hoon.k)
-    =/  contents=@
-      %-  jam
+    =/  [compiled=* new-bc=build-cache new-pc=parse-cache]
       ?:  arbitrary.cause
-        %-  ~(create-arbitrary builder u.cached-hoon.k)
+        %-  ~(create-arbitrary builder u.cached-hoon.k bc.k pc.k)
         [entry dir]
-      %-  ~(create builder u.cached-hoon.k)
+      %-  ~(create builder u.cached-hoon.k bc.k pc.k)
       [entry dir]
-    :_  k
+    :_  k(bc new-bc, pc new-pc)
     :~  :*  %file
             %write
             path=(crip "out.jam")
-            contents=contents
+            contents=(jam compiled)
         ==
         [%exit 0]
     ==
@@ -201,9 +237,6 @@
     (cook |=(a=term [`a a]) sym)            ::  foo    -> [[~ %foo] %foo]
   ==
 ::
-::  $taut: file import from /lib or /sur
-::
-+$  taut  [face=(unit term) pax=term]
 ++  segments
   |=  suffix=@tas
   ^-  (list path)
@@ -238,45 +271,39 @@
   ?^  (~(get by dir) puz)
     `puz
   $(paz t.paz)
-::  preprocessed hoon file
-++  pile
-  $:  sur=(list taut)  ::  /-
-      lib=(list taut)  ::  /+
-      raw=(list [face=term =path])
-      bar=(list [face=term mark=@tas =path])
-      =hoon
-  ==
 ::
 ++  resolve-pile
   ::  turn fits into resolved path suffixes
   |=  [=pile dir=(map path cord)]
-  ^-  rile
-  %=  pile
-    sur  (turn sur.pile |=(taut [face (need (get-fit %sur pax dir))]))
-    lib  (turn lib.pile |=(taut [face (need (get-fit %lib pax dir))]))
-      raw
+  ^-  (list raut)
+  ;:  weld
+    (turn sur.pile |=(taut ^-(raut [face (need (get-fit %sur pax dir))])))
+    (turn lib.pile |=(taut ^-(raut [face (need (get-fit %lib pax dir))])))
+  ::
     %+  turn  raw.pile
     |=  [face=term pax=path]
     =/  pax-snip  (snip pax)
     =/  pax-rear  (rear pax)
+    ^-  raut
     [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' %hoon]))]
   ::
-      bar
     %+  turn  bar.pile
     |=  [face=term mark=@tas pax=path]
     ?:  =(mark %hoon)
       =/  pax-snip  (snip pax)
       =/  pax-rear  (rear pax)
+      ^-  raut
       [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' %hoon]))]
     =/  pax-snip  (snip pax)
     =/  pax-rear  (rear pax)
+    ^-  raut
     [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' mark]))]
   ==
 --
 ::
 ::  builder core
 ::
-|_  honc=(trap vase)
+|_  [honc=(trap vase) bc=build-cache pc=parse-cache]
 ::
 ++  build-honc
   |=  hoon-txt=cord
@@ -285,153 +312,234 @@
 ::
 +$  octs  [p=@ud q=@]
 ::
-+$  graph-leaf
-  $%  [%hoon =hoon]
-      [%octs =octs]
-  ==
+::  $node: entry of adjacency matrix with metadata
 ::
-++  import-graph
-  $+  import-graph
-  $~  [*path ~ ~ ~ ~ *(unit @tas) [%hoon *hoon]]  ::  not needed in the dojo but here for some reason
++$  node
   $:  =path
-      sur=(list import-graph)
-      lib=(list import-graph)
-      raw=(list import-graph)
-      bar=(list import-graph)
-      face=(unit @tas)  ::  the face that this node of the import graph has
-      leaf=graph-leaf
+      hash=@
+      ::  holds only outgoing edges
+      deps=(list raut)
+      =hoon
   ==
 ::
+::  $node-set: adjacency matrix of merkle DAG. holds build target and leaf dependencies
+::
++$  node-set
+  $:  target=node
+      map=(map path node)
+      leaves=(map path node)
+  ==
+::
+::  $graph-view: adjacency matrix with easier access to neighbors
+::
+::    used to keep track of traversal when building the merkle DAG
+::
++$  graph-view  (map path (set path))
+::
+::  $temp-cache: temporary cache
+::
+::    holds the hash and (trap vase) of already built dependencies. it is not persisted.
+::
++$  temp-cache  (map path [hash=@ vaz=(trap vase)])
 ++  create
   |=  [=entry dir=(map path cord)]
-  ^-  (trap)
+  ^-  [(trap) build-cache parse-cache]
   =/  dir-hash  `@uvI`(mug dir)
-  ~&  dir-hash+dir-hash
-  =/  graph  (make-import-graph ~ entry 0 ~ dir)
+  ~&  >>  dir-hash+dir-hash
+  =/  [pc=parse-cache ns=node-set]  (make-node-set entry dir)
+  =/  compile  (build-merk-dag ns)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
-  =;  ker-gen
-    =>  %+  shot  ker-gen
-        =>  d=!>(dir-hash)
-        |.(d)
-    |.(+:^$)
-  %-  head
-  (compile-graph (head graph) ~)
-++  create-arbitrary
-  |=  [=entry dir=(map path cord)]
-  ^-  (trap)
-  =/  dir-hash  `@uvI`(mug dir)
-  ~&  dir-hash+dir-hash
-  =/  graph  (make-import-graph ~ entry 0 ~ dir)
-  =/  tase
-    %-  head
-    (compile-graph (head graph) ~)
-  =>  tase
+  =/  ker-gen  (head compile)
+  :_  [+7:compile pc]
+  =>  %+  shot  ker-gen
+      =>  d=!>(dir-hash)
+      |.(d)
   |.(+:^$)
 ::
-++  get-file
+++  create-arbitrary
+  |=  [=entry dir=(map path cord)]
+  ^-  [(trap) build-cache parse-cache]
+  =/  dir-hash  `@uvI`(mug dir)
+  ~&  >>  dir-hash+dir-hash
+  =/  [pc=parse-cache ns=node-set]  (make-node-set entry dir)
+  =/  compile  (build-merk-dag ns)
+  :_  [+7:compile pc]
+  =>  (head compile)
+  |.(+:^$)
+::
+::
+::  $make-node-set: Builds adjacency matrix.
+::
+::    Gathers dependencies of the build target via breadth-first-search.
+::
+++  make-node-set
   |=  [suf=entry dir=(map path cord)]
-  ^-  cord
-  ?~  tex.suf
-    (~(got by dir) pat.suf)
-  u.tex.suf
-::
-++  make-import-graph
-  |=  [face=(unit @tas) suf=entry depth=@ cache=(map path import-graph) dir=(map path cord)]
-  ^-  [import-graph (map path import-graph)]
-  ~&  building-graph-for+[depth=depth pat.suf]
-  ?^  existing=(~(get by cache) pat.suf)
-    ~&  >  "reusing cached graph for {<pat.suf>}"
-    [u.existing(face face) cache]  ::  make sure to use the provided face
-  =/  file=cord  (get-file suf dir)
-  ?.  (is-hoon pat.suf)
-    =/  graph=import-graph
-      :*  pat.suf
-          ~  ~
-          ~  ~
-          face
-          [%octs [(met 3 file) file]]
-      ==
-    =/  no-face=_graph
-      graph(face `%no-cache-entry-face)
-    :-  graph
-    (~(put by cache) pat.suf no-face)
-  =/  rile  (resolve-pile (parse-pile pat.suf (trip file)) dir)
-  =^  new-sur=(list import-graph)  cache
-    %^  spin  sur.rile  cache
-    |=  [raut cache=(map path import-graph)]
-    (make-import-graph face [pax ~] +(depth) cache dir)
-  =^  new-lib=(list import-graph)  cache
-    %^  spin  lib.rile  cache
-    |=  [raut cache=(map path import-graph)]
-    =/  c  (~(got by dir) pax)
-    (make-import-graph face [pax ~] +(depth) cache dir)
-  =^  new-raw=(list import-graph)  cache
-    %^  spin  raw.rile  cache
-    |=  [raut cache=(map path import-graph)]
-    =/  c  (~(got by dir) pax)
-    (make-import-graph face [pax ~] +(depth) cache dir)
-  =^  new-bar=(list import-graph)  cache
-    %^  spin  bar.rile  cache
-    |=  [raut cache=(map path import-graph)]
-    =/  c  (~(got by dir) pax)
-    (make-import-graph face [pax ~] +(depth) cache dir)
-  =/  graph=import-graph
-    :*  pat.suf
-        sur=new-sur
-        lib=new-lib
-        raw=new-raw
-        bar=new-bar
-        face
-        [%hoon hoon.rile]
-    ==
-  =/  no-face=_graph
-    graph(face `%no-cache-entry-face)
-  :-  graph
-  (~(put by cache) pat.suf no-face)
-::
-++  compile-graph
-  ::  accepts an import-graph and compiles it down to a vase
-  ::
-  |=  [graph=import-graph cache=(map path (trap vase))]
-  ^-  [(trap vase) cache=(map path (trap vase))]
+  ^-  [parse-cache node-set]
   |^
-  ::  recursively compile each dependency then cons them all together
-  ::  (base case is when both sur and lib are ~)
-  ~&  "processing {<path.graph>}"
-  ?^  existing=(~(get by cache) path.graph)
-    ~&  >  "reusing cached vase for {<path.graph>}"
-    [(label-vase u.existing face.graph) cache]
-  =^  surs  cache   (spin sur.graph cache compile-graph)
-  =^  libs  cache   (spin lib.graph cache compile-graph)
-  =^  raws  cache   (spin raw.graph cache compile-graph)
-  =^  bars  cache   (spin bar.graph cache compile-graph)
-  =/  sur-all=(trap vase)  (roll p.surs slew)
-  =/  lib-all=(trap vase)  (roll p.libs slew)
-  =/  raw-all=(trap vase)  (roll p.raws slew)
-  =/  bar-all=(trap vase)  (roll p.bars slew)
-  =/  deps=(trap vase)
-    ::  we must always make hoon.hoon available to each `hoon.graph`
-    ::  in case it's not available on account of being hidden behind a face in other dependencies
+  ?~  tex.suf  !!
+  =|  new-pc=parse-cache
+  =^  target  new-pc
+    (make-node pat.suf u.tex.suf dir new-pc)
+  =/  curr  target
+  =/  deps=(list [path cord])  (get-deps target dir ~)
+  =/  ns=node-set  [target ~ ~]
+  |-
+  ?:  =((lent deps) 0)
+    [new-pc ns]
+  =;  [ns=node-set deps=_deps new-pc=_new-pc]
+    $(ns ns, deps deps, new-pc new-pc)
+  %+  roll
+    deps
+  |=  [[pat=path tex=cord] [ns=_ns deps=(list [path cord]) new-pc=_new-pc]]
+  ?:  (~(has by map.ns) pat)
+    [ns deps new-pc]
+  =^  n=node  new-pc
+    (make-node pat tex dir new-pc)
+  =.  ns  ns(map (~(put by map.ns) path.n n))
+  =?  ns  (is-leaf n)
+    ns(leaves (~(put by leaves.ns) path.n n))
+  :+  ns
+    (weld deps (get-deps n dir map.ns))
+  new-pc
+  ::
+  ++  make-node
+    |=  [pat=path file=cord dir=(map path cord) new-pc=parse-cache]
+    ^-  [node parse-cache]
+    ~&  >  building-graph-for+pat
+    =/  hash=@  (shax file)
+    =/  =pile
+      ?:  (~(has by pc) hash)
+       ~&  >  parse-cache-hit+pat
+        (~(got by pc) hash)
+      ~&  >  parse-cache-miss+pat
+      (parse-pile pat (trip file))
+    :_  (~(put by new-pc) hash pile)
+    :*  path=pat
+        hash=(shax file)
+        deps=(resolve-pile pile dir)
+        hoon=hoon.pile
+    ==
+  ::
+  ++  get-file
+    |=  [suf=entry dir=(map path cord)]
+    ^-  cord
+    ?~  tex.suf
+      (~(got by dir) pat.suf)
+    u.tex.suf
+  ::
+  ++  get-deps
+    |=  [n=node dir=(map path cord) seen=(map path node)]
+    ^-  (list [path cord])
+    |^
+    (murn deps.n take)
     ::
-    ::  TODO make sure there are no bunted vases in here
-    =-  (roll - |=([v=(trap vase) a=(trap vase)] (slew a v)))
-    %+  murn  ~[lib-all sur-all raw-all bar-all honc]
-    |=  dep=(trap vase)
-    ?:  =(*(trap vase) dep)  ~
-    `dep
-  ::  compile the current `hoon.graph` against its compiled dependencies
+    ++  take
+      |=  raut
+      ^-  (unit [path cord])
+      ?:  (~(has by seen) pax)
+        ~
+      ?.  (~(has by dir) pax)
+        ~&  >>>  "Could not find dependency {<pax>} for {<path.n>}"  !!
+      `[pax (~(got by dir) pax)]
+    --
   ::
-  =/  compiled=(trap vase)
-    ?:  ?=(%hoon -.leaf.graph)
-      (swet deps hoon.leaf.graph)
-    =>  octs=!>(octs.leaf.graph)
-    |.  octs
-  ~&  compiled+path.graph
-  ::  cache the vase before adding the face so that alias can be handled jit when pulling from cache
+  ++  is-leaf
+    |=  node
+    .=(~ deps)
+  --
+::
+::  $build-merk-dag: builds the merkle DAG
+::
+::    To build the DAG, we compile the dependencies and subtree hashes along a topological sorting
+::    of the node-set.
+::
+++  build-merk-dag
+  |=  ns=node-set
+  ^-  [(trap vase) temp-cache build-cache]
+  |^
+  =|  new-bc=build-cache
+  =/  graph  (build-graph-view ns)
+  =|  tc=temp-cache
+  =/  next=(map path node)  leaves.ns
   ::
-  =.  cache     (~(put by cache) path.graph compiled)
-  =.  compiled  (label-vase compiled face.graph)
-  [compiled cache]
+  ::  traverse via a topological sorting of DAG
+  |-
+  ~&  >  traversing+~(key by next)
+  ~&  >  graph-view+graph
+  ?:  .=(~ next)
+    (compile-node target.ns tc new-bc)
+  =-
+    %=  $
+      next   (update-next ns graph)
+      graph  graph
+      tc     tc
+      new-bc     new-bc
+    ==
+  ^-  [graph=(map path (set path)) tc=temp-cache new-bc=build-cache]
+  %+  roll
+    ~(tap by next)
+  |=  [[p=path n=node] graph=_graph tc=_tc new-bc=_new-bc]
+  :-  (update-graph-view graph p)
+  +:(compile-node n tc new-bc)
+  ::
+  ++  update-next
+    |=  [ns=node-set gv=graph-view]
+    ^-  (map path node)
+    ::
+    ::  if we don't have the entry in gv, already visited
+    %+  roll
+      ~(tap by gv)
+    |=  [[pax=path edges=(set path)] next=(map path node)]
+    ::
+    :: if a node has no out edges, add it to next
+    ?.  =(*(set path) edges)
+      next
+    %+  ~(put by next)
+      pax
+    (~(got by map.ns) pax)
+  ::
+  ++  update-graph-view
+    |=  [gv=graph-view p=path]
+    ^-  graph-view
+    =.  gv  (~(del by gv) p)
+    %-  ~(urn by gv)
+    |=  [* edges=(set path)]
+    (~(del in edges) p)
+  ::
+  ++  compile-node
+    |=  [n=node tc=temp-cache new-bc=build-cache]
+    ^-  [(trap vase) temp-cache build-cache]
+    ~&  >  compiling-node+path.n
+    ~&  >  cache-keys+~(key by tc)
+    =;  [vaz-deps=(trap vase) hash=@]
+      =.  vaz-deps  (slew vaz-deps honc)
+      =/  target=(trap vase)
+        ?:  (~(has by bc) hash)
+          ~&  >  build-cache-hit+path.n
+          (~(got by bc) hash)
+        ~&  >  build-cache-miss+path.n
+        (swet vaz-deps hoon.n)
+      :*  target
+          (~(put by tc) path.n [hash target])
+          (~(put by new-bc) hash target)
+      ==
+    %+  roll
+      deps.n
+    |=  [raut vaz=(trap vase) hash=_hash.n]
+    ~&  >  grabbing-dep+pax
+    ?.  (~(has by tc) pax)
+      ~&  >>>  "Missing {<pax>} in cache. Should have been compiled already."  !!
+    =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
+    :-  (slew vaz (label-vase dep-vaz face))
+    (shax (rep 8 ~[hash dep-hash]))
+  ::
+  ++  build-graph-view
+    |=  ns=node-set
+    ^-  graph-view
+    %-  ~(urn by map.ns)
+    |=  [* n=node]
+    %-  silt
+    (turn deps.n |=(raut pax))
   ::
   ++  label-vase
     |=  [vaz=(trap vase) face=(unit @tas)]
@@ -490,9 +598,4 @@
   ^-  tape
   %-  trip
   (~(got by dir) pax)
-::
-++  is-graph-leaf
-  |=  import-graph
-  ^-  ?
-  &(=(~ sur) =(~ lib))
 --
