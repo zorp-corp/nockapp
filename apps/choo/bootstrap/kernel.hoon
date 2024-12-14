@@ -322,224 +322,138 @@
       =hoon
   ==
 ::
-::  $node-set: adjacency matrix of merkle DAG. holds build target and leaf dependencies
-::
-+$  node-set
-  $:  target=node
-      map=(map path node)
-      leaves=(map path node)
-  ==
-::
 ::  $graph-view: adjacency matrix with easier access to neighbors
 ::
 ::    used to keep track of traversal when building the merkle DAG
 ::
 +$  graph-view  (map path (set path))
 ::
-::  $temp-cache: temporary cache
-::
-::    holds the hash and (trap vase) of already built dependencies. it is not persisted.
-::
-+$  temp-cache  (map path [hash=@ vaz=(trap vase)])
 ++  create
   |=  [=entry dir=(map path cord)]
   ^-  [(trap) build-cache parse-cache]
   =/  dir-hash  `@uvI`(mug dir)
   ~&  >>  dir-hash+dir-hash
-  =/  [pc=parse-cache ns=node-set]  (make-node-set entry dir)
-  =/  compile  (build-merk-dag ns)
-  ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
-  =/  ker-gen  (head compile)
-  :_  [+7:compile pc]
-  =>  %+  shot  ker-gen
-      =>  d=!>(dir-hash)
-      |.(d)
-  |.(+:^$)
+  =/  [parsed-dir=(map path node) pc=parse-cache]  (parse-dir entry dir)
+  =/  [dep-dag=merk-dag =path-dag]  (build-merk-dag parsed-dir)
+  ~&  >>  dep-dag+dep-dag
+  ~&  >>  path-dag+path-dag
+  *[(trap) build-cache parse-cache]
+  ::
+  ::  delete invalid cache entries in bc
+  ::=.  bc
+  ::  %+  roll
+  ::    ~(tap by bc)
+  ::  |=  [[hash=@ *] bc=_bc]
+  ::  ?:  (~(has by dep-dag) hash)
+  ::    bc
+  ::  (~(del by bc) hash)
+  ::=/  compile
+  ::  %:  compile-target
+  ::    pat.entry
+  ::    path-dag
+  ::    (get-build-deps entry parsed-dir)
+  ::    bc
+  ::  ==
+  ::::  +shot calls the kernel gate to tell it the hash of the zkvm desk
+  ::=/  ker-gen  (head compile)
+  :::_  [(tail compile) pc]
+  ::=>  %+  shot  ker-gen
+  ::    =>  d=!>(dir-hash)
+  ::    |.(d)
+  ::|.(+:^$)
+::
 ::
 ++  create-arbitrary
   |=  [=entry dir=(map path cord)]
   ^-  [(trap) build-cache parse-cache]
   =/  dir-hash  `@uvI`(mug dir)
   ~&  >>  dir-hash+dir-hash
-  =/  [pc=parse-cache ns=node-set]  (make-node-set entry dir)
-  =/  compile  (build-merk-dag ns)
-  :_  [+7:compile pc]
-  =>  (head compile)
-  |.(+:^$)
+  =/  [parsed-dir=(map path node) pc=parse-cache]  (parse-dir entry dir)
+  =/  [dep-dag=merk-dag =path-dag]  (build-merk-dag parsed-dir)
+  ~&  >>  dep-dag+dep-dag
+  *[(trap) build-cache parse-cache]
 ::
-::
-::  $make-node-set: Builds adjacency matrix.
-::
-::    Gathers dependencies of the build target via breadth-first-search.
-::
-++  make-node-set
+++  parse-dir
   |=  [suf=entry dir=(map path cord)]
-  ^-  [parse-cache node-set]
-  |^
-  ?~  tex.suf  !!
-  =|  new-pc=parse-cache
-  =^  target  new-pc
-    (make-node pat.suf u.tex.suf dir new-pc)
-  =/  curr  target
-  =/  deps=(list [path cord])  (get-deps target dir ~)
-  =/  ns=node-set  [target ~ ~]
-  |-
-  ?:  =((lent deps) 0)
-    [new-pc ns]
-  =;  [ns=node-set deps=_deps new-pc=_new-pc]
-    $(ns ns, deps deps, new-pc new-pc)
+  ^-  [(map path node) parse-cache]
+  =/  [suf-node=node new-pc=parse-cache]
+    (make-node pat.suf (need tex.suf) dir ~)
+  =|  nodes=(map path node)
+  =.  nodes  (~(put by nodes) pat.suf suf-node)
   %+  roll
-    deps
-  |=  [[pat=path tex=cord] [ns=_ns deps=(list [path cord]) new-pc=_new-pc]]
-  ?:  (~(has by map.ns) pat)
-    [ns deps new-pc]
+    ~(tap by dir)
+  |=  [[pat=path file=cord] nodes=_nodes new-pc=_new-pc]
   =^  n=node  new-pc
-    (make-node pat tex dir new-pc)
-  =.  ns  ns(map (~(put by map.ns) path.n n))
-  =?  ns  (is-leaf n)
-    ns(leaves (~(put by leaves.ns) path.n n))
-  :+  ns
-    (weld deps (get-deps n dir map.ns))
+    (make-node pat file dir new-pc)
+  :-  (~(put by nodes) pat n)
   new-pc
-  ::
-  ++  make-node
-    |=  [pat=path file=cord dir=(map path cord) new-pc=parse-cache]
-    ^-  [node parse-cache]
-    ~&  >  building-graph-for+pat
-    =/  hash=@  (shax file)
-    =/  =pile
-      ?:  (~(has by pc) hash)
-       ~&  >  parse-cache-hit+pat
-        (~(got by pc) hash)
-      ~&  >  parse-cache-miss+pat
-      (parse-pile pat (trip file))
-    :_  (~(put by new-pc) hash pile)
-    :*  path=pat
-        hash=(shax file)
-        deps=(resolve-pile pile dir)
-        hoon=hoon.pile
-    ==
-  ::
-  ++  get-file
-    |=  [suf=entry dir=(map path cord)]
-    ^-  cord
-    ?~  tex.suf
-      (~(got by dir) pat.suf)
-    u.tex.suf
-  ::
-  ++  get-deps
-    |=  [n=node dir=(map path cord) seen=(map path node)]
-    ^-  (list [path cord])
-    |^
-    (murn deps.n take)
-    ::
-    ++  take
-      |=  raut
-      ^-  (unit [path cord])
-      ?:  (~(has by seen) pax)
-        ~
-      ?.  (~(has by dir) pax)
-        ~&  >>>  "Could not find dependency {<pax>} for {<path.n>}"  !!
-      `[pax (~(got by dir) pax)]
-    --
-  ::
-  ++  is-leaf
-    |=  node
-    .=(~ deps)
-  --
 ::
-::  $build-merk-dag: builds the merkle DAG
+++  make-node
+  |=  [pat=path file=cord dir=(map path cord) new-pc=parse-cache]
+  ^-  [node parse-cache]
+  ~&  >  building-graph-for+pat
+  =/  hash=@  (shax file)
+  =/  =pile
+    ?:  (~(has by pc) hash)
+      ~&  >  parse-cache-hit+pat
+      (~(got by pc) hash)
+    ~&  >  parse-cache-miss+pat
+    (parse-pile pat (trip file))
+  :_  (~(put by new-pc) hash pile)
+  :*  path=pat
+      hash=(shax file)
+      deps=(resolve-pile pile dir)
+      hoon=hoon.pile
+  ==
 ::
-::    To build the DAG, we compile the dependencies and subtree hashes along a topological sorting
-::    of the node-set.
-::
-++  build-merk-dag
-  |=  ns=node-set
-  ^-  [(trap vase) temp-cache build-cache]
+::  combine dep-dag and merk-dag into one structure
+::  recursively compile each dependency
+++  compile-graph
+  ::  accepts an import-graph and compiles it down to a vase
+  ::
+  |=  [n=node dep-dag=merk-dag =path-dag cache=build-cache]
+  ^-  [(trap vase) cache=(map path (trap vase))]
   |^
-  =|  new-bc=build-cache
-  =/  graph  (build-graph-view ns)
-  =|  tc=temp-cache
-  =/  next=(map path node)  leaves.ns
-  ::
-  ::  traverse via a topological sorting of DAG
-  |-
-  ~&  >  traversing+~(key by next)
-  ~&  >  graph-view+graph
-  ?:  .=(~ next)
-    (compile-node target.ns tc new-bc)
-  =-
-    %=  $
-      next   (update-next ns graph)
-      graph  graph
-      tc     tc
-      new-bc     new-bc
-    ==
-  ^-  [graph=(map path (set path)) tc=temp-cache new-bc=build-cache]
-  %+  roll
-    ~(tap by next)
-  |=  [[p=path n=node] graph=_graph tc=_tc new-bc=_new-bc]
-  :-  (update-graph-view graph p)
-  +:(compile-node n tc new-bc)
-  ::
-  ++  update-next
-    |=  [ns=node-set gv=graph-view]
-    ^-  (map path node)
+  ::  recursively compile each dependency then cons them all together
+  ::  (base case is when both sur and lib are ~)
+  ~&  "processing {<path.n>}"
+  ?^  existing=(~(get by cache) path.n)
+    ~&  >  "reusing cached vase for {<path.n>}"
+    [(label-vase u.existing face.n) cache]
+  ::  get nodes
+  ::=/  ns=(list node)
+  ::  spin nodes
+  =^  surs  cache   (spin sur.graph cache compile-graph)
+  =^  libs  cache   (spin lib.graph cache compile-graph)
+  =^  raws  cache   (spin raw.graph cache compile-graph)
+  =^  bars  cache   (spin bar.graph cache compile-graph)
+  =/  sur-all=(trap vase)  (roll p.surs slew)
+  =/  lib-all=(trap vase)  (roll p.libs slew)
+  =/  raw-all=(trap vase)  (roll p.raws slew)
+  =/  bar-all=(trap vase)  (roll p.bars slew)
+  =/  deps=(trap vase)
+    ::  we must always make hoon.hoon available to each `hoon.graph`
+    ::  in case it's not available on account of being hidden behind a face in other dependencies
     ::
-    ::  if we don't have the entry in gv, already visited
-    %+  roll
-      ~(tap by gv)
-    |=  [[pax=path edges=(set path)] next=(map path node)]
-    ::
-    :: if a node has no out edges, add it to next
-    ?.  =(*(set path) edges)
-      next
-    %+  ~(put by next)
-      pax
-    (~(got by map.ns) pax)
+    ::  TODO make sure there are no bunted vases in here
+    =-  (roll - |=([v=(trap vase) a=(trap vase)] (slew a v)))
+    %+  murn  ~[lib-all sur-all raw-all bar-all honc]
+    |=  dep=(trap vase)
+    ?:  =(*(trap vase) dep)  ~
+    `dep
+  ::  compile the current `hoon.graph` against its compiled dependencies
   ::
-  ++  update-graph-view
-    |=  [gv=graph-view p=path]
-    ^-  graph-view
-    =.  gv  (~(del by gv) p)
-    %-  ~(urn by gv)
-    |=  [* edges=(set path)]
-    (~(del in edges) p)
+  =/  compiled=(trap vase)
+    ?:  ?=(%hoon -.leaf.graph)
+      (swet deps hoon.leaf.graph)
+    =>  octs=!>(octs.leaf.graph)
+    |.  octs
+  ~&  compiled+path.graph
+  ::  cache the vase before adding the face so that alias can be handled jit when pulling from cache
   ::
-  ++  compile-node
-    |=  [n=node tc=temp-cache new-bc=build-cache]
-    ^-  [(trap vase) temp-cache build-cache]
-    ~&  >  compiling-node+path.n
-    ~&  >  cache-keys+~(key by tc)
-    =;  [vaz-deps=(trap vase) hash=@]
-      =.  vaz-deps  (slew vaz-deps honc)
-      =/  target=(trap vase)
-        ?:  (~(has by bc) hash)
-          ~&  >  build-cache-hit+path.n
-          (~(got by bc) hash)
-        ~&  >  build-cache-miss+path.n
-        (swet vaz-deps hoon.n)
-      :*  target
-          (~(put by tc) path.n [hash target])
-          (~(put by new-bc) hash target)
-      ==
-    %+  roll
-      deps.n
-    |=  [raut vaz=(trap vase) hash=_hash.n]
-    ~&  >  grabbing-dep+pax
-    ?.  (~(has by tc) pax)
-      ~&  >>>  "Missing {<pax>} in cache. Should have been compiled already."  !!
-    =/  [dep-hash=@ dep-vaz=(trap vase)]  (~(got by tc) pax)
-    :-  (slew vaz (label-vase dep-vaz face))
-    (shax (rep 8 ~[hash dep-hash]))
-  ::
-  ++  build-graph-view
-    |=  ns=node-set
-    ^-  graph-view
-    %-  ~(urn by map.ns)
-    |=  [* n=node]
-    %-  silt
-    (turn deps.n |=(raut pax))
+  =.  cache     (~(put by cache) path.graph compiled)
+  =.  compiled  (label-vase compiled face.graph)
+  [compiled cache]
   ::
   ++  label-vase
     |=  [vaz=(trap vase) face=(unit @tas)]
@@ -550,6 +464,197 @@
     =/  vas  $:vaz
     [[%face face p.vas] q.vas]
   --
+::
+::  $get-build-deps: Builds adjacency matrix.
+::
+::    Gathers dependencies of the build target via breadth-first-search.
+::
+++  get-build-deps
+  |=  [suf=entry nodes=(map path node)]
+  ^-  (map path node)
+  |^
+  ?~  tex.suf  !!
+  =|  target-deps=(map path node)
+  =|  new-pc=parse-cache
+  =/  target=node  (~(got by nodes) pat.suf)
+  =/  deps=(list [path node])  (get-deps target nodes)
+  |-
+  ?:  .=(deps ~)
+    target-deps
+  =;  [target-deps=(map path node) deps=(list [path node])]
+    $(target-deps target-deps, deps deps)
+  %+  roll
+    deps
+  |=  [[pat=path n=node] [target-deps=(map path node) deps=(list [path node])]]
+  ?:  (~(has by nodes) pat)
+    [target-deps deps]
+  :-  (~(put by target-deps) pat n)
+  (weld deps (get-deps n nodes))
+  ::
+  ++  get-deps
+    |=  [n=node nodes=(map path node)]
+    ^-  (list [path node])
+    |^
+    (turn deps.n take)
+    ::
+    ++  take
+      |=  raut
+      ^-  [path node]
+      ?.  (~(has by nodes) pax)
+        ~&  >>>  "Could not find dependency {<pax>} for {<path.n>}"  !!
+      [pax (~(got by nodes) pax)]
+    --
+  --
+::
+::++  compile-target
+::  |=  [pat=path =path-dag nodes=(map path node) bc=build-cache]
+::  ^-  [(trap vase) build-cache]
+::  =/  n=node  +:(~(got by path-dag) pat)
+::  =/  graph  (build-graph-view nodes)
+::  =/  next=(map path node)  (update-next nodes graph)
+::  =|  vaz=(trap vase)
+::  |-
+::  ~&  >  traversing+~(key by next)
+::  ~&  >  graph-view+graph
+::  ?:  .=(~ next)
+::    (compile-node n path-dag bc)
+::  =-
+::    %=  $
+::      next   (update-next nodes graph)
+::      graph  graph
+::      bc     bc
+::    ==
+::  ^-  [graph=(map path (set path)) bc=build-cache]
+::  %+  roll
+::    ~(tap by next)
+::  |=  [[p=path n=node] graph=_graph bc=_bc]
+::  =^  *  bc
+::    (compile-node n path-dag bc)
+::  [(update-graph-view graph p) bc]
+::::
+::++  compile-node
+::  |=  [n=node =path-dag bc=build-cache]
+::  ^-  [(trap vase) build-cache]
+::  ~&  >  compiling-node+path.n
+::  ~&  >  cache-keys+~(key by bc)
+::  =/  [dep-hash=@ *]  (~(got by path-dag) path.n)
+::  ?:  (~(has by bc) dep-hash)
+::    ~&  >  build-cache-hit+path.n
+::    [(~(got by bc) dep-hash) bc]
+::  ~&  >  build-cache-miss+path.n
+::  =/  vaz=(trap vase)  (build-node n path-dag bc)
+::  [vaz (~(put by bc) dep-hash vaz)]
+::::
+::++  build-node
+::  |=  [n=node =path-dag bc=build-cache]
+::  ^-  (trap vase)
+::  =;  dep-vaz=(trap vase)
+::    (swet dep-vaz hoon.n)
+::  %+  roll
+::    deps.n
+::  |=  [raut vaz=(trap vase)]
+::  ~&  >  grabbing-dep+pax
+::  =/  [dep-hash=@ *]  (~(got by path-dag) pax)
+::  =/  dep-vaz=(trap vase)  (~(got by bc) dep-hash)
+::  (slew vaz (label-vase dep-vaz face))
+::
+++  label-vase
+  |=  [vaz=(trap vase) face=(unit @tas)]
+  ^-  (trap vase)
+  ?~  face  vaz
+  =>  [vaz=vaz face=u.face]
+  |.
+  =/  vas  $:vaz
+  [[%face face p.vas] q.vas]
+::
+::  $build-merk-dag: builds a merkle DAG out of the dependency folder
+::
+::    To build the DAG, we compile the dependencies and subtree hashes along a topological sorting
+::    of the node-set.
+::
++$  merk-dag  (map @ node)
++$  path-dag  (map path [@ node])
+::
+++  build-merk-dag
+  ::
+  ::  node set of entire dir + target
+  |=  nodes=(map path node)
+  ^-  [merk-dag path-dag]
+  ::
+  ::  Need a way to uniquely identify dep directories
+  =|  dep-dag=merk-dag
+  =|  =path-dag
+  =/  graph  (build-graph-view nodes)
+  =/  next=(map path node)  (update-next nodes graph)
+  ::
+  ::  traverse via a topological sorting of DAG
+  |-
+  ~&  >  traversing+~(key by next)
+  ~&  >  graph-view+graph
+  ?:  .=(~ next)
+    [dep-dag path-dag]
+  =-
+    %=  $
+      next   (update-next nodes graph)
+      graph  graph
+      dep-dag  dd
+      path-dag  pd
+    ==
+  ^-  [graph=(map path (set path)) dd=(map @ node) pd=^path-dag]
+  %+  roll
+    ~(tap by next)
+  |=  [[p=path n=node] graph=_graph dep-dag=_dep-dag path-dag=_path-dag]
+  =/  hash  (calculate-hash n dep-dag path-dag)
+  :+  (update-graph-view graph p)
+    (~(put by dep-dag) hash n)
+  (~(put by path-dag) p [hash n])
+  ::
+++  update-next
+  |=  [nodes=(map path node) gv=graph-view]
+  ^-  (map path node)
+  ::
+  ::  if we don't have the entry in gv, already visited
+  %+  roll
+    ~(tap by gv)
+  |=  [[pax=path edges=(set path)] next=(map path node)]
+  ::
+  :: if a node has no out edges, add it to next
+  ?.  =(*(set path) edges)
+    next
+  %+  ~(put by next)
+    pax
+  (~(got by nodes) pax)
+::
+++  update-graph-view
+  |=  [gv=graph-view p=path]
+  ^-  graph-view
+  =.  gv  (~(del by gv) p)
+  %-  ~(urn by gv)
+  |=  [* edges=(set path)]
+  (~(del in edges) p)
+::
+++  calculate-hash
+  |=  [n=node dep-dag=merk-dag =path-dag]
+  ^-  @
+  ~&  >  calculating-hash+path.n
+  %+  roll
+    deps.n
+  |=  [raut hash=_hash.n]
+  ~&  >  grabbing-dep+pax
+  ?.  (~(has by path-dag) pax)
+    ~&  >>>  "calculate-hash: Missing {<pax>}"  !!
+  =/  [dep-hash=@ *]
+    (~(got by path-dag) pax)
+  (shax (rep 8 ~[hash dep-hash]))
+::
+++  build-graph-view
+  |=  nodes=(map path node)
+  ^-  graph-view
+  %-  ~(urn by nodes)
+  |=  [* n=node]
+  %-  silt
+  (turn deps.n |=(raut pax))
+::
 ::
 ++  slew
   |=  [hed=(trap vase) tal=(trap vase)]
