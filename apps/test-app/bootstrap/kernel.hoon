@@ -1,5 +1,6 @@
 /+  *wrapper
 =>
+::
 |%
 +$  test-state  [%0 val=@]
 ++  moat  (keep test-state)
