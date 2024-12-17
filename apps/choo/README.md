@@ -2,23 +2,36 @@
 
 To self-bootstrap:
 
-```
-$ cargo build
-$ ../target/debug/choo --new --knob hoon/lib/hoon-139.hoon
-$ mv out.jam hoon-139.jam
-$ ../target/debug/choo --new hoon/lib/kernel.hoon hoon-139.jam
-$ mv out.jam bootstrap/choo.jam
-$ cargo build
+```bash
+cargo build
+cargo run --release bootstrap/kernel.hoon ../hoon-deps
 ```
 
-You now have a choo executable whose nock was built entirely by choo from Hoon sources.
+This will save the built kernel as a jam file in the `.data.choo` directory.
 
 ## Usage
+
+The following assumes you have the `choo` binary in your path, which can be built with `cargo build --release` and found in `target/release/choo`.
 
 For `choo`, the first argument is the entrypoint to the program, while the second argument is the root directory for source files.
 
 ```bash
 choo main.hoon hoon/
+```
+
+### Building Arbitrary Hoon
+
+To build arbitrary Hoon files, use the `--arbitrary` flag:
+
+```bash
+# Create a directory for your Hoon files
+mkdir hoon
+
+# Create a simple Hoon file
+echo '%trivial' > hoon/trivial.hoon
+
+# Build the Hoon file (exclude --new if you want to use the build cache)
+choo --new --arbitrary hoon/trivial.hoon
 ```
 
 ## Hoon
