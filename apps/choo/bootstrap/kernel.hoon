@@ -22,7 +22,7 @@
 --
 ::
 =<
-~&  %choo-choo
+~&  >>  %choo-choo
 %-  moat
 ^-  fort:moat
 |_  k=choo-state
@@ -56,7 +56,7 @@
     [~ k]
   ::
       %boot
-    ~&  hoon-version+hoon-version
+    ~&  >>  hoon-version+hoon-version
     ?:  ?=(^ cached-hoon.k)
       [~ k]
    [~ k(cached-hoon `(build-honc hoon-txt.cause))]
@@ -306,7 +306,7 @@
   |=  [=entry dir=(map path cord)]
   ^-  (trap)
   =/  dir-hash  `@uvI`(mug dir)
-  ~&  dir-hash+dir-hash
+  ~&  >>  dir-hash+dir-hash
   =/  graph  (make-import-graph ~ entry 0 ~ dir)
   ::  +shot calls the kernel gate to tell it the hash of the zkvm desk
   =;  ker-gen
@@ -320,7 +320,7 @@
   |=  [=entry dir=(map path cord)]
   ^-  (trap)
   =/  dir-hash  `@uvI`(mug dir)
-  ~&  dir-hash+dir-hash
+  ~&  >>  dir-hash+dir-hash
   =/  graph  (make-import-graph ~ entry 0 ~ dir)
   =/  tase
     %-  head
@@ -338,9 +338,9 @@
 ++  make-import-graph
   |=  [face=(unit @tas) suf=entry depth=@ cache=(map path import-graph) dir=(map path cord)]
   ^-  [import-graph (map path import-graph)]
-  ~&  building-graph-for+[depth=depth pat.suf]
+  ~&  >>  building-graph-for+[depth=depth pat.suf]
   ?^  existing=(~(get by cache) pat.suf)
-    ~&  >  "reusing cached graph for {<pat.suf>}"
+    ~&  >>  "reusing cached graph for {<pat.suf>}"
     [u.existing(face face) cache]  ::  make sure to use the provided face
   =/  file=cord  (get-file suf dir)
   ?.  (is-hoon pat.suf)
@@ -397,9 +397,9 @@
   |^
   ::  recursively compile each dependency then cons them all together
   ::  (base case is when both sur and lib are ~)
-  ~&  "processing {<path.graph>}"
+  ~&  >>  "processing {<path.graph>}"
   ?^  existing=(~(get by cache) path.graph)
-    ~&  >  "reusing cached vase for {<path.graph>}"
+    ~&  >>  "reusing cached vase for {<path.graph>}"
     [(label-vase u.existing face.graph) cache]
   =^  surs  cache   (spin sur.graph cache compile-graph)
   =^  libs  cache   (spin lib.graph cache compile-graph)
@@ -426,7 +426,7 @@
       (swet deps hoon.leaf.graph)
     =>  octs=!>(octs.leaf.graph)
     |.  octs
-  ~&  compiled+path.graph
+  ~&  >>  compiled+path.graph
   ::  cache the vase before adding the face so that alias can be handled jit when pulling from cache
   ::
   =.  cache     (~(put by cache) path.graph compiled)
