@@ -1,3 +1,4 @@
+/+  *zose
 /+  *wrapper
 =>
 |%
@@ -12,6 +13,7 @@
 --
 ::
 %-  moat
+~&  %test-kernel
 ^-  fort:moat
 |_  k=test-state
 ::
@@ -40,6 +42,8 @@
 ++  poke
   |=  [eny=@ our=@ux now=@da dat=*]
   ^-  [(list effect) test-state]
+  =|  p=pith
+  =/  tap  (en-tape:pith p)
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
