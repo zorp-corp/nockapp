@@ -10,7 +10,6 @@ pub fn one_punch_man(data: NounSlab, op: Operation) -> IODriverFn {
     make_driver(|handle| async move {
         let result = match op {
             Operation::Poke => {
-                debug!("poke_once_driver: poking with {:?}", data);
                 Left(handle.poke(data).await?)
             }
             Operation::Peek => {
