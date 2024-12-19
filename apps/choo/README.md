@@ -3,11 +3,22 @@
 To self-bootstrap:
 
 ```bash
-cargo build
 cargo run --release bootstrap/kernel.hoon ../hoon-deps
 ```
 
-This will save the built kernel as a jam file in the `.data.choo` directory.
+This will save the built kernel as `out.jam` in the current directory. This should be moved to the bootstrap directory so the `choo` binary can pick it up:
+
+```bash
+mv out.jam bootstrap/choo.jam
+```
+
+Once this is done, you should be able to run
+
+``` bash
+cargo build --release
+```
+
+and use the resulting binary in `target/release/choo` (in the `nockapp` directory) to build NockApp kernels or arbitrary hoon files as detailed in the following section.
 
 ## Usage
 
