@@ -92,8 +92,8 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Error> {
-    let mut nockapp = boot::setup(KERNEL_JAM, Some(cli.boot), &[], "choo")?;
-
+    let mut nockapp = boot::setup(KERNEL_JAM, Some(cli.boot.clone()), &[], "choo")?;
+    boot::init_default_tracing(&cli.boot.clone());
     let mut slab = NounSlab::new();
     let hoon_cord = Atom::from_value(&mut slab, HOON_TXT).unwrap().as_noun();
     let bootstrap_poke = T(&mut slab, &[D(tas!(b"boot")), hoon_cord]);
