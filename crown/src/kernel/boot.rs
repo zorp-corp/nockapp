@@ -46,6 +46,16 @@ pub struct Cli {
     pub state_jam: Option<String>,
 }
 
+pub fn init_default_tracing(cli: &Cli) {
+    tracing_subscriber::registry()
+        .with(
+            fmt::layer()
+                .with_ansi(cli.color == ColorChoice::Auto || cli.color == ColorChoice::Always),
+        )
+        .with(EnvFilter::new(&cli.log_level))
+        .init();
+}
+
 pub fn setup(
     jam: &[u8],
     cli: Option<Cli>,
@@ -53,16 +63,6 @@ pub fn setup(
     name: &str,
 ) -> Result<NockApp, Box<dyn std::error::Error>> {
     let cli = cli.unwrap_or_else(|| Cli::parse());
-
-    if !cfg!(feature = "skip-subscriber") {
-        tracing_subscriber::registry()
-            .with(
-                fmt::layer()
-                    .with_ansi(cli.color == ColorChoice::Auto || cli.color == ColorChoice::Always),
-            )
-            .with(EnvFilter::new(&cli.log_level))
-            .init();
-    }
 
     let data_dir = default_data_dir(name);
     let pma_dir = data_dir.join("pma");
