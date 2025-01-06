@@ -43,7 +43,7 @@
 --
 ::
 ~&  %serving
-%-  moat
+%-  (moat |)
 ^-  fort:moat
 |_  k=server-state
 ::
