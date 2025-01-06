@@ -11,7 +11,7 @@
   ==
 --
 ::
-%-  moat
+%-  (moat |)
 ^-  fort:moat
 |_  k=test-state
 ::

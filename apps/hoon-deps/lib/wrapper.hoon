@@ -45,6 +45,7 @@
     --
   --
   ::
+  |=  crash=?
   |=  inner=fort
   |=  hash=@uvI
   =<  .(desk-hash.outer `hash)
@@ -68,11 +69,12 @@
   ++  poke
     |=  [num=@ ovum=*]
     ^-  [(list *) _..poke]
-    ?+   ovum  ~&("invalid arg: {<ovum>}" ~^..poke)
+    =/  effects=(list *)  ?:(crash ~[exit/0] ~)
+    ?+   ovum  ~&("invalid arg: {<ovum>}" effects^..poke)
         [[%$ %arvo ~] *]
       =/  g  ((soft crud) +.ovum)
-      ?~  g  ~&(%invalid-goof ~^..poke)
-      =-  [~ ..poke]
+      ?~  g  ~&(%invalid-goof effects^..poke)
+      =-  [effects ..poke]
       (slog tang.goof.u.g)
     ::
         [[%poke ~] *]

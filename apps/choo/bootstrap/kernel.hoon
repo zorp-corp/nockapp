@@ -23,7 +23,7 @@
 ::
 =<
 ~&  >>  %choo-choo
-%-  moat
+%-  (moat &)
 ^-  fort:moat
 |_  k=choo-state
 +*  builder  +>
