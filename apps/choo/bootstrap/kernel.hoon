@@ -332,6 +332,7 @@
   |=  [suf=entry dir=(map path cord)]
   ^-  cord
   ?~  tex.suf
+    ~|  "file not found: {<pat.suf>}"
     (~(got by dir) pat.suf)
   u.tex.suf
 ::
@@ -363,17 +364,14 @@
   =^  new-lib=(list import-graph)  cache
     %^  spin  lib.rile  cache
     |=  [raut cache=(map path import-graph)]
-    =/  c  (~(got by dir) pax)
     (make-import-graph face [pax ~] +(depth) cache dir)
   =^  new-raw=(list import-graph)  cache
     %^  spin  raw.rile  cache
     |=  [raut cache=(map path import-graph)]
-    =/  c  (~(got by dir) pax)
     (make-import-graph face [pax ~] +(depth) cache dir)
   =^  new-bar=(list import-graph)  cache
     %^  spin  bar.rile  cache
     |=  [raut cache=(map path import-graph)]
-    =/  c  (~(got by dir) pax)
     (make-import-graph face [pax ~] +(depth) cache dir)
   =/  graph=import-graph
     :*  pat.suf
@@ -413,7 +411,6 @@
     ::  we must always make hoon.hoon available to each `hoon.graph`
     ::  in case it's not available on account of being hidden behind a face in other dependencies
     ::
-    ::  TODO make sure there are no bunted vases in here
     =-  (roll - |=([v=(trap vase) a=(trap vase)] (slew a v)))
     %+  murn  ~[lib-all sur-all raw-all bar-all honc]
     |=  dep=(trap vase)
@@ -483,13 +480,6 @@
   ^-  ?
   =/  end  (rear pax)
   !=(~ (find ".hoon" (trip end)))
-::
-++  get-hoon
-  ::  produces the hoon source at the given path
-  |=  [pax=path dir=(map path cord)]
-  ^-  tape
-  %-  trip
-  (~(got by dir) pax)
 ::
 ++  is-graph-leaf
   |=  import-graph
