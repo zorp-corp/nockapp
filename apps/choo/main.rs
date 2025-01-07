@@ -92,6 +92,9 @@ async fn main() -> Result<(), Error> {
 }
 
 async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Error> {
+    // Remove trailing slash from directory if present
+    let directory = cli.directory.trim_end_matches('/').to_string();
+
     let mut nockapp = boot::setup(KERNEL_JAM, Some(cli.boot.clone()), &[], "choo")?;
     boot::init_default_tracing(&cli.boot.clone());
     let mut slab = NounSlab::new();
@@ -123,7 +126,7 @@ async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Err
 
     let mut directory_noun = D(0);
 
-    let walker = WalkDir::new(cli.directory.clone())
+    let walker = WalkDir::new(&directory)
         .follow_links(true)
         .into_iter();
     for entry_result in walker.filter_entry(|e| is_valid_file_or_dir(e)) {
@@ -134,7 +137,7 @@ async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Err
                 .path()
                 .to_str()
                 .unwrap()
-                .strip_prefix(&cli.directory)
+                .strip_prefix(&directory)
                 .unwrap();
             let path_cord = Atom::from_value(&mut slab, path_str).unwrap().as_noun();
 
