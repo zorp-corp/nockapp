@@ -8,7 +8,6 @@ use sword::noun::{Atom, D, T};
 use sword_macros::tas;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use tracing::error;
 use walkdir::{DirEntry, WalkDir};
 
 use clap::{arg, command, ColorChoice, Parser};
@@ -29,10 +28,10 @@ struct ChooCli {
     boot: BootCli,
 
     #[arg(help = "Path to file to compile")]
-    entry: String,
+    entry: std::path::PathBuf,
 
     #[arg(help = "Path to root of dependency directory", default_value = "hoon")]
-    directory: String,
+    directory: std::path::PathBuf,
 
     #[arg(
         long,
@@ -66,8 +65,8 @@ type Error = Box<dyn std::error::Error>;
 async fn main() -> Result<(), Error> {
     let cli = ChooCli::parse();
     let result = std::panic::AssertUnwindSafe(async {
-        let nockapp = initialize_nockapp(cli).await?;
-        work_loop(nockapp).await;
+        let mut nockapp = initialize_nockapp(cli).await?;
+        nockapp.run().await?;
         Ok::<(), Error>(())
     })
     .catch_unwind()
@@ -91,10 +90,18 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
-async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Error> {
-    // Remove trailing slash from directory if present
-    let directory = cli.directory.trim_end_matches('/').to_string();
+fn canonicalize_and_string(path: &std::path::Path) -> Result<String, Error> {
+    let path = path.canonicalize()?;
+    let path = path.to_str().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Path is not valid or file cannot be found",
+        )
+    })?;
+    Ok(path.to_string())
+}
 
+async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Error> {
     let mut nockapp = boot::setup(KERNEL_JAM, Some(cli.boot.clone()), &[], "choo")?;
     boot::init_default_tracing(&cli.boot.clone());
     let mut slab = NounSlab::new();
@@ -114,20 +121,11 @@ async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Err
         Atom::from_value(&mut slab, contents_vec).unwrap().as_noun()
     };
 
-    let mut entry = cli.entry.clone();
-
-    //  Insert a leading slash if it is not present
-    //  Needed to make the entry path an actual hoon $path type
-    if !entry.starts_with('/') {
-        entry.insert(0, '/');
-    }
-
-    // hoon does not support uppercase paths
-    let entry_path = Atom::from_value(&mut slab, entry.to_lowercase())
-        .unwrap()
-        .as_noun();
+    let entry_string = canonicalize_and_string(&cli.entry)?;
+    let entry_path = Atom::from_value(&mut slab, entry_string.to_lowercase()).unwrap().as_noun();
 
     let mut directory_noun = D(0);
+    let directory = canonicalize_and_string(&cli.directory)?;
 
     let walker = WalkDir::new(&directory).follow_links(true).into_iter();
     for entry_result in walker.filter_entry(|e| is_valid_file_or_dir(e)) {
@@ -171,71 +169,92 @@ async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Err
     Ok(nockapp)
 }
 
-async fn work_loop(mut nockapp: crown::nockapp::NockApp) {
-    loop {
-        let work_res = nockapp.work().await;
-        if let Err(e) = work_res {
-            error!("work error: {:?}", e);
-            break;
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use tokio::fs;
-    use tracing::info;
+    use tracing::{debug, info};
 
-    #[ignore]
+    async fn test_nockapp(entry: std::path::PathBuf, deps_dir: std::path::PathBuf,) -> Result<crown::nockapp::NockApp, Error> {
+        let cli = ChooCli {
+            boot: BootCli {
+                save_interval: 1000,
+                new: false,
+                trace: false,
+                log_level: "trace".to_string(),
+                color: ColorChoice::Auto,
+                state_jam: None,
+            },
+            entry,
+            directory: deps_dir,
+            arbitrary: false,
+        };
+        initialize_nockapp(cli).await
+    }
+
+    async fn test_build(nockapp: &mut crown::nockapp::NockApp) -> Result<(), Error> {
+        nockapp.run().await?;
+        // TODO this doesn't work because choo exits when compilation is done.
+        // Verify output file exists and is not empty
+        let metadata = fs::metadata("out.jam").await?;
+        info!("Output file size: {} bytes", metadata.len());
+        assert!(metadata.len() > 0, "Output file is empty");
+        Ok(())
+    }
+
+    // TODO: Move this to an integration test.
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_compile_test_app() -> Result<(), Box<dyn std::error::Error>> {
-        let mut test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        // let mut test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        // test_dir.pop();
+        // test_dir.push("test-app");
+
+        // use std::path to get pwd() and then canonicalize
+        let pwd = std::env::current_dir().unwrap();
+        let mut test_dir = pwd.clone();
         test_dir.pop();
         test_dir.push("test-app");
 
+        let entry = test_dir.join("bootstrap/kernel.hoon");
+
+        // TODO: Add -o flag to specify output file and then use the tmp-dir
+        // TODO: instead of mutating the non-tmp filesystem in this test
         // Clean up any existing output file
         let _ = fs::remove_file("out.jam").await;
 
-        let mut deps_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let mut deps_dir = pwd.clone();
         deps_dir.pop();
         deps_dir.push("hoon-deps");
-        let entry = format!("{}/bootstrap/kernel.hoon", test_dir.display());
+        info!("Test directory: {:?}", test_dir);
+        info!("Dependencies directory: {:?}", deps_dir);
+        info!("Entry file: {:?}", entry);
 
-        let result = async {
-            let cli = ChooCli {
-                boot: BootCli {
-                    save_interval: 1000,
-                    new: false,
-                    trace: false,
-                    log_level: "trace".to_string(),
-                    color: ColorChoice::Auto,
-                    state_jam: None,
-                },
-                entry: entry.clone(),
-                directory: deps_dir.display().to_string(),
-                arbitrary: false,
-            };
-
-            let nockapp = initialize_nockapp(cli).await?;
-            info!("Test directory: {}", test_dir.display());
-            info!("Dependencies directory: {}", deps_dir.display());
-            info!("Entry file: {}", entry.clone());
-            work_loop(nockapp).await;
-
-            // TODO this doesn't work because choo exits when compilation is done.
-            // Verify output file exists and is not empty
-            let metadata = fs::metadata("out.jam").await?;
-            info!("Output file size: {} bytes", metadata.len());
-            assert!(metadata.len() > 0, "Output file is empty");
-            Ok(())
-        }
-        .await;
-
+        let mut nockapp = test_nockapp(entry, deps_dir).await?;
+        let result = test_build(&mut nockapp).await;
+        assert!(result.is_ok());
         // Cleanup
         let _ = fs::remove_file("out.jam").await;
+        debug!("Removed file");
 
+        // Second run to test consecutive execution
+        // FIXME: This currently panics because of the one-shot.
+        // let result = test_build(&mut nockapp).await;
+        // // Cleanup
+        // let _ = fs::remove_file("out.jam").await;
         result
+    }
+
+    #[test]
+    #[cfg_attr(miri, ignore)]
+    fn test_canonicalize_and_string() {
+        let path = std::path::Path::new("Cargo.toml");
+        let result = super::canonicalize_and_string(path);
+        assert!(result.is_ok());
+        // left: "/Users/callen/work/zorp/nockapp/apps/choo/Cargo.toml"
+        // right: "Cargo.toml"
+        let pwd = std::env::current_dir().unwrap();
+        let cargo_toml = pwd.join("Cargo.toml").canonicalize().unwrap();
+        assert_eq!(result.unwrap(), cargo_toml.to_str().unwrap());
     }
 }

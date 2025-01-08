@@ -20,13 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     boot::init_default_tracing(&cli.boot.clone());
     http_app.add_io_driver(crown::http_driver()).await;
 
-    loop {
-        let work_res = http_app.work().await;
-        if let Err(e) = work_res {
-            debug!("work error: {:?}", e);
-            break;
-        }
-    }
+    http_app.run().await.expect("Failed to run app");
 
     Ok(())
 }

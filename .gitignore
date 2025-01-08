@@ -12,6 +12,8 @@ out.jam
 
 # Dev config
 .vscode/settings.json
+.vscode/
+.idea/
 
 # Junk
 .unikraft
