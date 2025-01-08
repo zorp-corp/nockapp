@@ -44,6 +44,11 @@ pub struct NockApp {
     pub npc_socket_path: Option<PathBuf>,
 }
 
+pub enum NockAppRun {
+    Pending,
+    Done,
+}
+
 impl NockApp {
     pub fn new(kernel: Kernel, save_interval: Duration) -> Self {
         let (action_channel_sender, action_channel) = mpsc::channel(100);
@@ -149,7 +154,7 @@ impl NockApp {
         Ok(())
     }
 
-    pub async fn work(&mut self) -> Result<(), NockAppError> {
+    pub async fn work(&mut self) -> Result<NockAppRun, NockAppError> {
         let tasks_fut = async {
             let mut joinset = self.tasks.clone().lock_owned().await;
             joinset.join_next().await
@@ -165,7 +170,7 @@ impl NockApp {
                     }
                 }
             }
-            std::process::exit(1);
+            return Err(NockAppError::ShutdownForCancelToken);
         }
 
         select!(
@@ -181,7 +186,7 @@ impl NockApp {
                     Some(Err(e)) => {
                         Err(e)?
                     },
-                    _ => {Ok(())},
+                    _ => {Ok(NockAppRun::Pending)},
                 }
             },
             permit = self.save_sem.clone().acquire_owned() => {
@@ -189,7 +194,7 @@ impl NockApp {
                 let curr_event_num = self.kernel.serf.event_num;
                 let saved_event_num = self.watch_recv.borrow();
                 if curr_event_num <= *saved_event_num {
-                    return Ok(())
+                    return Ok(NockAppRun::Pending)
                 }
                 drop(saved_event_num);
 
@@ -202,11 +207,12 @@ impl NockApp {
                 if elapsed < self.save_interval && !self.exit_status.load(Ordering::SeqCst) {
                     tokio::time::sleep(self.save_interval - elapsed).await;
                 }
-                return res
+                return res.map(|_| NockAppRun::Pending);
             },
             exit = self.exit_recv.recv() => {
                 if let Some(code) = exit {
                     self.action_channel.close();
+                    // TODO: See if exit_status is duplicative of what the cancel token is for.
                     self.exit_status.store(true, Ordering::SeqCst);
                     let exit_event_num = self.kernel.serf.event_num;
                     info!("Exit request received, waiting for save checkpoint with event_num {}", exit_event_num);
@@ -226,14 +232,17 @@ impl NockApp {
                                         }
                                     }
                                 }
-                                info!("Save event_num reached, exiting with code {}", code);
-                                std::process::exit(code as i32);
+                                info!("Save event_num reached, finishing with code {}", code);
+                                if code == 0 {
+                                    return Ok(NockAppRun::Done);
+                                } else {
+                                    return Err(NockAppError::Exit(code));
+                                }
                             }
                         }
                     });
-                    Ok(())
-                }
-                else {
+                    Ok(NockAppRun::Pending)
+                } else {
                     error!("Exit signal channel closed prematurely");
                     Err(NockAppError::ChannelClosedError)
                 }
@@ -275,7 +284,7 @@ impl NockApp {
                         },
                     }
                 }
-                Ok(())
+                Ok(NockAppRun::Pending)
             }
         )
     }
