@@ -26,7 +26,7 @@ pub struct Cli {
         default_value = "1000",
         help = "Set the save interval for checkpoints (in ms)"
     )]
-    save_interval: u64,
+    pub save_interval: u64,
 
     #[arg(
         long,

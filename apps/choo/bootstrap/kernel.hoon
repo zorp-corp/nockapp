@@ -99,7 +99,10 @@
    [~ k(cached-hoon `(build-honc hoon-txt.cause))]
   ::
       %build
-    =/  =entry  [(stab pat.cause) `tex.cause]
+    ~&  >>  "building path: {<pat.cause>}"
+    =/  =entry
+      ~|  "path did not parse: {<pat.cause>}"
+      [(stab pat.cause) `tex.cause]
     =/  dir
       %-  ~(gas by *(map path cord))
       (turn directory.cause |=((pair @t @t) [(stab p) q]))
