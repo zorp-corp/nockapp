@@ -109,9 +109,9 @@
     ?>  ?=(^ cached-hoon.k)
     =/  [compiled=* new-bc=build-cache new-pc=parse-cache]
       ?:  arbitrary.cause
-        %-  ~(create builder u.cached-hoon.k bc.k pc.k)
+        %-  ~(create-arbitrary builder u.cached-hoon.k bc.k pc.k)
         [entry dir]
-      %-  ~(create-arbitrary builder u.cached-hoon.k bc.k pc.k)
+      %-  ~(create builder u.cached-hoon.k bc.k pc.k)
       [entry dir]
     :_  k(bc new-bc, pc new-pc)
     :~  :*  %file
