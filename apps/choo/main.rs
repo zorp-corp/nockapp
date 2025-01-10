@@ -19,7 +19,7 @@ static KERNEL_JAM: &[u8] =
 
 static HOON_TXT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../hoon-deps/lib/hoon-138.hoon"
+    "/../hoon/hoon-138.hoon"
 ));
 
 #[derive(Parser, Debug)]
@@ -122,7 +122,8 @@ async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Err
         entry.insert(0, '/');
     }
 
-    let entry_path = Atom::from_value(&mut slab, entry).unwrap().as_noun();
+    // hoon does not support uppercase paths
+    let entry_path = Atom::from_value(&mut slab, entry.to_lowercase()).unwrap().as_noun();
 
     let mut directory_noun = D(0);
 
@@ -139,7 +140,8 @@ async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Err
                 .unwrap()
                 .strip_prefix(&directory)
                 .unwrap();
-            let path_cord = Atom::from_value(&mut slab, path_str).unwrap().as_noun();
+
+            let path_cord = Atom::from_value(&mut slab, path_str.to_lowercase()).unwrap().as_noun();
 
             let contents = {
                 let mut contents_vec: Vec<u8> = vec![];
@@ -174,5 +176,63 @@ async fn work_loop(mut nockapp: crown::nockapp::NockApp) {
             error!("work error: {:?}", e);
             break;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use tokio::fs;
+    use tracing::info;
+
+    #[ignore]
+    #[tokio::test]
+    async fn test_compile_test_app() -> Result<(), Box<dyn std::error::Error>> {
+        let mut test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        test_dir.pop();
+        test_dir.push("test-app");
+
+        // Clean up any existing output file
+        let _ = fs::remove_file("out.jam").await;
+
+        let mut deps_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        deps_dir.pop();
+        deps_dir.push("hoon-deps");
+        let entry = format!("{}/bootstrap/kernel.hoon", test_dir.display());
+
+        let result = async {
+            let cli = ChooCli {
+                boot: BootCli {
+                    save_interval: 1000,
+                    new: false,
+                    trace: false,
+                    log_level: "trace".to_string(),
+                    color: ColorChoice::Auto,
+                    state_jam: None,
+                },
+                entry: entry.clone(),
+                directory: deps_dir.display().to_string(),
+                arbitrary: false,
+            };
+
+            let nockapp = initialize_nockapp(cli).await?;
+            info!("Test directory: {}", test_dir.display());
+            info!("Dependencies directory: {}", deps_dir.display());
+            info!("Entry file: {}", entry.clone());
+            work_loop(nockapp).await;
+
+            // TODO this doesn't work because choo exits when compilation is done.
+            // Verify output file exists and is not empty
+            let metadata = fs::metadata("out.jam").await?;
+            info!("Output file size: {} bytes", metadata.len());
+            assert!(metadata.len() > 0, "Output file is empty");
+            Ok(())
+        }.await;
+
+        // Cleanup
+        let _ = fs::remove_file("out.jam").await;
+
+        result
     }
 }
