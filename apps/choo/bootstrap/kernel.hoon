@@ -570,7 +570,20 @@
   [[%face face p.vas] q.vas]
 ::
 ::
+::  $merk-dag: content-addressed map of nodes
+::
+::    maps content hashes to nodes. each hash is computed from the node's
+::    content and the hashes of its dependencies, forming a merkle tree.
+::    used to detect changes in the dependency graph and enable caching.
+::
 +$  merk-dag  (map @ node)
+::
+::  $path-dag: path-addressed map of nodes with their content hashes
+::
+::    maps file paths to [hash node] pairs. provides a way to look up nodes
+::    by path while maintaining the connection to their content hash in the
+::    merk-dag. used during traversal to find dependencies by path.
+::
 +$  path-dag  (map path [@ node])
 ::
 ::  $build-merk-dag: builds a merkle DAG out of the dependency folder
