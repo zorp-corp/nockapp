@@ -494,18 +494,16 @@
   |-
   ?:  .=(~ next)
     (compile-node n path-dag bc)
-  =^  vaz  bc
+  =.  bc
     %+  roll  ~(tap by next)
-    |=  [[p=path n=node] [v=_vaz bc=_bc]]
-    =^  new-vaz  bc  (compile-node n path-dag bc)
-    ?:  =(vaz *_vaz)
-      [new-vaz bc]
-    [(slew v new-vaz) bc]
+    |=  [[p=path n=node] bc=_bc]
+    +:(compile-node n path-dag bc)
+  =.  graph
+    (roll ~(tap by next) |=([[p=path *] g=_graph] (update-graph-view g p)))
   %=  $
     next   (update-next nodes graph)
-    graph  (roll ~(tap by next) |=([[p=path *] g=_graph] (update-graph-view g p)))
+    graph  graph
     bc     bc
-    vaz    vaz
   ==
 ::
 ::  $compile-node: compile a single node
@@ -541,6 +539,7 @@
   |=  [n=node =path-dag bc=build-cache]
   ^-  (trap vase)
   =;  dep-vaz=(trap vase)
+    ~>  %bout
     (swet (slew honc dep-vaz) hoon.n)
   %+  roll
     deps.n
@@ -550,8 +549,8 @@
     ~|  "couldn't find dep hash for {<pax>}"
     (~(got by path-dag) pax)
   =/  dep-vaz=(trap vase)
-    %+  fall  (~(get by bc) dep-hash)
-    (build-node dep-node path-dag bc)
+    ~|  "couldn't find artifact for {<pax>} in build cache"
+    (~(got by bc) dep-hash)
   (slew (slew honc vaz) (label-vase dep-vaz face))
 ::
 ::  $label-vase: label a (trap vase) with a face
