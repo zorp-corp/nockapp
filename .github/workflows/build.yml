@@ -28,12 +28,14 @@ jobs:
     - uses: zorp-corp/rust-cache@v2
       with:
         workspaces: ". -> target"
+    - name: Install cargo-nextest
+      uses: taiki-e/install-action@nextest
     - name: Run tests
-      run: cargo test
+      run: cargo nextest run
     - name: Install Miri
       run: rustup component add miri
     - name: Test with Miri
-      run: cargo miri test
+      run: cargo miri nextest run
     - name: Build all
       run: cargo build --release
     - name: Compile choo kernel with bootstrap choo
