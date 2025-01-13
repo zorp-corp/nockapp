@@ -202,7 +202,6 @@ async fn work_loop(mut nockapp: crown::nockapp::NockApp) -> Result<(), NockAppEr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use tokio::fs;
     use tracing::info;
 
@@ -215,7 +214,7 @@ mod tests {
         result
     }
 
-    #[ignore]
+    // TODO: Move this to an integration test.
     #[tokio::test]
     async fn test_compile_test_app() -> Result<(), Box<dyn std::error::Error>> {
         // let mut test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -258,7 +257,7 @@ mod tests {
             info!("Test directory: {:?}", test_dir);
             info!("Dependencies directory: {:?}", deps_dir);
             info!("Entry file: {:?}", entry);
-            work_loop(nockapp).await;
+            work_loop(nockapp).await.expect("Work loop failed");
 
             // TODO this doesn't work because choo exits when compilation is done.
             // Verify output file exists and is not empty
