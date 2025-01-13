@@ -371,15 +371,19 @@
    =>  tase
    |.(+:^$)
 ::
-::  $create-target: builds a hoon file with dependencies
+::  $create-target: builds a hoon or jock file with dependencies
 ::
 ::    .entry: the entry to build
 ::    .dir: the directory to get dependencies from
 ::
-::    returns a trap with the compiled hoon file and the updated caches
+::    returns a trap with the compiled hoon or jock file and the updated caches
 ++  create-target
   |=  [=entry dir=(map path cord)]
   ^-  [(trap vase) build-cache parse-cache]
+  ?.  (is-hoon pat.entry)
+    =/  file  (get-file entry dir)
+    =/  vaz  !>([%octs [(met 3 file) file]])
+    [|.(vaz) *build-cache *parse-cache]
   =/  [parsed-dir=(map path node) pc=parse-cache]  (parse-dir entry dir)
   =/  all-nodes=(map path node)  parsed-dir
   =/  [dep-dag=merk-dag =path-dag]  (build-merk-dag all-nodes)
