@@ -331,7 +331,7 @@
 ::
 +$  graph-view  (map path (set path))
 ::
-::  $create: build a trap from a hoon file with dependencies
+::  $create: build a trap from a hoon/jock file with dependencies
 ::
 ::    .entry: the entry to build
 ::    .dir: the directory to get dependencies from
@@ -356,7 +356,7 @@
     |.(d)
   |.(+:^$)
 ::
-::  $create-arbitrary: builds a hoon file with dependencies without file hash injection
+::  $create-arbitrary: builds a hoon/jock file with dependencies without file hash injection
 ::
 ::    .entry: the entry to build
 ::    .dir: the directory to get dependencies from
@@ -371,15 +371,19 @@
    =>  tase
    |.(+:^$)
 ::
-::  $create-target: builds a hoon file with dependencies
+::  $create-target: builds a hoon/jock file with dependencies
 ::
 ::    .entry: the entry to build
 ::    .dir: the directory to get dependencies from
 ::
-::    returns a trap with the compiled hoon file and the updated caches
+::    returns a trap with the compiled hoon/jock file and the updated caches
 ++  create-target
   |=  [=entry dir=(map path cord)]
   ^-  [(trap vase) build-cache parse-cache]
+  ?.  (is-hoon pat.entry)
+    =/  file  (get-file entry dir)
+    =/  vaz  !>([%octs [(met 3 file) file]])
+    [|.(vaz) *build-cache *parse-cache]
   =/  [parsed-dir=(map path node) pc=parse-cache]  (parse-dir entry dir)
   =/  all-nodes=(map path node)  parsed-dir
   =/  [dep-dag=merk-dag =path-dag]  (build-merk-dag all-nodes)
@@ -460,13 +464,6 @@
       ==
     $(deps t.deps)                                      ::  next dep
   ::
-  ++  get-file                                          ::  get file contents
-    |=  [suf=entry dir=(map path cord)]
-    ^-  cord
-    ?~  tex.suf
-      ~|  "file not found: {<pat.suf>}"
-      (~(got by dir) pat.suf)
-    u.tex.suf
   --
 ::
 ::  $compile-target: compile a target hoon file
@@ -494,18 +491,16 @@
   |-
   ?:  .=(~ next)
     (compile-node n path-dag bc)
-  =^  vaz  bc
+  =.  bc
     %+  roll  ~(tap by next)
-    |=  [[p=path n=node] [v=_vaz bc=_bc]]
-    =^  new-vaz  bc  (compile-node n path-dag bc)
-    ?:  =(vaz *_vaz)
-      [new-vaz bc]
-    [(slew v new-vaz) bc]
+    |=  [[p=path n=node] bc=_bc]
+    +:(compile-node n path-dag bc)
+  =.  graph
+    (roll ~(tap by next) |=([[p=path *] g=_graph] (update-graph-view g p)))
   %=  $
     next   (update-next nodes graph)
-    graph  (roll ~(tap by next) |=([[p=path *] g=_graph] (update-graph-view g p)))
+    graph  graph
     bc     bc
-    vaz    vaz
   ==
 ::
 ::  $compile-node: compile a single node
@@ -541,6 +536,7 @@
   |=  [n=node =path-dag bc=build-cache]
   ^-  (trap vase)
   =;  dep-vaz=(trap vase)
+    ~>  %bout
     (swet (slew honc dep-vaz) hoon.n)
   %+  roll
     deps.n
@@ -550,9 +546,9 @@
     ~|  "couldn't find dep hash for {<pax>}"
     (~(got by path-dag) pax)
   =/  dep-vaz=(trap vase)
-    %+  fall  (~(get by bc) dep-hash)
-    (build-node dep-node path-dag bc)
-  (slew (slew honc vaz) (label-vase dep-vaz face))
+    ~|  "couldn't find artifact for {<pax>} in build cache"
+    (~(got by bc) dep-hash)
+  (slew vaz (label-vase dep-vaz face))
 ::
 ::  $label-vase: label a (trap vase) with a face
 ::
@@ -741,6 +737,14 @@
   =>  [gun=gun tap=tap]
   |.  ~+
   [p.gun .*(q:$:tap q.gun)]
+::
+++  get-file                                          ::  get file contents
+  |=  [suf=entry dir=(map path cord)]
+  ^-  cord
+  ?~  tex.suf
+    ~|  "file not found: {<pat.suf>}"
+    (~(got by dir) pat.suf)
+  u.tex.suf
 ::
 ++  is-hoon
   |=  pax=path
