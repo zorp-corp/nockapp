@@ -382,8 +382,10 @@
   ^-  [(trap vase) build-cache parse-cache]
   ?.  (is-hoon pat.entry)
     =/  file  (get-file entry dir)
-    =/  vaz  !>([%octs [(met 3 file) file]])
-    [|.(vaz) *build-cache *parse-cache]
+    =/  trap-vase
+      =>  v=!>([%octs [(met 3 file) file]])
+      |.(v)
+    [trap-vase *build-cache *parse-cache]
   =/  [parsed-dir=(map path node) pc=parse-cache]  (parse-dir entry dir)
   =/  all-nodes=(map path node)  parsed-dir
   =/  [dep-dag=merk-dag =path-dag]  (build-merk-dag all-nodes)
