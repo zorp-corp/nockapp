@@ -420,6 +420,7 @@
   ~&  >  parsing+pat.suf
   |^
   =/  file=cord  (get-file suf dir)                   ::  get target file
+  =/  hash=@  (shax file)                             ::  hash target file
   =/  target=node
     ?.  (is-hoon pat.suf)
       :*  pat.suf                                       ::  path
@@ -427,7 +428,6 @@
           ~
           [%octs [(met 3 file) file]])
       ==
-    =/  hash=@  (shax file)                             ::  hash target file
     =/  =pile  (parse-pile pat.suf (trip file))         ::  parse target file
     =/  deps=(list raut)  (resolve-pile pile dir)       ::  resolve deps
     :*  pat.suf                                         ::  path
