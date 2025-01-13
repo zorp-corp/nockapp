@@ -325,12 +325,6 @@
       =hoon
   ==
 ::
-::  $graph-view: adjacency matrix with easier access to neighbors
-::
-::    used to keep track of traversal when building the merkle DAG
-::
-+$  graph-view  (map path (set path))
-::
 ::  $create: build a trap from a hoon/jock file with dependencies
 ::
 ::    .entry: the entry to build
@@ -468,106 +462,6 @@
   ::
   --
 ::
-::  $compile-target: compile a target hoon file
-::
-::    .pat: path to the target hoon file
-::    .path-dag: the path-dag of the dependency graph
-::    .nodes: the nodes of the dependency graph
-::    .bc: the build cache
-::
-::    returns a trap vase with the compiled hoon file and the updated build cache
-++  compile-target
-  |=  [pat=path =path-dag nodes=(map path node) bc=build-cache]
-  ^-  [(trap vase) build-cache]
-  ~&  >>  compiling-target+pat
-  =/  n=node
-    ~|  """
-        couldn't find node {<pat>} in path-dag.
-        nodes: {<~(key by nodes)>}
-        path-dag: {<~(key by path-dag)>}
-        """
-    +:(~(got by path-dag) pat)
-  =/  graph  (build-graph-view nodes)
-  =/  next=(map path node)  (update-next nodes graph)
-  =|  vaz=(trap vase)
-  |-
-  ?:  .=(~ next)
-    (compile-node n path-dag bc)
-  =.  bc
-    %+  roll  ~(tap by next)
-    |=  [[p=path n=node] bc=_bc]
-    +:(compile-node n path-dag bc)
-  =.  graph
-    (roll ~(tap by next) |=([[p=path *] g=_graph] (update-graph-view g p)))
-  %=  $
-    next   (update-next nodes graph)
-    graph  graph
-    bc     bc
-  ==
-::
-::  $compile-node: compile a single node
-::
-::    .n: the node to compile
-::    .path-dag: the path-dag of the dependency graph
-::    .bc: the build cache
-::
-::    looks up the node in the build cache and compiles it if it's not already
-::    cached.
-::
-::    returns a trap vase with the compiled hoon and the updated build cache
-++  compile-node
-  |=  [n=node =path-dag bc=build-cache]
-  ^-  [(trap vase) build-cache]
-  ~&  >  compiling-node+path.n
-  =/  [dep-hash=@ *]  (~(got by path-dag) path.n)
-  ?:  (~(has by bc) dep-hash)
-    ~&  >  build-cache-hit+path.n
-    [(~(got by bc) dep-hash) bc]
-  ~&  >  build-cache-miss+path.n
-  =/  vaz=(trap vase)  (build-node n path-dag bc)
-  [vaz (~(put by bc) dep-hash vaz)]
-::
-::  $build-node: build a single node and its dependencies
-::
-::    .n: the node to compile
-::    .path-dag: the path-dag of the dependency graph
-::    .bc: the build cache
-::
-::    returns a trap vase with the compiled hoon
-++  build-node
-  |=  [n=node =path-dag bc=build-cache]
-  ^-  (trap vase)
-  =;  dep-vaz=(trap vase)
-    ~>  %bout
-    (swet (slew honc dep-vaz) hoon.n)
-  %+  roll
-    deps.n
-  |=  [raut vaz=(trap vase)]
-  ~&  >  grabbing-dep+pax
-  =/  [dep-hash=@ dep-node=node]
-    ~|  "couldn't find dep hash for {<pax>}"
-    (~(got by path-dag) pax)
-  =/  dep-vaz=(trap vase)
-    ~|  "couldn't find artifact for {<pax>} in build cache"
-    (~(got by bc) dep-hash)
-  (slew vaz (label-vase dep-vaz face))
-::
-::  $label-vase: label a (trap vase) with a face
-::
-::    .vaz: the (trap vase) to label
-::    .face: the face to label the (trap vase) with
-::
-::    returns a (trap vase) labeled with the given face
-++  label-vase
-  |=  [vaz=(trap vase) face=(unit @tas)]
-  ^-  (trap vase)
-  ?~  face  vaz
-  =>  [vaz=vaz face=u.face]
-  |.
-  =/  vas  $:vaz
-  [[%face face p.vas] q.vas]
-::
-::
 ::  $merk-dag: content-addressed map of nodes
 ::
 ::    maps content hashes to nodes. each hash is computed from the node's
@@ -584,12 +478,19 @@
 ::
 +$  path-dag  (map path [@ node])
 ::
+::  $graph-view: adjacency matrix with easier access to neighbors
+::
+::    used to keep track of traversal when building the merkle DAG
+::
++$  graph-view  (map path (set path))
+::
 ::  $build-merk-dag: builds a merkle DAG out of the dependency folder
 ::
 ::    .nodes: the nodes of the dependency graph
 ::
 ::    returns a merkle DAG and a path-dag
 ++  build-merk-dag
+  |^
   ::
   ::  node set of entire dir + target
   |=  nodes=(map path node)
@@ -624,6 +525,127 @@
   :+  (update-graph-view graph p)
     (~(put by dep-dag) hash n)
   (~(put by path-dag) p [hash n])
+  ::
+  ::  $calculate-hash: calculate the hash of a node
+  ::
+  ::    .n: the node to calculate the hash of
+  ::    .dep-dag: the merkle DAG of the dependency graph
+  ::    .path-dag: the path-dag of the dependency graph
+  ::
+  ::    returns the hash of the node
+  ++  calculate-hash
+    |=  [n=node dep-dag=merk-dag =path-dag]
+    ^-  @
+    %+  roll
+      deps.n
+    |=  [raut hash=_hash.n]
+    ?.  (~(has by path-dag) pax)
+      ~&  >>>  "calculate-hash: Missing {<pax>}"  !!
+    =/  [dep-hash=@ *]
+      (~(got by path-dag) pax)
+    (shax (rep 8 ~[hash dep-hash]))
+  --
+::
+::  $compile-target: compile a target hoon file
+::
+::    .pat: path to the target hoon file
+::    .path-dag: the path-dag of the dependency graph
+::    .nodes: the nodes of the dependency graph
+::    .bc: the build cache
+::
+::    returns a trap vase with the compiled hoon file and the updated build cache
+++  compile-target
+  |^
+  |=  [pat=path =path-dag nodes=(map path node) bc=build-cache]
+  ^-  [(trap vase) build-cache]
+  ~&  >>  compiling-target+pat
+  =/  n=node
+    ~|  """
+        couldn't find node {<pat>} in path-dag.
+        nodes: {<~(key by nodes)>}
+        path-dag: {<~(key by path-dag)>}
+        """
+    +:(~(got by path-dag) pat)
+  =/  graph  (build-graph-view nodes)
+  =/  next=(map path node)  (update-next nodes graph)
+  =|  vaz=(trap vase)
+  |-
+  ?:  .=(~ next)
+    (compile-node n path-dag bc)
+  =.  bc
+    %+  roll  ~(tap by next)
+    |=  [[p=path n=node] bc=_bc]
+    +:(compile-node n path-dag bc)
+  =.  graph
+    (roll ~(tap by next) |=([[p=path *] g=_graph] (update-graph-view g p)))
+  %=  $
+    next   (update-next nodes graph)
+    graph  graph
+    bc     bc
+  ==
+  ::
+  ::  $compile-node: compile a single node
+  ::
+  ::    .n: the node to compile
+  ::    .path-dag: the path-dag of the dependency graph
+  ::    .bc: the build cache
+  ::
+  ::    looks up the node in the build cache and compiles it if it's not already
+  ::    cached.
+  ::
+  ::    returns a trap vase with the compiled hoon and the updated build cache
+  ++  compile-node
+    |=  [n=node =path-dag bc=build-cache]
+    ^-  [(trap vase) build-cache]
+    ~&  >  compiling-node+path.n
+    =/  [dep-hash=@ *]  (~(got by path-dag) path.n)
+    ?:  (~(has by bc) dep-hash)
+      ~&  >  build-cache-hit+path.n
+      [(~(got by bc) dep-hash) bc]
+    ~&  >  build-cache-miss+path.n
+    =/  vaz=(trap vase)  (build-node n path-dag bc)
+    [vaz (~(put by bc) dep-hash vaz)]
+  ::
+  ::  $build-node: build a single node and its dependencies
+  ::
+  ::    .n: the node to compile
+  ::    .path-dag: the path-dag of the dependency graph
+  ::    .bc: the build cache
+  ::
+  ::    returns a trap vase with the compiled hoon
+  ++  build-node
+    |=  [n=node =path-dag bc=build-cache]
+    ^-  (trap vase)
+    =;  dep-vaz=(trap vase)
+      ~>  %bout
+      (swet (slew honc dep-vaz) hoon.n)
+    %+  roll
+      deps.n
+    |=  [raut vaz=(trap vase)]
+    ~&  >  grabbing-dep+pax
+    =/  [dep-hash=@ dep-node=node]
+      ~|  "couldn't find dep hash for {<pax>}"
+      (~(got by path-dag) pax)
+    =/  dep-vaz=(trap vase)
+      ~|  "couldn't find artifact for {<pax>} in build cache"
+      (~(got by bc) dep-hash)
+    (slew vaz (label-vase dep-vaz face))
+  ::
+  ::  $label-vase: label a (trap vase) with a face
+  ::
+  ::    .vaz: the (trap vase) to label
+  ::    .face: the face to label the (trap vase) with
+  ::
+  ::    returns a (trap vase) labeled with the given face
+  ++  label-vase
+    |=  [vaz=(trap vase) face=(unit @tas)]
+    ^-  (trap vase)
+    ?~  face  vaz
+    =>  [vaz=vaz face=u.face]
+    |.
+    =/  vas  $:vaz
+    [[%face face p.vas] q.vas]
+  --
 ::
 ::  $update-next: returns nodes from a $graph-view that have no outgoing edges
 ::
@@ -655,6 +677,7 @@
 ::    .p: the path to remove from the graph-view
 ::
 ::    deletes the $path from the $graph-view and removes it from all edge sets
+::
 ++  update-graph-view
   |=  [gv=graph-view p=path]
   ^-  graph-view
@@ -663,30 +686,12 @@
   |=  [pax=path edges=(set path)]
   (~(del in edges) p)
 ::
-::  $calculate-hash: calculate the hash of a node
-::
-::    .n: the node to calculate the hash of
-::    .dep-dag: the merkle DAG of the dependency graph
-::    .path-dag: the path-dag of the dependency graph
-::
-::    returns the hash of the node
-++  calculate-hash
-  |=  [n=node dep-dag=merk-dag =path-dag]
-  ^-  @
-  %+  roll
-    deps.n
-  |=  [raut hash=_hash.n]
-  ?.  (~(has by path-dag) pax)
-    ~&  >>>  "calculate-hash: Missing {<pax>}"  !!
-  =/  [dep-hash=@ *]
-    (~(got by path-dag) pax)
-  (shax (rep 8 ~[hash dep-hash]))
-::
 ::  $build-graph-view: build a graph-view from a node map
 ::
 ::    .nodes: the nodes of the dependency graph
 ::
 ::    returns a graph-view of the dependency graph
+::
 ++  build-graph-view
   |=  nodes=(map path node)
   ^-  graph-view
