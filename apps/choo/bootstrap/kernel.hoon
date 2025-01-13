@@ -425,8 +425,8 @@
     ?.  (is-hoon pat.suf)
       :*  pat.suf                                       ::  path
           hash                                          ::  hash
-          ~
-          [%octs [(met 3 file) file]])
+          ~                                             ::  deps
+          [%octs [(met 3 file) file]])                  ::  octs
       ==
     =/  =pile  (parse-pile pat.suf (trip file))         ::  parse target file
     =/  deps=(list raut)  (resolve-pile pile dir)       ::  resolve deps
