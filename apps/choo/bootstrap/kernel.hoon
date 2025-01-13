@@ -331,7 +331,7 @@
 ::
 +$  graph-view  (map path (set path))
 ::
-::  $create: build a trap from a hoon file with dependencies
+::  $create: build a trap from a hoon/jock file with dependencies
 ::
 ::    .entry: the entry to build
 ::    .dir: the directory to get dependencies from
@@ -356,7 +356,7 @@
     |.(d)
   |.(+:^$)
 ::
-::  $create-arbitrary: builds a hoon file with dependencies without file hash injection
+::  $create-arbitrary: builds a hoon/jock file with dependencies without file hash injection
 ::
 ::    .entry: the entry to build
 ::    .dir: the directory to get dependencies from
@@ -371,12 +371,12 @@
    =>  tase
    |.(+:^$)
 ::
-::  $create-target: builds a hoon or jock file with dependencies
+::  $create-target: builds a hoon/jock file with dependencies
 ::
 ::    .entry: the entry to build
 ::    .dir: the directory to get dependencies from
 ::
-::    returns a trap with the compiled hoon or jock file and the updated caches
+::    returns a trap with the compiled hoon/jock file and the updated caches
 ++  create-target
   |=  [=entry dir=(map path cord)]
   ^-  [(trap vase) build-cache parse-cache]
@@ -464,13 +464,6 @@
       ==
     $(deps t.deps)                                      ::  next dep
   ::
-  ++  get-file                                          ::  get file contents
-    |=  [suf=entry dir=(map path cord)]
-    ^-  cord
-    ?~  tex.suf
-      ~|  "file not found: {<pat.suf>}"
-      (~(got by dir) pat.suf)
-    u.tex.suf
   --
 ::
 ::  $compile-target: compile a target hoon file
@@ -555,7 +548,7 @@
   =/  dep-vaz=(trap vase)
     ~|  "couldn't find artifact for {<pax>} in build cache"
     (~(got by bc) dep-hash)
-  (slew (slew honc vaz) (label-vase dep-vaz face))
+  (slew vaz (label-vase dep-vaz face))
 ::
 ::  $label-vase: label a (trap vase) with a face
 ::
@@ -744,6 +737,14 @@
   =>  [gun=gun tap=tap]
   |.  ~+
   [p.gun .*(q:$:tap q.gun)]
+::
+++  get-file                                          ::  get file contents
+  |=  [suf=entry dir=(map path cord)]
+  ^-  cord
+  ?~  tex.suf
+    ~|  "file not found: {<pat.suf>}"
+    (~(got by dir) pat.suf)
+  u.tex.suf
 ::
 ++  is-hoon
   |=  pax=path
