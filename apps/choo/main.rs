@@ -124,7 +124,7 @@ async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Err
     };
 
     let entry_string = canonicalize_and_string(&cli.entry)?;
-    let entry_path = Atom::from_value(&mut slab, entry_string).unwrap().as_noun();
+    let entry_path = Atom::from_value(&mut slab, entry_string.to_lowercase()).unwrap().as_noun();
 
     let mut directory_noun = D(0);
     let directory = canonicalize_and_string(&cli.directory)?;

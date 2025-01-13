@@ -219,6 +219,8 @@ impl NockApp {
 
                     let mut recv = self.watch_recv.clone();
                     let socket_path = self.npc_socket_path.clone();
+                    // let cancel_token = self.cancel_token.clone();
+                    // FIXME: Why do we have to spawn here?
                     tokio::task::spawn(async move {
                         loop {
                             let _ = recv.changed().await;
@@ -233,10 +235,15 @@ impl NockApp {
                                     }
                                 }
                                 info!("Save event_num reached, finishing with code {}", code);
-                                if code == 0 {
-                                    return Ok(NockAppRun::Done);
+                                // cancel_token.cancel();
+                                // TODO: This doesn't work currently because
+                                // TODO: it's embedded in a spawned task.
+                                // We could fix this in a hacky way with a one-shot
+                                // but I'd rather make this better-behaved as a library.
+                                return if code == 0 {
+                                    Ok(NockAppRun::Done)
                                 } else {
-                                    return Err(NockAppError::Exit(code));
+                                    Err(NockAppError::Exit(code))
                                 }
                             }
                         }
