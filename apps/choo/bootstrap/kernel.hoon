@@ -442,32 +442,33 @@
       ~&  >>  parsing+pax.i.deps
       =/  dep-file  (get-file [pax.i.deps ~] dir)       ::  get dep file
       =/  dep-hash  (shax dep-file)                     ::  hash dep file
-      =/  dep-node=node
-      ?.  (is-hoon dep-file)
-        :*  pax.i.deps                                  ::  path
-            dep-hash                                    ::  hash
-            ~                                           ::  deps
-            [%octs [(met 3 dep-file) dep-file]]         ::  octs
-        ==
-      =/  dep-pile
-        ?:  (~(has by pc) dep-hash)                     ::  check cache
-          (~(got by pc) dep-hash)
-        (parse-pile pax.i.deps (trip dep-file))         ::  parse dep file
-      ~&  >>  parsed+pax.i.deps
-      =/  dep-deps  (resolve-pile dep-pile dir)         ::  resolve dep deps
-      ~&  >>  resolved+pax.i.deps
+      =^  dep-node=node  pc
+        ?.  (is-hoon pax.i.deps)
+          :_  pc
+          :*  pax.i.deps                                  ::  path
+              dep-hash                                    ::  hash
+              ~                                           ::  deps
+              [%octs [(met 3 dep-file) dep-file]]         ::  octs
+          ==
+        =/  dep-pile
+          ?:  (~(has by pc) dep-hash)                     ::  check cache
+            (~(got by pc) dep-hash)
+          (parse-pile pax.i.deps (trip dep-file))         ::  parse dep file
+        ~&  >>  parsed+pax.i.deps
+        =/  dep-deps  (resolve-pile dep-pile dir)         ::  resolve dep deps
+        ~&  >>  resolved+pax.i.deps
+        :_  (~(put by pc) dep-hash dep-pile)              ::  cache parse
         :*  pax.i.deps
             dep-hash
             dep-deps
             [%hoon hoon.dep-pile]
         ==
       =.  nodes  (~(put by nodes) pax.i.deps dep-node)  ::  add dep node
-      =.  pc  (~(put by pc) dep-hash dep-pile)          ::  cache parse
       =.  seen  (~(put in seen) pax.i.deps)             ::  mark as seen
       %=  $
         nodes  nodes
         seen   seen
-        deps   (weld t.deps dep-deps)                   ::  add new deps
+        deps   (weld t.deps deps.dep-node)                   ::  add new deps
       ==
     $(deps t.deps)                                      ::  next dep
   ::
