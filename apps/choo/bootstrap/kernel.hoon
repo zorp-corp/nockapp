@@ -631,20 +631,21 @@
     =;  dep-vaz=(trap vase)
       ~>  %bout
       ?:  ?=(%hoon -.leaf.n)
-        (swet (slew honc dep-vaz) hoon.leaf.n)
+        (swet (slew dep-vaz honc) hoon.leaf.n)
       =>  octs=!>(octs.leaf.n)
       |.(octs)
     %+  roll
       deps.n
-    |=  [raut vaz=(trap vase)]
-    ~&  >  grabbing-dep+pax
+    |=  [r=raut vaz=(trap vase)]
+    ~&  >  grabbing-dep+pax.r
     =/  [dep-hash=@ dep-node=node]
-      ~|  "couldn't find dep hash for {<pax>}"
-      (~(got by path-dag) pax)
+      ~|  "couldn't find dep hash for {<pax.r>}"
+      (~(got by path-dag) pax.r)
     =/  dep-vaz=(trap vase)
-      ~|  "couldn't find artifact for {<pax>} in build cache"
+      ~|  "couldn't find artifact for {<pax.r>} in build cache"
       (~(got by bc) dep-hash)
-    (slew vaz (label-vase dep-vaz face))
+    ~&  >  attaching-face+face.r
+    (slew vaz (label-vase dep-vaz face.r))
   ::
   ::  $label-vase: label a (trap vase) with a face
   ::
