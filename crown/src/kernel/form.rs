@@ -10,7 +10,6 @@ use sword::hamt::Hamt;
 use sword::interpreter::{self, interpret, Context, Error, Mote};
 use sword::jets::cold::Cold;
 use sword::jets::hot::{Hot, HotEntry, URBIT_HOT_STATE};
-use sword::jets::list::util::zing;
 use sword::jets::nock::util::mook;
 use sword::jets::warm::Warm;
 use sword::mem::NockStack;
@@ -195,8 +194,7 @@ impl Kernel {
     ///
     /// A noun representing the error.
     pub fn goof(&mut self, mote: Mote, traces: Noun) -> Noun {
-        let trace = zing(&mut self.serf.context.stack, traces).expect("serf: goof: zing failed");
-        let tone = Cell::new(&mut self.serf.context.stack, D(2), trace);
+        let tone = Cell::new(&mut self.serf.context.stack, D(2), traces);
         let tang = mook(&mut self.serf.context, tone, false)
             .expect("serf: goof: +mook crashed on bail")
             .tail();
