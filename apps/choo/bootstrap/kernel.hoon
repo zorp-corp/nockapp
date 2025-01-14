@@ -322,7 +322,12 @@
       hash=@
       ::  holds only outgoing edges
       deps=(list raut)
-      =hoon
+      leaf=graph-leaf
+  ==
+::
++$  graph-leaf
+  $%  [%hoon =hoon]
+      [%octs =octs]
   ==
 ::
 ::  $create: build a trap from a hoon/jock file with dependencies
@@ -374,12 +379,6 @@
 ++  create-target
   |=  [=entry dir=(map path cord)]
   ^-  [(trap vase) build-cache parse-cache]
-  ?.  (is-hoon pat.entry)
-    =/  file  (get-file entry dir)
-    =/  trap-vase
-      =>  v=!>([%octs [(met 3 file) file]])
-      |.(v)
-    [trap-vase *build-cache *parse-cache]
   =/  [parsed-dir=(map path node) pc=parse-cache]  (parse-dir entry dir)
   =/  all-nodes=(map path node)  parsed-dir
   =/  [dep-dag=merk-dag =path-dag]  (build-merk-dag all-nodes)
@@ -416,47 +415,60 @@
   |^
   =/  file=cord  (get-file suf dir)                   ::  get target file
   =/  hash=@  (shax file)                             ::  hash target file
-  =/  =pile  (parse-pile pat.suf (trip file))         ::  parse target file
-  =/  deps=(list raut)  (resolve-pile pile dir)       ::  resolve deps
   =/  target=node
-    :*  pat.suf                                       ::  path
-        hash                                          ::  hash
-        deps                                          ::  deps
-        hoon.pile                                     ::  hoon
+    ?.  (is-hoon pat.suf)
+      :*  pat.suf                                       ::  path
+          hash                                          ::  hash
+          ~                                             ::  deps
+          [%octs [(met 3 file) file]]                   ::  octs
+      ==
+    =/  =pile  (parse-pile pat.suf (trip file))         ::  parse target file
+    =/  deps=(list raut)  (resolve-pile pile dir)       ::  resolve deps
+    :*  pat.suf                                         ::  path
+        hash                                            ::  hash
+        deps                                            ::  deps
+        [%hoon hoon.pile]                               ::  hoon
     ==
-  =|  nodes=(map path node)                           ::  init empty node map
-  =.  nodes  (~(put by nodes) pat.suf target)         ::  add target node
+  =|  nodes=(map path node)                             ::  init empty node map
+  =.  nodes  (~(put by nodes) pat.suf target)           ::  add target node
   =/  seen=(set path)  (~(put in *(set path)) pat.suf)
-  (resolve-all nodes seen deps)
+  (resolve-all nodes seen deps.target)
   ::
   ++  resolve-all
     |=  [nodes=(map path node) seen=(set path) deps=(list raut)]
     ^-  [(map path node) parse-cache]
-    ?~  deps  [nodes pc]                             ::  done if no deps
-    ?.  (~(has in seen) pax.i.deps)                  ::  skip if seen
+    ?~  deps  [nodes pc]                                ::  done if no deps
+    ?.  (~(has in seen) pax.i.deps)                     ::  skip if seen
       ~&  >>  parsing+pax.i.deps
-      =/  dep-file  (get-file [pax.i.deps ~] dir)    ::  get dep file
-      =/  dep-hash  (shax dep-file)                  ::  hash dep file
-      =/  dep-pile
-        ?:  (~(has by pc) dep-hash)                  ::  check cache
-          (~(got by pc) dep-hash)
-        (parse-pile pax.i.deps (trip dep-file))      ::  parse dep file
-      ~&  >>  parsed+pax.i.deps
-      =/  dep-deps  (resolve-pile dep-pile dir)      ::  resolve dep deps
-      ~&  >>  resolved+pax.i.deps
-      =/  dep-node
+      =/  dep-file  (get-file [pax.i.deps ~] dir)       ::  get dep file
+      =/  dep-hash  (shax dep-file)                     ::  hash dep file
+      =^  dep-node=node  pc
+        ?.  (is-hoon pax.i.deps)
+          :_  pc
+          :*  pax.i.deps                                  ::  path
+              dep-hash                                    ::  hash
+              ~                                           ::  deps
+              [%octs [(met 3 dep-file) dep-file]]         ::  octs
+          ==
+        =/  dep-pile
+          ?:  (~(has by pc) dep-hash)                     ::  check cache
+            (~(got by pc) dep-hash)
+          (parse-pile pax.i.deps (trip dep-file))         ::  parse dep file
+        ~&  >>  parsed+pax.i.deps
+        =/  dep-deps  (resolve-pile dep-pile dir)         ::  resolve dep deps
+        ~&  >>  resolved+pax.i.deps
+        :_  (~(put by pc) dep-hash dep-pile)              ::  cache parse
         :*  pax.i.deps
             dep-hash
             dep-deps
-            hoon.dep-pile
+            [%hoon hoon.dep-pile]
         ==
       =.  nodes  (~(put by nodes) pax.i.deps dep-node)  ::  add dep node
-      =.  pc  (~(put by pc) dep-hash dep-pile)          ::  cache parse
       =.  seen  (~(put in seen) pax.i.deps)             ::  mark as seen
       %=  $
         nodes  nodes
         seen   seen
-        deps   (weld t.deps dep-deps)                   ::  add new deps
+        deps   (weld t.deps deps.dep-node)                   ::  add new deps
       ==
     $(deps t.deps)                                      ::  next dep
   ::
@@ -618,18 +630,22 @@
     ^-  (trap vase)
     =;  dep-vaz=(trap vase)
       ~>  %bout
-      (swet (slew honc dep-vaz) hoon.n)
+      ?:  ?=(%hoon -.leaf.n)
+        (swet (slew dep-vaz honc) hoon.leaf.n)
+      =>  octs=!>(octs.leaf.n)
+      |.(octs)
     %+  roll
       deps.n
-    |=  [raut vaz=(trap vase)]
-    ~&  >  grabbing-dep+pax
+    |=  [r=raut vaz=(trap vase)]
+    ~&  >  grabbing-dep+pax.r
     =/  [dep-hash=@ dep-node=node]
-      ~|  "couldn't find dep hash for {<pax>}"
-      (~(got by path-dag) pax)
+      ~|  "couldn't find dep hash for {<pax.r>}"
+      (~(got by path-dag) pax.r)
     =/  dep-vaz=(trap vase)
-      ~|  "couldn't find artifact for {<pax>} in build cache"
+      ~|  "couldn't find artifact for {<pax.r>} in build cache"
       (~(got by bc) dep-hash)
-    (slew vaz (label-vase dep-vaz face))
+    ~&  >  attaching-face+face.r
+    (slew vaz (label-vase dep-vaz face.r))
   ::
   ::  $label-vase: label a (trap vase) with a face
   ::
