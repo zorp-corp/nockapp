@@ -379,12 +379,6 @@
 ++  create-target
   |=  [=entry dir=(map path cord)]
   ^-  [(trap vase) build-cache parse-cache]
-  ?.  (is-hoon pat.entry)
-    =/  file  (get-file entry dir)
-    =/  trap-vase
-      =>  v=!>([%octs [(met 3 file) file]])
-      |.(v)
-    [trap-vase *build-cache *parse-cache]
   =/  [parsed-dir=(map path node) pc=parse-cache]  (parse-dir entry dir)
   =/  all-nodes=(map path node)  parsed-dir
   =/  [dep-dag=merk-dag =path-dag]  (build-merk-dag all-nodes)
@@ -426,7 +420,7 @@
       :*  pat.suf                                       ::  path
           hash                                          ::  hash
           ~                                             ::  deps
-          [%octs [(met 3 file) file]])                  ::  octs
+          [%octs [(met 3 file) file]]                   ::  octs
       ==
     =/  =pile  (parse-pile pat.suf (trip file))         ::  parse target file
     =/  deps=(list raut)  (resolve-pile pile dir)       ::  resolve deps
@@ -438,7 +432,7 @@
   =|  nodes=(map path node)                             ::  init empty node map
   =.  nodes  (~(put by nodes) pat.suf target)           ::  add target node
   =/  seen=(set path)  (~(put in *(set path)) pat.suf)
-  (resolve-all nodes seen deps)
+  (resolve-all nodes seen deps.target)
   ::
   ++  resolve-all
     |=  [nodes=(map path node) seen=(set path) deps=(list raut)]
@@ -448,6 +442,13 @@
       ~&  >>  parsing+pax.i.deps
       =/  dep-file  (get-file [pax.i.deps ~] dir)       ::  get dep file
       =/  dep-hash  (shax dep-file)                     ::  hash dep file
+      =/  dep-node=node
+      ?.  (is-hoon dep-file)
+        :*  pax.i.deps                                  ::  path
+            dep-hash                                    ::  hash
+            ~                                           ::  deps
+            [%octs [(met 3 dep-file) dep-file]]         ::  octs
+        ==
       =/  dep-pile
         ?:  (~(has by pc) dep-hash)                     ::  check cache
           (~(got by pc) dep-hash)
@@ -455,11 +456,10 @@
       ~&  >>  parsed+pax.i.deps
       =/  dep-deps  (resolve-pile dep-pile dir)         ::  resolve dep deps
       ~&  >>  resolved+pax.i.deps
-      =/  dep-node
         :*  pax.i.deps
             dep-hash
             dep-deps
-            hoon.dep-pile
+            [%hoon hoon.dep-pile]
         ==
       =.  nodes  (~(put by nodes) pax.i.deps dep-node)  ::  add dep node
       =.  pc  (~(put by pc) dep-hash dep-pile)          ::  cache parse
