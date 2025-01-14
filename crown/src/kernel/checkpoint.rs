@@ -13,12 +13,19 @@ use tracing::{debug, error, info, warn};
 
 #[derive(Clone)]
 pub struct Checkpoint {
+    /// Magic bytes to identify checkpoint format
     pub magic_bytes: u64,
+    /// Version of checkpoint
     pub version: u32,
+    /// The buffer that this checkpoint was saved to, either 0 or 1.
     pub buff_index: bool,
+    /// Hash of the boot kernel
     pub ker_hash: Hash,
+    /// Event number
     pub event_num: u64,
+    /// State of the kernel
     pub ker_state: Noun,
+    /// Cold state
     pub cold: Cold,
 }
 
@@ -45,14 +52,21 @@ impl Checkpoint {
 
 #[derive(Encode, Decode, PartialEq, Debug)]
 pub struct JammedCheckpoint {
+    /// Magic bytes to identify checkpoint format
     pub magic_bytes: u64,
+    /// Version of checkpoint
     pub version: u32,
+    /// The buffer this checkpoint was saved to, either 0 or 1
     pub buff_index: bool,
+    /// Hash of the boot kernel
     #[bincode(with_serde)]
     pub ker_hash: Hash,
+    /// Checksum derived from event_num and jam (the entries below)
     #[bincode(with_serde)]
     pub checksum: Hash,
+    /// Event number
     pub event_num: u64,
+    /// Jammed noun of [kernel_state cold_state]
     pub jam: JammedNoun,
 }
 

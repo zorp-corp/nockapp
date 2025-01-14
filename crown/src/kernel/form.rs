@@ -32,12 +32,7 @@ const LOAD_AXIS: u64 = 4;
 const PEEK_AXIS: u64 = 22;
 const POKE_AXIS: u64 = 23;
 
-/// Enum representing the Sword snapshot metadata fields.
-#[repr(usize)]
-enum BTMetaField {
-    SnapshotVersion = 0,
-    Snapshot = 1,
-}
+const SNAPSHOT_VERSION: u32 = 0;
 
 /// Represents a Sword kernel, containing a Serf and snapshot location.
 pub struct Kernel {
@@ -470,7 +465,7 @@ impl Kernel {
 /// Represents the Serf, which maintains context and provides an interface to
 /// the Sword.
 pub struct Serf {
-    /// Version number of arvo
+    /// Version number of snapshot
     pub version: u32,
     /// Hash of boot kernel
     pub ker_hash: Hash,
@@ -540,7 +535,7 @@ impl Serf {
 
         let version = checkpoint
             .as_ref()
-            .map_or_else(|| 0, |snapshot| snapshot.version);
+            .map_or_else(|| SNAPSHOT_VERSION, |snapshot| snapshot.version);
 
         let mut hasher = Hasher::new();
         hasher.update(kernel_bytes);
