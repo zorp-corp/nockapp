@@ -123,13 +123,13 @@ async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Err
     }
 
     // hoon does not support uppercase paths
-    let entry_path = Atom::from_value(&mut slab, entry.to_lowercase()).unwrap().as_noun();
+    let entry_path = Atom::from_value(&mut slab, entry.to_lowercase())
+        .unwrap()
+        .as_noun();
 
     let mut directory_noun = D(0);
 
-    let walker = WalkDir::new(&directory)
-        .follow_links(true)
-        .into_iter();
+    let walker = WalkDir::new(&directory).follow_links(true).into_iter();
     for entry_result in walker.filter_entry(|e| is_valid_file_or_dir(e)) {
         let entry = entry_result?;
         let is_file = entry.metadata().unwrap().is_file();
@@ -141,7 +141,9 @@ async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Err
                 .strip_prefix(&directory)
                 .unwrap();
 
-            let path_cord = Atom::from_value(&mut slab, path_str.to_lowercase()).unwrap().as_noun();
+            let path_cord = Atom::from_value(&mut slab, path_str.to_lowercase())
+                .unwrap()
+                .as_noun();
 
             let contents = {
                 let mut contents_vec: Vec<u8> = vec![];
@@ -228,7 +230,8 @@ mod tests {
             info!("Output file size: {} bytes", metadata.len());
             assert!(metadata.len() > 0, "Output file is empty");
             Ok(())
-        }.await;
+        }
+        .await;
 
         // Cleanup
         let _ = fs::remove_file("out.jam").await;
