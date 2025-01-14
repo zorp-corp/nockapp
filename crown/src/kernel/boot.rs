@@ -2,11 +2,11 @@ use crate::kernel::checkpoint::JamPaths;
 use crate::kernel::form::Kernel;
 use crate::{default_data_dir, NockApp};
 use clap::{arg, command, ColorChoice, Parser};
+use std::fs;
 use sword::jets::hot::HotEntry;
 use tracing::{debug, info};
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::{fmt, EnvFilter};
-use std::fs;
 
 #[derive(Parser, Debug, Clone)]
 #[command(about = "boot a nockapp", author, version, color = ColorChoice::Auto)]
@@ -39,10 +39,7 @@ pub struct Cli {
     #[arg(long, help = "Control colored output", value_enum, default_value_t = ColorChoice::Auto)]
     pub color: ColorChoice,
 
-    #[arg(
-        long,
-        help = "Path to a jam file containing existing kernel state"
-    )]
+    #[arg(long, help = "Path to a jam file containing existing kernel state")]
     pub state_jam: Option<String>,
 }
 

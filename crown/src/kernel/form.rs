@@ -457,7 +457,8 @@ impl Kernel {
         hot_state: &[HotEntry],
         trace: bool,
     ) -> Result<Self> {
-        let mut kernel = Self::load_with_hot_state(pma_dir, jam_paths, kernel_jam, hot_state, trace);
+        let mut kernel =
+            Self::load_with_hot_state(pma_dir, jam_paths, kernel_jam, hot_state, trace);
         let state_noun = <Noun as NounExt>::cue_bytes_slice(&mut kernel.serf.stack(), state_jam)?;
         let kernel_noun = kernel.serf.arvo;
         let new_arvo = Serf::load(&mut kernel.serf.context, kernel_noun, state_noun)?;

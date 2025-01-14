@@ -3,9 +3,9 @@ use super::NockAppError;
 use crate::kernel::form::Kernel;
 use crate::noun::slab::NounSlab;
 use crate::NounExt;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::path::PathBuf;
 
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, AcquireError, Mutex, OwnedSemaphorePermit};
