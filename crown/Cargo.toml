@@ -37,6 +37,9 @@ tokio = { workspace = true, features = ["time", "sync", "signal"]}
 tokio-util = { workspace = true, features = ["rt"] }
 yaque = { workspace = true }
 
+[dev-dependencies]
+console-subscriber = { workspace = true }
+
 [lib]
 name = "crown"
 path = "src/lib.rs"

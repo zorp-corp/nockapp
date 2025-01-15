@@ -6,6 +6,7 @@ mod tests {
     use crate::{kernel, NockApp, NounExt};
     use bytes::Bytes;
     use sword::noun::Slots;
+    use tracing::info;
 
     use std::fs;
     use std::path::Path;
@@ -33,37 +34,44 @@ mod tests {
     }
 
     async fn save_nockapp(nockapp: &mut NockApp) {
+        nockapp.tasks.close();
         let permit = nockapp.save_sem.clone().acquire_owned().await;
         let _ = nockapp.save(permit).await;
         let _ = nockapp
             .tasks
             .wait().await;
+        nockapp.tasks.reopen();
     }
 
     // Test nockapp save
     #[tokio::test]
     #[traced_test]
-    #[cfg_attr(miri, ignore)]
-    async fn test_nockapp_save() {
+    // #[cfg_attr(miri, ignore)]
+    async fn test_nockapp_save_blah() {
+        // console_subscriber::init();
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
+        info!("1");
         let mut arvo = nockapp
             .kernel
             .serf
             .arvo
             .slot(crate::kernel::form::STATE_AXIS)
             .expect("Could not slot state from kernel");
+        info!("2");
         let jam_paths = nockapp.kernel.jam_paths.clone();
         assert_eq!(nockapp.kernel.serf.event_num, 0);
-
+        info!("3");
         // Save
         save_nockapp(&mut nockapp).await;
-
+        info!("4");
         // Permit should be dropped
         assert_eq!(nockapp.save_sem.available_permits(), 1);
-
+        info!("5");
         // A valid checkpoint should exist in one of the jam files
         let checkpoint = jam_paths.load_checkpoint(nockapp.kernel.serf.stack());
+        info!("6");
         assert!(checkpoint.is_ok());
+        info!("7");
         let mut checkpoint = checkpoint.unwrap();
 
         // Checkpoint event number should be 0
@@ -77,7 +85,7 @@ mod tests {
                 &mut arvo
             ));
         }
-
+        info!("8");
         // Checkpoint cold state should be equal to the saved cold state
         let mut cold_chk_noun = checkpoint.cold.into_noun(nockapp.kernel.serf.stack());
         let mut cold_noun = nockapp
@@ -130,7 +138,6 @@ mod tests {
             .arvo
             .slot(kernel::form::STATE_AXIS)
             .expect("Could not slot state from kernel");
-
         unsafe {
             let stack = nockapp.kernel.serf.stack();
             // Checkpoint kernel should be equal to the saved kernel
@@ -142,7 +149,6 @@ mod tests {
                 stack, &mut checkpoint.ker_state, &mut state_before_poke
             ));
         }
-
         // Checkpoint cold state should be equal to the saved cold state
         let mut cold_chk_noun = checkpoint.cold.into_noun(nockapp.kernel.serf.stack());
         let mut cold_noun = nockapp

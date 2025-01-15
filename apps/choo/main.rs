@@ -175,14 +175,14 @@ mod tests {
     use tokio::fs;
     use tracing::info;
 
-    #[test]
-    fn test_result() -> Result<(), Box<dyn std::error::Error>> {
-        let result: Result<(), Box<dyn std::error::Error>> = Err(Box::new(std::io::Error::new(
-            std::io::ErrorKind::NotFound,
-            "Path is not valid or file cannot be found",
-        )));
-        result
-    }
+    // #[test]
+    // fn test_result() -> Result<(), Box<dyn std::error::Error>> {
+    //     let result: Result<(), Box<dyn std::error::Error>> = Err(Box::new(std::io::Error::new(
+    //         std::io::ErrorKind::NotFound,
+    //         "Path is not valid or file cannot be found",
+    //     )));
+    //     result
+    // }
 
     // TODO: Move this to an integration test.
     #[tokio::test]

@@ -70,13 +70,15 @@ impl NockApp {
         let exit_status = AtomicBool::new(false);
         let (shutdown_send, shutdown_recv) = tokio::sync::oneshot::channel();
         let cancel_token = tokio_util::sync::CancellationToken::new();
-        let ctrl_c = tokio::signal::ctrl_c();
+        // let ctrl_c = tokio::signal::ctrl_c();
 
-        tokio::task::spawn(async move {
-            let _ = ctrl_c.await;
-            info!("ctrl_c registered");
-            std::process::exit(0);
-        });
+        // tokio::task::spawn(async move {
+        //     let _ = ctrl_c.await;
+        //     info!("ctrl_c registered");
+        //     // TODO: Should this trigger cleanup actions?
+        //     // FIXME: Don't use std::process::exit
+        //     std::process::exit(0);
+        // });
 
         Self {
             kernel,
