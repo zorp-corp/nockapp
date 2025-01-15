@@ -292,15 +292,11 @@
   ::
     %+  turn  bar.pile
     |=  [face=term mark=@tas pax=path]
-    ?:  =(mark %hoon)
-      =/  pax-snip  (snip pax)
-      =/  pax-rear  (rear pax)
-      ^-  raut
-      [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' %hoon]))]
     =/  pax-snip  (snip pax)
+    =/  pax-hind  (rear pax-snip)
     =/  pax-rear  (rear pax)
     ^-  raut
-    [`face `path`(snoc pax-snip `@ta`(rap 3 ~[pax-rear %'.' mark]))]
+    [`face `path`(snoc (snip pax-snip) `@ta`(rap 3 ~[pax-hind %'.' pax-rear]))]
   ==
 --
 ::
