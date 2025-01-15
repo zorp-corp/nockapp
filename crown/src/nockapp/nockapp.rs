@@ -260,7 +260,7 @@ impl NockApp {
                     let socket_path = self.npc_socket_path.clone();
                     let cancel_token = self.cancel_token.clone();
                     let shutdown_send = self.shutdown_send.take().unwrap();
-                    tokio::task::spawn(async move {
+                    self.tasks.spawn(async move {
                         loop {
                             let _ = recv.changed().await;
                             let new = *(recv.borrow());
