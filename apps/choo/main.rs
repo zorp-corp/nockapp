@@ -186,6 +186,7 @@ mod tests {
 
     // TODO: Move this to an integration test.
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_compile_test_app() -> Result<(), Box<dyn std::error::Error>> {
         // let mut test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         // test_dir.pop();

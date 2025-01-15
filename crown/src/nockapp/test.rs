@@ -46,7 +46,7 @@ mod tests {
     // Test nockapp save
     #[tokio::test]
     #[traced_test]
-    // #[cfg_attr(miri, ignore)]
+    #[cfg_attr(miri, ignore)]
     async fn test_nockapp_save_blah() {
         // console_subscriber::init();
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
