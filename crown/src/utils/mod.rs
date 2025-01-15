@@ -1,7 +1,7 @@
 pub mod bytes;
 pub mod error;
-pub mod slogger;
 pub mod scry;
+pub mod slogger;
 
 use byteorder::{LittleEndian, ReadBytesExt};
 pub use bytes::ToBytes;
