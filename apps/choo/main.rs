@@ -1,6 +1,5 @@
 use crown::kernel::boot;
 use crown::nockapp::driver::Operation;
-use crown::nockapp::NockAppError;
 use crown::noun::slab::NounSlab;
 use crown::AtomExt;
 use futures::FutureExt;
@@ -9,7 +8,6 @@ use sword::noun::{Atom, D, T};
 use sword_macros::tas;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
-use tracing::{error, info};
 use walkdir::{DirEntry, WalkDir};
 
 use clap::{arg, command, ColorChoice, Parser};
@@ -68,7 +66,7 @@ async fn main() -> Result<(), Error> {
     let cli = ChooCli::parse();
     let result = std::panic::AssertUnwindSafe(async {
         let nockapp = initialize_nockapp(cli).await?;
-        work_loop(nockapp).await?;
+        nockapp.work_loop().await?;
         Ok::<(), Error>(())
     })
     .catch_unwind()
@@ -171,34 +169,6 @@ async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Err
     Ok(nockapp)
 }
 
-async fn work_loop(mut nockapp: crown::nockapp::NockApp) -> Result<(), NockAppError> {
-    loop {
-        let work_res = nockapp.work().await;
-        match work_res {
-            Ok(nockapp_run) => {
-                match nockapp_run {
-                    crown::nockapp::NockAppRun::Pending => continue,
-                    crown::nockapp::NockAppRun::Done => return Ok(()),
-                }
-            }
-            Err(NockAppError::Exit(code)) => {
-                if code == 0 {
-                    // zero is success, we're simply done.
-                    info!("nockapp exited successfully with code: {}", code);
-                    return Ok(());
-                } else {
-                    error!("nockapp exited with error code: {}", code);
-                    return Err(NockAppError::Exit(code));
-                }
-            }
-            Err(e) => {
-                error!("Got error running nockapp: {:?}", e);
-                return Err(e);
-            }
-        };
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -257,7 +227,7 @@ mod tests {
             info!("Test directory: {:?}", test_dir);
             info!("Dependencies directory: {:?}", deps_dir);
             info!("Entry file: {:?}", entry);
-            work_loop(nockapp).await.expect("Work loop failed");
+            nockapp.work_loop().await.expect("Work loop failed");
 
             // TODO this doesn't work because choo exits when compilation is done.
             // Verify output file exists and is not empty

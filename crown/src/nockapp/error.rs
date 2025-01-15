@@ -13,8 +13,6 @@ pub enum NockAppError {
     Exit(usize),
     #[error("Timeout")]
     Timeout,
-    #[error("Shut down for cancel token")]
-    ShutdownForCancelToken,
     #[error("IO error: {0}")]
     IoError(#[source] std::io::Error),
     #[error("Save error: {0}")]

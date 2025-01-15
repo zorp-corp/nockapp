@@ -1,4 +1,4 @@
-use super::driver::{IOAction, IODriverFn, NockAppHandle, PokeResult, TaskJoinSet};
+use super::driver::{IOAction, IODriverFn, NockAppHandle, PokeResult};
 use super::NockAppError;
 use crate::kernel::form::Kernel;
 use crate::noun::slab::NounSlab;
@@ -11,36 +11,42 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::{broadcast, mpsc, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::time::Duration;
 use tokio::{fs, select};
+use tokio_util::task::TaskTracker;
 use tracing::{error, info, trace};
 
+type NockAppResult = Result<(), NockAppError>;
+
 pub struct NockApp {
-    // Nock kernel
+    /// Nock kernel
     pub kernel: Kernel,
-    // Current join handles for IO drivers (parallel to `drivers`)
-    pub tasks: Arc<Mutex<tokio::task::JoinSet<Result<(), NockAppError>>>>,
-    // Exit signal sender
+    /// Current join handles for IO drivers (parallel to `drivers`)
+    // pub tasks: Arc<tokio::task::JoinSet<NockAppResult>>,
+    pub tasks: tokio_util::task::TaskTracker,
+    /// Exit signal sender
     pub exit_send: mpsc::Sender<usize>,
-    // Exit signal receiver
+    /// Exit signal receiver
     pub exit_recv: mpsc::Receiver<usize>,
-    // Exit status
+    /// Exit status
     pub exit_status: AtomicBool,
-    // Save event num sender
+    /// Save event num sender
     pub watch_send: Arc<Mutex<tokio::sync::watch::Sender<u64>>>,
-    // Save event num receiver
+    /// Save event num receiver
     pub watch_recv: tokio::sync::watch::Receiver<u64>,
-    // IO action channel
+    /// IO action channel
     pub action_channel: mpsc::Receiver<IOAction>,
-    // IO action channel sender
+    /// IO action channel sender
     pub action_channel_sender: mpsc::Sender<IOAction>,
-    // Effect broadcast channel
+    /// Effect broadcast channel
     pub effect_broadcast: broadcast::Sender<NounSlab>,
-    // Save semaphore
+    /// Save semaphore
     pub save_sem: Arc<tokio::sync::Semaphore>,
-    // Save interval
+    /// Save interval
     pub save_interval: Duration,
-    // Cancel token
+    /// Shutdown oneshot sender
+    pub shutdown_send: Option<tokio::sync::oneshot::Sender<NockAppResult>>,
+    /// Shutdown oneshot receiver
+    pub shutdown_recv: tokio::sync::oneshot::Receiver<NockAppResult>,
     pub cancel_token: tokio_util::sync::CancellationToken,
-    // Socket path
     pub npc_socket_path: Option<PathBuf>,
 }
 
@@ -53,15 +59,18 @@ impl NockApp {
     pub fn new(kernel: Kernel, save_interval: Duration) -> Self {
         let (action_channel_sender, action_channel) = mpsc::channel(100);
         let (effect_broadcast, _) = broadcast::channel(100);
-        let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
+        // let tasks = Arc::new(Mutex::new(TaskJoinSet::new()));
+        // let tasks = TaskJoinSet::new();
+        // let tasks = Arc::new(TaskJoinSet::new());
+        let tasks = TaskTracker::new();
         let (exit_send, exit_recv) = mpsc::channel(1);
         let save_sem = Arc::new(tokio::sync::Semaphore::new(1));
         let (watch_send, watch_recv) = tokio::sync::watch::channel(kernel.serf.event_num);
         let watch_send = Arc::new(Mutex::new(watch_send.clone()));
         let exit_status = AtomicBool::new(false);
-
-        let ctrl_c = tokio::signal::ctrl_c();
+        let (shutdown_send, shutdown_recv) = tokio::sync::oneshot::channel();
         let cancel_token = tokio_util::sync::CancellationToken::new();
+        let ctrl_c = tokio::signal::ctrl_c();
 
         tokio::task::spawn(async move {
             let _ = ctrl_c.await;
@@ -82,6 +91,8 @@ impl NockApp {
             effect_broadcast,
             save_sem,
             save_interval,
+            shutdown_send: Some(shutdown_send),
+            shutdown_recv,
             cancel_token,
             npc_socket_path: None,
         }
@@ -107,19 +118,19 @@ impl NockApp {
             effect_receiver,
             exit,
         });
-        let _ = self.tasks.clone().lock_owned().await.spawn(fut);
+        let _ = self.tasks.spawn(fut);
     }
 
     pub async fn save(
         &mut self,
         save: Result<OwnedSemaphorePermit, AcquireError>,
-    ) -> Result<(), NockAppError> {
+    ) -> NockAppResult {
         let toggle = self.kernel.buffer_toggle.clone();
         let jam_paths = self.kernel.jam_paths.clone();
         let checkpoint = self.kernel.checkpoint();
         let bytes = checkpoint.encode()?;
         let send_lock = self.watch_send.clone();
-        self.tasks.lock().await.spawn(async move {
+        self.tasks.spawn(async move {
             let path = if toggle.load(Ordering::SeqCst) {
                 jam_paths.1
             } else {
@@ -148,46 +159,73 @@ impl NockApp {
             let send = send_lock.lock().await;
             send.send(checkpoint.event_num)?;
             drop(save);
-            Ok(())
+            Ok::<(), NockAppError>(())
         });
 
         Ok(())
     }
 
-    pub async fn work(&mut self) -> Result<NockAppRun, NockAppError> {
-        let tasks_fut = async {
-            let mut joinset = self.tasks.clone().lock_owned().await;
-            joinset.join_next().await
-        };
-
-        if self.cancel_token.is_cancelled() {
-            info!("Cancel token received, exiting");
-            // Clean up npc socket file if it exists
-            if let Some(socket) = &self.npc_socket_path {
-                if socket.exists() {
-                    if let Err(e) = std::fs::remove_file(socket) {
-                        error!("Failed to remove npc socket file before exit: {}", e);
+    /// Runs until the nockapp is done (returns exit 0 or an error)
+    pub async fn work_loop(mut self) -> NockAppResult {
+        // Close the task tracker so wait can return when the task tracker is complete.
+        self.tasks.close();
+        loop {
+            let work_res = self.work().await;
+            match work_res {
+                Ok(nockapp_run) => {
+                    match nockapp_run {
+                        crate::nockapp::NockAppRun::Pending => continue,
+                        crate::nockapp::NockAppRun::Done => return Ok(()),
                     }
                 }
-            }
-            return Err(NockAppError::ShutdownForCancelToken);
-        }
-
-        select!(
-            res = tasks_fut => {
-                match res {
-                    Some(Ok(Err(e))) => {
-                        if let NockAppError::SaveError(_) = e {
-                            error!("{}", e);
-                            self.cancel_token.cancel();
-                        }
-                        Err(e)
-                    },
-                    Some(Err(e)) => {
-                        Err(e)?
-                    },
-                    _ => {Ok(NockAppRun::Pending)},
+                Err(NockAppError::Exit(code)) => {
+                    if code == 0 {
+                        // zero is success, we're simply done.
+                        info!("nockapp exited successfully with code: {}", code);
+                        return Ok(());
+                    } else {
+                        error!("nockapp exited with error code: {}", code);
+                        return Err(NockAppError::Exit(code));
+                    }
                 }
+                Err(e) => {
+                    error!("Got error running nockapp: {:?}", e);
+                    return Err(e);
+                }
+            };
+        }
+    }
+
+    fn cleanup_socket(&self) {
+        // Clean up npc socket file if it exists
+        if let Some(socket) = &self.npc_socket_path {
+            if socket.exists() {
+                if let Err(e) = std::fs::remove_file(socket) {
+                    error!("Failed to remove npc socket file before exit: {}", e);
+                }
+            }
+        }
+    }
+
+    pub async fn work(&mut self) -> Result<NockAppRun, NockAppError> {
+        select!(
+            shutdown = &mut self.shutdown_recv => {
+                self.cleanup_socket();
+                match shutdown {
+                    Ok(Ok(())) => {
+                        info!("Shutdown triggered, exiting");
+                        return Ok(NockAppRun::Done);
+                    },
+                    Ok(Err(e)) => {
+                        error!("Shutdown triggered with error: {}", e);
+                        return Err(e);
+                    },
+                    // Err(_recv_error) => {},
+                    Err(_recv_error) => {
+                        error!("Shutdown channel closed prematurely");
+                        return Err(NockAppError::ChannelClosedError);
+                    },
+                };
             },
             permit = self.save_sem.clone().acquire_owned() => {
                 //  Check if we should write in the first place
@@ -211,7 +249,8 @@ impl NockApp {
             },
             exit = self.exit_recv.recv() => {
                 if let Some(code) = exit {
-                    self.action_channel.close();
+                    // TODO: Is this necessary?
+                    // self.action_channel.close();
                     // TODO: See if exit_status is duplicative of what the cancel token is for.
                     self.exit_status.store(true, Ordering::SeqCst);
                     let exit_event_num = self.kernel.serf.event_num;
@@ -219,15 +258,15 @@ impl NockApp {
 
                     let mut recv = self.watch_recv.clone();
                     let socket_path = self.npc_socket_path.clone();
-                    // let cancel_token = self.cancel_token.clone();
-                    // FIXME: Why do we have to spawn here?
+                    let cancel_token = self.cancel_token.clone();
+                    let shutdown_send = self.shutdown_send.take().unwrap();
                     tokio::task::spawn(async move {
                         loop {
                             let _ = recv.changed().await;
                             let new = *(recv.borrow());
                             assert!(new <= exit_event_num);
                             if new == exit_event_num {
-                                if let Some(path) = socket_path {
+                                if let Some(ref path) = socket_path {
                                     if path.exists() {
                                         if let Err(e) = std::fs::remove_file(&path) {
                                             error!("Failed to remove socket file on exit: {}", e);
@@ -235,17 +274,15 @@ impl NockApp {
                                     }
                                 }
                                 info!("Save event_num reached, finishing with code {}", code);
-                                // cancel_token.cancel();
-                                // TODO: This doesn't work currently because
-                                // TODO: it's embedded in a spawned task.
-                                // We could fix this in a hacky way with a one-shot
-                                // but I'd rather make this better-behaved as a library.
-                                return if code == 0 {
-                                    Ok(NockAppRun::Done)
+                                let shutdown_result = if code == 0 {
+                                    Ok(())
                                 } else {
                                     Err(NockAppError::Exit(code))
-                                }
-                            }
+                                };
+                                let _ = shutdown_send.send(shutdown_result);
+                                cancel_token.cancel();
+                                break
+                            };
                         }
                     });
                     Ok(NockAppRun::Pending)
@@ -290,8 +327,11 @@ impl NockApp {
                             }
                         },
                     }
+                    Ok(NockAppRun::Pending)
+                } else {
+                    error!("Action channel closed prematurely");
+                    Err(NockAppError::ChannelClosedError)
                 }
-                Ok(NockAppRun::Pending)
             }
         )
     }

@@ -37,11 +37,7 @@ mod tests {
         let _ = nockapp.save(permit).await;
         let _ = nockapp
             .tasks
-            .lock()
-            .await
-            .join_next()
-            .await
-            .expect("Failed to join task");
+            .wait().await;
     }
 
     // Test nockapp save
