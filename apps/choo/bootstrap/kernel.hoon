@@ -630,6 +630,7 @@
       ~>  %bout
       ?:  ?=(%hoon -.leaf.n)
         ::
+        ::  Faces are resolved via depth-first search into the subject.
         ::  We append the honc (hoon.hoon) to the end of the vase
         ::  because imports have higher precedence when resolving faces.
         ::  To avoid shadowing issues with hoon.hoon, attach faces to your
