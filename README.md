@@ -20,6 +20,8 @@ To test compiling a Nock kernel using the `choo` command-line Hoon compiler, run
 cargo build
 cd apps/choo
 cargo run --release bootstrap/kernel.hoon ../hoon-deps
+yes | mv out.jam bootstrap/choo.jam
+cargo run --release bootstrap/kernel.hoon ../hoon-deps
 ```
 
 For large builds, the rust stack might overflow. To get around this, increase the stack size by setting: `RUST_MIN_STACK=838860`.
