@@ -1,4 +1,4 @@
-use crown::noun::Noun;
+use sword::noun::Noun;
 use either::{Left, Right};
 
 pub enum ScryResult {
