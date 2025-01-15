@@ -1,5 +1,5 @@
-use sword::noun::Noun;
 use either::{Left, Right};
+use sword::noun::Noun;
 
 pub enum ScryResult {
     BadPath,    // ~
