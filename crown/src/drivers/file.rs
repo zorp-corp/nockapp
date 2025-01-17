@@ -89,6 +89,28 @@ pub fn file() -> IODriverFn {
                     };
                     let path = path_atom.as_string()?;
                     let contents = contents_atom.as_bytes();
+
+                    // Create parent directories if they don't exist
+                    if let Some(parent) = std::path::Path::new(&path).parent() {
+                        if let Err(e) = tokio::fs::create_dir_all(parent).await {
+                            error!("file driver: error creating directories: {}", e);
+                            let mut poke_slab = NounSlab::new();
+                            let poke_noun = T(
+                                &mut poke_slab,
+                                &[
+                                    D(tas!(b"file")),
+                                    D(tas!(b"write")),
+                                    path_atom.as_noun(),
+                                    contents_atom.as_noun(),
+                                    D(0),
+                                ],
+                            );
+                            poke_slab.set_root(poke_noun);
+                            handle.poke(poke_slab).await?;
+                            continue;
+                        }
+                    }
+
                     match tokio::fs::write(&path, contents).await {
                         Ok(_) => {
                             let mut poke_slab = NounSlab::new();
