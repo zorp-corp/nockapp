@@ -30,6 +30,7 @@ pub use drivers::http::http as http_driver;
 pub use drivers::markdown::markdown as markdown_driver;
 pub use drivers::npc::{npc_client as npc_client_driver, npc_listener as npc_listener_driver};
 pub use drivers::one_punch::one_punch_man as one_punch_driver;
+pub use drivers::timer::make_timer_driver as timer_driver;
 
 use std::path::PathBuf;
 

@@ -1,5 +1,6 @@
 pub mod bytes;
 pub mod error;
+pub mod scry;
 pub mod slogger;
 
 use byteorder::{LittleEndian, ReadBytesExt};
