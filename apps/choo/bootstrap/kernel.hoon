@@ -29,6 +29,12 @@
 +$  hash  @
 +$  build-cache  (map hash (trap vase))
 ::
+::  $build-result: result of a build
+::
+::    either a (trap vase) or an error trace.
+::
++$  build-result  (each (trap vase) tang)
+::
 ::  $taut: file import from /lib or /sur
 ::
 +$  taut  [face=(unit term) pax=term]
@@ -114,13 +120,17 @@
       %-  ~(create builder u.cached-hoon.k bc.k pc.k)
       [entry dir]
     :_  k(bc new-bc, pc new-pc)
-    :~  :*  %file
-            %write
-            path=(crip "out.jam")
-            contents=(jam compiled)
-        ==
-        [%exit 0]
-    ==
+    =/  exit-code  ?:(=(compiled *(trap vase)) 1 0)
+    =/  write-effect
+      :*  %file
+          %write
+          path=(crip "out.jam")
+          contents=(jam compiled)
+      ==
+    ?:  =(exit-code 0)
+      ~[write-effect [%exit exit-code]]
+    ~&  >>>  "build failed, skipping write"
+    ~[[%exit exit-code]]
   ==
 --
 ::
@@ -346,6 +356,8 @@
   =/  [=build-cache =parse-cache]  (tail compile)
   ::  +shot calls the kernel gate to tell it the hash of the dependency directory
   :_  [build-cache parse-cache]
+  ::  build failure, just return the bunted trap
+  ?:  =(ker-gen *(trap vase))  ker-gen
   =>  %+  shot  ker-gen
     =>  d=!>(dir-hash)
     |.(d)
@@ -563,7 +575,9 @@
 ::    .nodes: the nodes of the dependency graph
 ::    .bc: the build cache
 ::
-::    returns a trap vase with the compiled hoon file and the updated build cache
+::    returns a trap vase with the compiled hoon file and the updated build
+::    cache. if a build failure is detected, a bunted (trap vase) is returned
+::    instead.
 ++  compile-target
   |^
   |=  [pat=path =path-dag nodes=(map path node) bc=build-cache]
@@ -578,20 +592,38 @@
     +:(~(got by path-dag) pat)
   =/  graph  (build-graph-view nodes)
   =/  next=(map path node)  (update-next nodes graph)
-  =|  vaz=(trap vase)
-  |-
+  =|  failed=_|
+  |-  ^-  [(trap vase) build-cache]
+  ?:  failed  [*(trap vase) bc]
   ?:  .=(~ next)
-    (compile-node n path-dag bc)
-  =.  bc
+    =/  [=build-result new-bc=build-cache]
+      (compile-node n path-dag bc)
+    ?-  -.build-result
+      ::
+      %|  ~&  >>>  "compile-target: failed: {<pat>}"
+          [*(trap vase) new-bc]
+      ::
+      %&  [p.build-result new-bc]
+    ==
+  =/  [err=? bc=build-cache]
     %+  roll  ~(tap by next)
-    |=  [[p=path n=node] bc=_bc]
-    +:(compile-node n path-dag bc)
+    |=  [[p=path n=node] [err=_| bc=_bc]]
+    =/  [=build-result new-bc=build-cache]
+      (compile-node n path-dag bc)
+    ?-  -.build-result
+      ::
+      %|  ~&  >>>  "compile-target: failed: {<p>}"
+          [& new-bc]
+      ::
+      %&  [err new-bc]
+    ==
   =.  graph
     (roll ~(tap by next) |=([[p=path *] g=_graph] (update-graph-view g p)))
   %=  $
-    next   (update-next nodes graph)
-    graph  graph
-    bc     bc
+    next       (update-next nodes graph)
+    graph      graph
+    bc         bc
+    failed     err
   ==
   ::
   ::  $compile-node: compile a single node
@@ -603,18 +635,22 @@
   ::    looks up the node in the build cache and compiles it if it's not already
   ::    cached.
   ::
-  ::    returns a trap vase with the compiled hoon and the updated build cache
+  ::    returns a $build-result and the updated build cache
   ++  compile-node
     |=  [n=node =path-dag bc=build-cache]
-    ^-  [(trap vase) build-cache]
-    ~&  >  compiling-node+path.n
+    ^-  [build-result build-cache]
     =/  [dep-hash=@ *]  (~(got by path-dag) path.n)
     ?:  (~(has by bc) dep-hash)
       ~&  >  build-cache-hit+path.n
-      [(~(got by bc) dep-hash) bc]
+      :_  bc
+      [%.y (~(got by bc) dep-hash)]
     ~&  >  build-cache-miss+path.n
-    =/  vaz=(trap vase)  (build-node n path-dag bc)
-    [vaz (~(put by bc) dep-hash vaz)]
+    =/  =build-result  (mule |.((build-node n path-dag bc)))
+    =?  bc  ?=(%& -.build-result)
+      (~(put by bc) dep-hash p.build-result)
+    =-  ?.  ?=(%| -.build-result)  -
+        ((slog p.build-result) -)
+    [build-result bc]
   ::
   ::  $build-node: build a single node and its dependencies
   ::
@@ -626,8 +662,8 @@
   ++  build-node
     |=  [n=node =path-dag bc=build-cache]
     ^-  (trap vase)
+    ~>  %bout
     =;  dep-vaz=(trap vase)
-      ~>  %bout
       ?:  ?=(%hoon -.leaf.n)
         ::
         ::  Faces are resolved via depth-first search into the subject.
@@ -635,11 +671,10 @@
         ::  because imports have higher precedence when resolving faces.
         ::  To avoid shadowing issues with hoon.hoon, attach faces to your
         ::  imports or avoid shadowed names altogether.
-        (swet (slew dep-vaz honc) hoon.leaf.n)
+        (swet (slat dep-vaz honc) hoon.leaf.n)
       =>  octs=!>(octs.leaf.n)
       |.(octs)
-    %+  roll
-      deps.n
+    %+  roll  deps.n
     |=  [r=raut vaz=(trap vase)]
     ~&  >  grabbing-dep+pax.r
     =/  [dep-hash=@ dep-node=node]
@@ -651,7 +686,7 @@
     ~&  >  attaching-face+face.r
     ::
     ::  Ford imports are included in the order that they appear in the deps.
-    (slew vaz (label-vase dep-vaz face.r))
+    (slat vaz (label-vase dep-vaz face.r))
   ::
   ::  $label-vase: label a (trap vase) with a face
   ::
@@ -722,13 +757,13 @@
   %-  silt
   (turn deps.n |=(raut pax))
 ::
-::  $slew: merge two (trap vase)s
+::  $slat: merge two (trap vase)s
 ::
 ::    .hed: the first (trap vase)
 ::    .tal: the second (trap vase)
 ::
 ::    returns a merged (trap vase)
-++  slew
+++  slat
   |=  [hed=(trap vase) tal=(trap vase)]
   ^-  (trap vase)
   =>  +<
