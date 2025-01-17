@@ -511,9 +511,11 @@
   =/  graph  (build-graph-view nodes)
   =/  next=(map path node)  (update-next nodes graph)
   ::
-  ::  traverse via a topological sorting of the DAG
+  ::  traverse via a topological sorting of the DAG using Kahn's algorithm
   |-
   ?:  .=(~ next)
+    ?.  .=(~ graph)
+      ~|(cycle-detected+~(key by graph) !!)
     [dep-dag path-dag]
   =-
     %=  $
@@ -627,6 +629,12 @@
     =;  dep-vaz=(trap vase)
       ~>  %bout
       ?:  ?=(%hoon -.leaf.n)
+        ::
+        ::  Faces are resolved via depth-first search into the subject.
+        ::  We append the honc (hoon.hoon) to the end of the vase
+        ::  because imports have higher precedence when resolving faces.
+        ::  To avoid shadowing issues with hoon.hoon, attach faces to your
+        ::  imports or avoid shadowed names altogether.
         (swet (slew dep-vaz honc) hoon.leaf.n)
       =>  octs=!>(octs.leaf.n)
       |.(octs)
@@ -641,6 +649,8 @@
       ~|  "couldn't find artifact for {<pax.r>} in build cache"
       (~(got by bc) dep-hash)
     ~&  >  attaching-face+face.r
+    ::
+    ::  Ford imports are included in the order that they appear in the deps.
     (slew vaz (label-vase dep-vaz face.r))
   ::
   ::  $label-vase: label a (trap vase) with a face
