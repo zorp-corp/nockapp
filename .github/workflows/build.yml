@@ -39,7 +39,7 @@ jobs:
     - name: Build all
       run: cargo build --release
     - name: Compile choo kernel with bootstrap choo
-      run: target/release/choo apps/choo/bootstrap/kernel.hoon apps/hoon-deps
+      run: target/release/choo --log-level=trace apps/choo/bootstrap/kernel.hoon apps/hoon-deps
     - name: Move choo jam back into assets
       run: mv out.jam apps/choo/bootstrap/choo.jam
     - name: Rebuild choo with built jamfile

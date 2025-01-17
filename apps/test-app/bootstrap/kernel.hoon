@@ -1,4 +1,4 @@
-/+  *wrapper
+/+  *wrapper, *zeke
 =>
 |%
 +$  test-state  [%0 val=@]

@@ -25,7 +25,7 @@ mod tests {
         let jam_paths = JamPaths::new(&snap_dir);
         eprintln!("jam_paths: {:?}", jam_paths);
         let jam_path = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests")
+            .join("test-jams")
             .join(jam);
         let jam_bytes = fs::read(jam_path).expect(&format!("Failed to read {} file", jam));
         let kernel = Kernel::load(snap_dir, jam_paths, &jam_bytes, false);
@@ -262,7 +262,7 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)]
     fn test_jam_equality_slab_no_driver() {
-        let bytes = include_bytes!("../../tests/test-ker.jam");
+        let bytes = include_bytes!("../../test-jams/test-ker.jam");
         let mut slab1 = NounSlab::new();
         slab1.cue_into(Bytes::from(Vec::from(bytes))).unwrap();
         let jammed_bytes = slab1.jam();
