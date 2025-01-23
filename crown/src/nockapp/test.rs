@@ -208,6 +208,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[traced_test]
     #[cfg_attr(miri, ignore)]
     async fn test_nockapp_save_multiple() {
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
@@ -238,11 +239,17 @@ mod tests {
             // Checkpointed state should have been incremented
             let peek = T(nockapp.kernel.serf.stack(), &[D(tas!(b"state")), D(0)]);
 
-            // res should be [~ ~ val]
+            // res should be [~ ~ [%0 val]]
             let res = nockapp.kernel.peek(peek).unwrap();
-            let val = slot(res, 7).unwrap();
+            let val = slot(res, 7).unwrap().as_cell().unwrap().tail();
+
             unsafe {
-                assert!(val.raw_equals(D(i)));
+                assert!(
+                    val.raw_equals(D(i)),
+                    "val: {:?} != expected: {:?}",
+                    val,
+                    D(i)
+                );
             }
         }
     }
