@@ -2,6 +2,7 @@
 mod tests {
     use crate::kernel::checkpoint::JamPaths;
     use crate::kernel::form::Kernel;
+    use crate::nockapp::wire::{SystemWire, Wire};
     use crate::noun::slab::{slab_equality, NounSlab};
     use crate::{kernel, NockApp, NounExt};
     use bytes::Bytes;
@@ -157,7 +158,9 @@ mod tests {
 
         let poke = D(tas!(b"inc"));
 
-        let _ = nockapp.kernel.poke(poke).unwrap();
+        let wire = SystemWire.to_noun_slab();
+        let wire_root = unsafe { wire.root() };
+        let _ = nockapp.kernel.poke(wire_root, poke).unwrap();
 
         // Save
         save_nockapp(&mut nockapp).await;
@@ -214,7 +217,9 @@ mod tests {
         for i in 1..4 {
             // Poke to increment the state
             let poke = D(tas!(b"inc"));
-            let _ = nockapp.kernel.poke(poke).unwrap();
+            let wire = SystemWire.to_noun_slab();
+            let wire_root = unsafe { wire.root() };
+            let _ = nockapp.kernel.poke(wire_root, poke).unwrap();
 
             // Save
             save_nockapp(&mut nockapp).await;

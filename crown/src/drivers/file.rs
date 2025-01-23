@@ -1,10 +1,39 @@
 use crate::nockapp::driver::{make_driver, IODriverFn};
+use crate::nockapp::wire::Wire;
 use crate::noun::slab::NounSlab;
 use crate::noun::FromAtom;
+use crate::utils::make_tas;
 use crate::AtomExt;
 use sword::noun::{IndirectAtom, Noun, D, T};
 use sword_macros::tas;
 use tracing::error;
+
+pub enum FileWire {
+    Read,
+    Write,
+}
+
+impl Wire for FileWire {
+    const VERSION: u64 = 1;
+    const SOURCE: &'static str = "file";
+
+    fn to_noun_slab(&self) -> NounSlab {
+        let mut slab = NounSlab::new();
+        let source = make_tas(&mut slab, FileWire::SOURCE).as_noun();
+        let wire = match self {
+            FileWire::Read => T(
+                &mut slab,
+                &[source, D(FileWire::VERSION), D(tas!(b"read")), D(0)],
+            ),
+            FileWire::Write => T(
+                &mut slab,
+                &[source, D(FileWire::VERSION), D(tas!(b"write")), D(0)],
+            ),
+        };
+        slab.set_root(wire);
+        slab
+    }
+}
 
 /// File IO Driver
 ///
@@ -69,14 +98,16 @@ pub fn file() -> IODriverFn {
                                 &[D(tas!(b"file")), D(tas!(b"read")), D(0), contents_noun],
                             );
                             poke_slab.set_root(poke_noun);
-                            handle.poke(poke_slab).await?;
+                            let wire = FileWire::Read.to_noun_slab();
+                            handle.poke(wire, poke_slab).await?;
                         }
                         Err(_) => {
                             let mut poke_slab = NounSlab::new();
                             let poke_noun =
                                 T(&mut poke_slab, &[D(tas!(b"file")), D(tas!(b"read")), D(0)]);
                             poke_slab.set_root(poke_noun);
-                            handle.poke(poke_slab).await?;
+                            let wire = FileWire::Read.to_noun_slab();
+                            handle.poke(wire, poke_slab).await?;
                         }
                     }
                 }
@@ -106,7 +137,8 @@ pub fn file() -> IODriverFn {
                                 ],
                             );
                             poke_slab.set_root(poke_noun);
-                            handle.poke(poke_slab).await?;
+                            let wire = FileWire::Write.to_noun_slab();
+                            handle.poke(wire, poke_slab).await?;
                             continue;
                         }
                     }
@@ -125,7 +157,8 @@ pub fn file() -> IODriverFn {
                                 ],
                             );
                             poke_slab.set_root(poke_noun);
-                            handle.poke(poke_slab).await?;
+                            let wire = FileWire::Write.to_noun_slab();
+                            handle.poke(wire, poke_slab).await?;
                         }
                         Err(e) => {
                             error!("file driver: error writing to path: {}", e);
@@ -141,7 +174,8 @@ pub fn file() -> IODriverFn {
                                 ],
                             );
                             poke_slab.set_root(poke_noun);
-                            handle.poke(poke_slab).await?;
+                            let wire = FileWire::Write.to_noun_slab();
+                            handle.poke(wire, poke_slab).await?;
                         }
                     }
                 }
