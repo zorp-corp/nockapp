@@ -394,6 +394,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_write_message_format() {
         let (server, mut client) = setup_socket_pair().await;
         let (_, mut writer) = split(server);
@@ -423,6 +424,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_write_message_empty() {
         let (server, mut client) = setup_socket_pair().await;
         let (_, mut writer) = split(server);
@@ -439,6 +441,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn test_read_message_eof() {
         let (server, client) = setup_socket_pair().await;
         drop(client);
@@ -450,6 +453,7 @@ mod tests {
 
     #[tokio::test]
     #[traced_test]
+    #[cfg_attr(miri, ignore)]
     async fn test_npc_driver() {
         // Setup
         let dir = tempdir().unwrap();
