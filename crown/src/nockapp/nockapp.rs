@@ -46,7 +46,7 @@ pub struct NockApp {
     /// Shutdown oneshot receiver
     shutdown_recv: tokio::sync::oneshot::Receiver<NockAppResult>,
     // cancel_token: tokio_util::sync::CancellationToken,
-    npc_socket_path: Option<PathBuf>,
+    pub npc_socket_path: Option<PathBuf>,
 }
 
 pub enum NockAppRun {
