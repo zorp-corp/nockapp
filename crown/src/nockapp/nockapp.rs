@@ -251,7 +251,6 @@ impl NockApp {
                 };
             },
             permit = self.save_sem.clone().acquire_owned() => {
-                debug!("Permit semaphore acquired");
                 //  Check if we should write in the first place
                 let curr_event_num = self.kernel.serf.event_num;
                 let saved_event_num = self.watch_recv.borrow();
