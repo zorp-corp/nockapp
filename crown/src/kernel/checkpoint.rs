@@ -29,6 +29,19 @@ pub struct Checkpoint {
     pub cold: Cold,
 }
 
+impl std::fmt::Debug for Checkpoint {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Checkpoint")
+            .field("magic_bytes", &self.magic_bytes)
+            .field("version", &self.version)
+            .field("buff_index", &self.buff_index)
+            .field("ker_hash", &self.ker_hash)
+            .field("event_num", &self.event_num)
+            .field("ker_state", &self.ker_state)
+            .finish()
+    }
+}
+
 impl Checkpoint {
     pub fn load(stack: &mut NockStack, jam: JammedCheckpoint) -> Result<Self, CheckpointError> {
         let cell = <Noun as NounExt>::cue_bytes(stack, &jam.jam.0)
@@ -122,6 +135,8 @@ pub enum CheckpointError<'a> {
     SwordNounError(#[from] sword::noun::Error),
     #[error("Sword cold error: {0}")]
     FromNounError(#[from] sword::jets::cold::FromNounError),
+    #[error("Both checkpoints failed: {0}, {1}")]
+    BothCheckpointsFailed(Box<CheckpointError<'a>>, Box<CheckpointError<'a>>),
     #[error("Sword interpreter error")]
     SwordInterpreterError,
 }
@@ -174,7 +189,12 @@ impl JamPaths {
             (Err(e1), Err(e2)) => {
                 error!("{e1}");
                 error!("{e2}");
-                panic!("Error loading both checkpoints");
+                // TODO: Why is this a panic?
+                // panic!("Error loading both checkpoints");
+                Err(CheckpointError::BothCheckpointsFailed(
+                    Box::new(e1),
+                    Box::new(e2),
+                ))
             }
         }
     }

@@ -50,6 +50,10 @@ impl NounExt for Noun {
     }
 }
 
+// TODO: This exists largely because crown doesn't own the [`Atom`] type from [`sword`].
+// TODO: The next step for this should be to lower the methods on this trait to a concrete `impl` stanza for [`Atom`] in [`sword`].
+// TODO: In the course of doing so, we should split out a serialization trait that has only the [`AtomExt::from_value`] method as a public API in [`sword`].
+// The goal would be to canonicalize the Atom representations of various Rust types. When it needs to be specialized, users can make a newtype.
 pub trait AtomExt {
     fn from_bytes<A: NounAllocator>(allocator: &mut A, bytes: &Bytes) -> Atom;
     fn from_value<A: NounAllocator, T: ToBytes>(allocator: &mut A, value: T) -> Result<Atom>;
@@ -59,12 +63,14 @@ pub trait AtomExt {
 }
 
 impl AtomExt for Atom {
+    // TODO: This is iffy. What byte representation is it expecting and why?
     fn from_bytes<A: NounAllocator>(allocator: &mut A, bytes: &Bytes) -> Atom {
         unsafe {
             IndirectAtom::new_raw_bytes(allocator, bytes.len(), bytes.as_ptr()).normalize_as_atom()
         }
     }
 
+    // TODO: This is worth making into a public/supported part of [`sword`]'s API.
     fn from_value<A: NounAllocator, T: ToBytes>(allocator: &mut A, value: T) -> Result<Atom> {
         unsafe {
             let data: Bytes = value.as_bytes()?;

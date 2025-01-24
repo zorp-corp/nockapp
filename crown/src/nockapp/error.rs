@@ -8,6 +8,9 @@ use super::driver::IOAction;
 /// Error type for NockApps
 #[derive(Debug, Error)]
 pub enum NockAppError {
+    /// NockApp exited with a code, shouldn't ever be 0, that's a Done/Success.
+    #[error("NockApp exited with error code: {0}")]
+    Exit(usize),
     #[error("Timeout")]
     Timeout,
     #[error("IO error: {0}")]

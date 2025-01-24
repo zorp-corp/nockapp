@@ -4,7 +4,7 @@ use crown::kernel::boot::Cli as BootCli;
 use crown::noun::slab::NounSlab;
 use sword::noun::D;
 use sword_macros::tas;
-use tracing::{debug, error};
+use tracing::debug;
 
 static KERNEL_JAM: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -41,13 +41,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     test_app.add_io_driver(crown::exit_driver()).await;
 
-    loop {
-        let work_res = test_app.work().await;
-        if let Err(e) = work_res {
-            error!("work error: {:?}", e);
-            break;
-        }
-    }
+    test_app.run().await.expect("Failed to run app");
 
     Ok(())
 }
