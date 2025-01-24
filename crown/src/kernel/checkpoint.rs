@@ -191,7 +191,10 @@ impl JamPaths {
                 error!("{e2}");
                 // TODO: Why is this a panic?
                 // panic!("Error loading both checkpoints");
-                Err(CheckpointError::BothCheckpointsFailed(Box::new(e1), Box::new(e2)))
+                Err(CheckpointError::BothCheckpointsFailed(
+                    Box::new(e1),
+                    Box::new(e2),
+                ))
             }
         }
     }

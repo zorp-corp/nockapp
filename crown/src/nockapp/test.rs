@@ -37,9 +37,7 @@ mod tests {
         nockapp.tasks.close();
         let permit = nockapp.save_sem.clone().acquire_owned().await;
         let _ = nockapp.save(permit).await;
-        let _ = nockapp
-            .tasks
-            .wait().await;
+        let _ = nockapp.tasks.wait().await;
         nockapp.tasks.reopen();
     }
 
@@ -47,7 +45,10 @@ mod tests {
     async fn spawn_save_t(nockapp: &mut NockApp, sleep_t: std::time::Duration) {
         let sleepy_time = tokio::time::sleep(sleep_t);
         let permit = nockapp.save_sem.clone().acquire_owned().await;
-        let _join_handle = nockapp.save_f(permit, sleepy_time).await.expect("Failed to spawn nockapp save task");
+        let _join_handle = nockapp
+            .save_f(permit, sleepy_time)
+            .await
+            .expect("Failed to spawn nockapp save task");
         // join_handle.await.expect("Failed to save nockapp").expect("Failed to save nockapp 2");
     }
 
@@ -74,10 +75,17 @@ mod tests {
         nockapp.tasks.reopen();
         // Shutdown the runtime immediately
         runtime.shutdown_timeout(std::time::Duration::from_secs(0));
-        let checkpoint = nockapp.kernel.jam_paths.load_checkpoint(nockapp.kernel.serf.stack()).expect("Failed to get checkpoint");
+        let checkpoint = nockapp
+            .kernel
+            .jam_paths
+            .load_checkpoint(nockapp.kernel.serf.stack())
+            .expect("Failed to get checkpoint");
         info!("checkpoint: {:?}", checkpoint);
         assert_eq!(checkpoint.event_num, 1);
-        assert_ne!(nockapp.kernel.jam_paths.0, nockapp.kernel.jam_paths.1, "After a new checkpoint the jam_paths should be different");
+        assert_ne!(
+            nockapp.kernel.jam_paths.0, nockapp.kernel.jam_paths.1,
+            "After a new checkpoint the jam_paths should be different"
+        );
     }
 
     // Test nockapp save

@@ -120,7 +120,7 @@ impl NockApp {
     pub(crate) async fn save_f(
         &mut self,
         save: Result<OwnedSemaphorePermit, AcquireError>,
-        f: impl std::future::Future<Output=()> + Send + 'static,
+        f: impl std::future::Future<Output = ()> + Send + 'static,
     ) -> Result<tokio::task::JoinHandle<NockAppResult>, NockAppError> {
         let toggle = self.kernel.buffer_toggle.clone();
         let jam_paths = self.kernel.jam_paths.clone();
@@ -191,12 +191,10 @@ impl NockApp {
         loop {
             let work_res = self.work().await;
             match work_res {
-                Ok(nockapp_run) => {
-                    match nockapp_run {
-                        crate::nockapp::NockAppRun::Pending => continue,
-                        crate::nockapp::NockAppRun::Done => return Ok(()),
-                    }
-                }
+                Ok(nockapp_run) => match nockapp_run {
+                    crate::nockapp::NockAppRun::Pending => continue,
+                    crate::nockapp::NockAppRun::Done => return Ok(()),
+                },
                 Err(NockAppError::Exit(code)) => {
                     if code == 0 {
                         // zero is success, we're simply done.
