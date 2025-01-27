@@ -40,7 +40,7 @@
       |~  arg=path
       *(unit (unit *))
     ++  poke
-      |~  arg=input
+      |~  arg=ovum
       [*(list *) *inner-state]
     --
   --
@@ -77,7 +77,7 @@
       =-  [effects ..poke]
       (slog tang.goof.u.g)
     ::
-        [[%poke ~] *]
+        [[%poke *] *]
       =/  ovum  ((soft ^ovum) ovum)
       ?~  ovum  ~&("invalid arg: {<ovum>}" ~^..poke)
       =/  o  ((soft input) input.u.ovum)
@@ -86,7 +86,7 @@
         =+  (road |.(;;(^^ovum ovum)))
         ~^..poke
       =^  effects  internal.outer
-        (poke:inner-fort input.u.ovum)
+        (poke:inner-fort u.ovum)
       [effects ..poke(internal.outer internal.outer)]
     ==
   --

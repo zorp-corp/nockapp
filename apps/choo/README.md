@@ -56,3 +56,14 @@ runes:
 - `/=` load from specified path (required `%hoon` mark)
 - `/*` load from specified path via specified mark (presumptively `%hoon` or `%jock`)
 - `/?` version pinning (ignored)
+
+## Developer Troubleshooting
+
+If you make changes to the `poke` arm in `bootstrap/kernel.hoon` or in `hoon-deps/wrapper.hoon`, you'll need to update the `choo.jam` file by running:
+
+```bash
+cargo run --release bootstrap/kernel.hoon ../hoon-deps
+mv out.jam bootstrap/choo.jam
+```
+
+and committing the changes to `choo.jam` so that the CI can properly bootstrap the `choo` kernel.

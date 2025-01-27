@@ -322,9 +322,10 @@ impl NockApp {
                 debug!("Action channel received");
                 if let Some(action) = action_res {
                     match action {
-                        IOAction::Poke { poke, ack_channel } => {
+                        IOAction::Poke { wire, poke, ack_channel } => {
+                            let wire_noun = wire.copy_to_stack(self.kernel.serf.stack());
                             let poke_noun = poke.copy_to_stack(self.kernel.serf.stack());
-                            let effects_res = self.kernel.poke(poke_noun);
+                            let effects_res = self.kernel.poke(wire_noun, poke_noun);
                             match effects_res {
                                 Ok(effects) => {
                                     let _ = ack_channel.send(PokeResult::Ack);

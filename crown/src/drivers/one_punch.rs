@@ -1,15 +1,37 @@
 use crate::nockapp::driver::*;
+use crate::nockapp::wire::Wire;
 use crate::nockapp::NockAppError;
 use crate::noun::slab::NounSlab;
+use crate::utils::make_tas;
 use either::Either::{self, Left, Right};
-use sword::noun::D;
+use sword::noun::{D, T};
 use sword_macros::tas;
 use tracing::{debug, error, info};
 
+pub enum OnePunchWire {
+    Poke,
+}
+
+impl Wire for OnePunchWire {
+    const VERSION: u64 = 1;
+    const SOURCE: &'static str = "one_punch";
+
+    fn to_noun_slab(&self) -> NounSlab {
+        let mut slab = NounSlab::new();
+        let source = make_tas(&mut slab, OnePunchWire::SOURCE).as_noun();
+        let wire = match self {
+            OnePunchWire::Poke => T(&mut slab, &[source, D(OnePunchWire::VERSION), D(0)]),
+        };
+        slab.set_root(wire);
+        slab
+    }
+}
+
 pub fn one_punch_man(data: NounSlab, op: Operation) -> IODriverFn {
     make_driver(|handle| async move {
+        let wire = OnePunchWire::Poke.to_noun_slab();
         let result = match op {
-            Operation::Poke => Left(handle.poke(data).await?),
+            Operation::Poke => Left(handle.poke(wire, data).await?),
             Operation::Peek => {
                 debug!("poke_once_driver: peeking with {:?}", data);
                 Right(handle.peek(data).await?)

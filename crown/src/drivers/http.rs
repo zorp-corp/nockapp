@@ -1,6 +1,8 @@
 use crate::nockapp::driver::{make_driver, IODriverFn, PokeResult};
+use crate::nockapp::wire::Wire;
 use crate::nockapp::NockAppError;
 use crate::noun::slab::NounSlab;
+use crate::utils::make_tas;
 use crate::{AtomExt, Bytes};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -31,6 +33,25 @@ struct ResponseBuilder {
     status_code: StatusCode,
     headers: Vec<(String, String)>,
     body: Option<axum::body::Bytes>,
+}
+
+pub enum HttpWire {
+    Request,
+}
+
+impl Wire for HttpWire {
+    const VERSION: u64 = 1;
+    const SOURCE: &'static str = "http";
+
+    fn to_noun_slab(&self) -> NounSlab {
+        let mut slab = NounSlab::new();
+        let source = make_tas(&mut slab, HttpWire::SOURCE).as_noun();
+        let wire = match self {
+            HttpWire::Request => T(&mut slab, &[source, D(HttpWire::VERSION), D(tas!(b"req"))]),
+        };
+        slab.set_root(wire);
+        slab
+    }
 }
 
 static COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -100,7 +121,8 @@ pub fn http() -> IODriverFn {
                     debug!("poking: {:?}", poke);
                     slab.set_root(poke);
 
-                    let poke_result = handle.poke(slab).await?;
+                    let wire = HttpWire::Request.to_noun_slab();
+                    let poke_result = handle.poke(wire, slab).await?;
                     debug!("poke result: {:?}", poke_result);
 
                     if let PokeResult::Nack = poke_result {

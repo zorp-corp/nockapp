@@ -87,7 +87,7 @@
 ::  +poke: external apply
 ::
 ++  poke
-  |=  [eny=@ our=@ux now=@da dat=*]
+  |=  [=wire eny=@ our=@ux now=@da dat=*]
   ^-  [(list effect) choo-state]
   =/  cause=(unit cause)  ((soft cause) dat)
   ?~  cause

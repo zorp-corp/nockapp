@@ -415,12 +415,13 @@ impl Kernel {
     ///
     /// # Arguments
     ///
-    /// * `cause` - The cause noun for the poke.
+    /// * `wire` - The wire noun.
+    /// * `cause` - The cause noun.
     ///
     /// # Returns
     ///
     /// Result containing the poke response or an error.
-    pub fn poke(&mut self, cause: Noun) -> Result<Noun> {
+    pub fn poke(&mut self, wire: Noun, cause: Noun) -> Result<Noun> {
         let stack = &mut self.serf.context.stack;
 
         let random_bytes = rand::random::<u64>();
@@ -434,7 +435,7 @@ impl Kernel {
         };
 
         let event_num = D(self.serf.event_num + 1);
-        let wire = T(stack, &[D(tas!(b"poke")), D(0)]);
+        let wire = T(stack, &[D(tas!(b"poke")), wire]);
         let poke = T(
             stack,
             &[event_num, wire, eny.as_noun(), our.as_noun(), now.as_noun(), cause],

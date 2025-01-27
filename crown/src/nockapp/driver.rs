@@ -41,13 +41,20 @@ pub struct NockAppHandle {
     pub exit: mpsc::Sender<usize>,
 }
 
-/// IO actions to be sent over channels
+/// IO actions sent between [`NockAppHandle`] and [`crate::NockApp`] over channels.
+///
+/// Used by [`NockAppHandle`] to send poke/peek requests to [`crate::NockApp`] ,
+/// which processes them against the Nock kernel and returns results
+/// via oneshot channels.
 #[derive(Debug)]
 pub enum IOAction {
+    /// Poke request to [`crate::NockApp`]
     Poke {
+        wire: NounSlab,
         poke: NounSlab,
         ack_channel: oneshot::Sender<PokeResult>,
     },
+    /// Peek request to [`crate::NockApp`]
     Peek {
         path: NounSlab,
         result_channel: oneshot::Sender<Option<NounSlab>>,
@@ -55,10 +62,14 @@ pub enum IOAction {
 }
 
 impl NockAppHandle {
-    pub async fn poke(&self, poke: NounSlab) -> Result<PokeResult, NockAppError> {
+    pub async fn poke(&self, wire: NounSlab, poke: NounSlab) -> Result<PokeResult, NockAppError> {
         let (ack_channel, ack_future) = oneshot::channel();
         self.io_sender
-            .send(IOAction::Poke { poke, ack_channel })
+            .send(IOAction::Poke {
+                wire,
+                poke,
+                ack_channel,
+            })
             .await?;
         Ok(ack_future.await?)
     }

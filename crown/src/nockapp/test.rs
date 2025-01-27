@@ -2,6 +2,7 @@
 mod tests {
     use crate::kernel::checkpoint::JamPaths;
     use crate::kernel::form::Kernel;
+    use crate::nockapp::wire::{SystemWire, Wire};
     use crate::noun::slab::{slab_equality, NounSlab};
     use crate::{kernel, NockApp, NounExt};
     use bytes::Bytes;
@@ -157,7 +158,9 @@ mod tests {
 
         let poke = D(tas!(b"inc"));
 
-        let _ = nockapp.kernel.poke(poke).unwrap();
+        let wire = SystemWire.to_noun_slab();
+        let wire_root = unsafe { wire.root() };
+        let _ = nockapp.kernel.poke(wire_root, poke).unwrap();
 
         // Save
         save_nockapp(&mut nockapp).await;
@@ -205,6 +208,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[traced_test]
     #[cfg_attr(miri, ignore)]
     async fn test_nockapp_save_multiple() {
         let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
@@ -214,7 +218,9 @@ mod tests {
         for i in 1..4 {
             // Poke to increment the state
             let poke = D(tas!(b"inc"));
-            let _ = nockapp.kernel.poke(poke).unwrap();
+            let wire = SystemWire.to_noun_slab();
+            let wire_root = unsafe { wire.root() };
+            let _ = nockapp.kernel.poke(wire_root, poke).unwrap();
 
             // Save
             save_nockapp(&mut nockapp).await;
@@ -233,11 +239,17 @@ mod tests {
             // Checkpointed state should have been incremented
             let peek = T(nockapp.kernel.serf.stack(), &[D(tas!(b"state")), D(0)]);
 
-            // res should be [~ ~ val]
+            // res should be [~ ~ [%0 val]]
             let res = nockapp.kernel.peek(peek).unwrap();
-            let val = slot(res, 7).unwrap();
+            let val = slot(res, 7).unwrap().as_cell().unwrap().tail();
+
             unsafe {
-                assert!(val.raw_equals(D(i)));
+                assert!(
+                    val.raw_equals(D(i)),
+                    "val: {:?} != expected: {:?}",
+                    val,
+                    D(i)
+                );
             }
         }
     }

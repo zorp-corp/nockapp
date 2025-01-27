@@ -19,6 +19,7 @@
 ::
 ++  load
   |=  arg=test-state
+  ~&  >>  "load"
   arg
 ::
 ::  +peek: external inspect
@@ -38,8 +39,9 @@
 ::  +poke: external apply
 ::
 ++  poke
-  |=  [eny=@ our=@ux now=@da dat=*]
+  |=  [=wire eny=@ our=@ux now=@da dat=*]
   ^-  [(list effect) test-state]
+  ~&  >>  "poke: {<wire>}"
   =/  sof-cau=(unit cause)  ((soft cause) dat)
   ?~  sof-cau
     ~&  "cause incorrectly formatted!"
