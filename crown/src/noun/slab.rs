@@ -133,6 +133,14 @@ impl Default for NounSlab {
     }
 }
 
+impl From<Noun> for NounSlab {
+    fn from(noun: Noun) -> Self {
+        let mut slab = Self::new();
+        slab.copy_into(noun);
+        slab
+    }
+}
+
 impl NounSlab {
     /// Make a new noun slab with D(0) as the root
     pub fn new() -> Self {
