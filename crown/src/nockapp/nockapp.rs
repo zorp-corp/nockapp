@@ -174,13 +174,33 @@ impl NockApp {
         Ok(())
     }
 
-    // fn reset(&mut self) {
-    //     self.tasks.reopen();
-    //     let (shutdown_send, shutdown_recv) = tokio::sync::oneshot::channel();
-    //     self.shutdown_send = Some(shutdown_send);
-    //     self.shutdown_recv = shutdown_recv;
-    //     self.exit_status.store(false, Ordering::SeqCst);
-    // }
+    /// Peek at a noun in the kernel, blocking operation
+    pub fn peek_sync(&mut self, path: NounSlab) -> Result<NounSlab, NockAppError> {
+        trace!("About to copy to stack");
+        let path_noun = path.copy_to_stack(self.kernel.serf.stack());
+        trace!("Peeking at noun: {:?}", path_noun);
+        let peek_noun = self.kernel.peek(path_noun)?;
+        trace!("Peeked noun: {:?}", peek_noun);
+        let mut res_slab = NounSlab::new();
+        res_slab.copy_into(peek_noun);
+        trace!("Copied res_slab");
+        Ok(res_slab)
+    }
+
+    /// Poke at a noun in the kernel, blocking operation
+    pub fn poke_sync(&mut self, poke: NounSlab) -> Result<Vec<NounSlab>, NockAppError> {
+        let poke_noun = poke.copy_to_stack(self.kernel.serf.stack());
+        let slab = NounSlab::new();
+        let root = unsafe { slab.root() };
+        let effects = self.kernel.poke(root, poke_noun)?;
+        let mut effect_slabs = Vec::new();
+        for effect in effects.list_iter() {
+            let mut effect_slab = NounSlab::new();
+            effect_slab.copy_into(effect);
+            effect_slabs.push(effect_slab);
+        }
+        Ok(effect_slabs)
+    }
 
     /// Runs until the nockapp is done (returns exit 0 or an error)
     pub async fn run(&mut self) -> NockAppResult {
