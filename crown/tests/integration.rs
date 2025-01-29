@@ -2,9 +2,8 @@ use crown::kernel::checkpoint::JamPaths;
 use crown::kernel::form::Kernel;
 use crown::noun::slab::NounSlab;
 use crown::NockApp;
-use sword::noun::{Slots, T};
-use tracing::{debug, info};
-use tracing_test::traced_test;
+use sword::noun::Slots;
+use tracing::debug;
 
 use std::fs;
 use std::path::Path;

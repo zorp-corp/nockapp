@@ -141,7 +141,7 @@ impl From<Noun> for NounSlab {
     }
 }
 
-impl <const N: usize> From<[Noun; N]> for NounSlab {
+impl<const N: usize> From<[Noun; N]> for NounSlab {
     fn from(nouns: [Noun; N]) -> Self {
         let mut slab = Self::new();
         let new_root = sword::noun::T(&mut slab, &nouns);

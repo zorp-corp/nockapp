@@ -12,7 +12,7 @@ use tokio::sync::{broadcast, mpsc, AcquireError, Mutex, OwnedSemaphorePermit};
 use tokio::time::Duration;
 use tokio::{fs, select};
 use tokio_util::task::TaskTracker;
-use tracing::{debug, error, info, instrument, trace};
+use tracing::{debug, error, info, trace};
 
 type NockAppResult = Result<(), NockAppError>;
 
