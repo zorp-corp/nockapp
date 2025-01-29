@@ -175,17 +175,19 @@ impl NockApp {
     }
 
     /// Peek at a noun in the kernel, blocking operation
-    #[instrument(skip(self))]
     pub fn peek_sync(&mut self, path: NounSlab) -> Result<NounSlab, NockAppError> {
+        trace!("About to copy to stack");
         let path_noun = path.copy_to_stack(self.kernel.serf.stack());
+        trace!("Peeking at noun: {:?}", path_noun);
         let peek_noun = self.kernel.peek(path_noun)?;
+        trace!("Peeked noun: {:?}", peek_noun);
         let mut res_slab = NounSlab::new();
         res_slab.copy_into(peek_noun);
+        trace!("Copied res_slab");
         Ok(res_slab)
     }
 
     /// Poke at a noun in the kernel, blocking operation
-    #[instrument(skip(self))]
     pub fn poke_sync(&mut self, poke: NounSlab) -> Result<Vec<NounSlab>, NockAppError> {
         let poke_noun = poke.copy_to_stack(self.kernel.serf.stack());
         let slab = NounSlab::new();
