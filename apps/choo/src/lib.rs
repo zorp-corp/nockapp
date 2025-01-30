@@ -1,10 +1,10 @@
 use clap::{arg, command, ColorChoice, Parser};
 use tokio::fs::File;
-use walkdir::{DirEntry, WalkDir};
 use tokio::io::AsyncReadExt;
+use walkdir::{DirEntry, WalkDir};
 
-use crown::kernel::boot::Cli as BootCli;
 use crown::kernel::boot;
+use crown::kernel::boot::Cli as BootCli;
 use crown::nockapp::driver::Operation;
 use crown::noun::slab::NounSlab;
 use crown::AtomExt;
