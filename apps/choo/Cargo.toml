@@ -16,4 +16,4 @@ walkdir = "2.5.0"
 
 [[bin]]
 name = "choo"
-path = "main.rs"
+path = "src/main.rs"
