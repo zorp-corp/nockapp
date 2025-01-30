@@ -60,7 +60,15 @@ pub fn setup(
     name: &str,
 ) -> Result<NockApp, Box<dyn std::error::Error>> {
     let cli = cli.unwrap_or_else(|| Cli::parse());
+    setup_(jam, cli, hot_state, name)
+}
 
+pub fn setup_(
+    jam: &[u8],
+    cli: Cli,
+    hot_state: &[HotEntry],
+    name: &str,
+) -> Result<NockApp, Box<dyn std::error::Error>> {
     let data_dir = default_data_dir(name);
     let pma_dir = data_dir.join("pma");
     let jams_dir = data_dir.join("jams");
