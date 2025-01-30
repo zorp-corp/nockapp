@@ -5,10 +5,6 @@ use tracing::{debug, info};
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn test_compile_test_app() -> Result<(), Box<dyn std::error::Error>> {
-    // let mut test_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // test_dir.pop();
-    // test_dir.push("test-app");
-
     // use std::path to get pwd() and then canonicalize
     let pwd = std::env::current_dir().unwrap();
     let mut test_dir = pwd.clone();
