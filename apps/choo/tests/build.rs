@@ -1,7 +1,6 @@
-use choo::test::*;
+use choo;
 use tracing::{debug, info};
 
-// TODO: Move this to an integration test.
 #[tokio::test]
 #[cfg_attr(miri, ignore)]
 async fn test_compile_test_app() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,8 +24,8 @@ async fn test_compile_test_app() -> Result<(), Box<dyn std::error::Error>> {
     info!("Dependencies directory: {:?}", deps_dir);
     info!("Entry file: {:?}", entry);
 
-    let mut nockapp = test_nockapp(entry, deps_dir).await?;
-    let result = test_build(&mut nockapp).await;
+    let mut nockapp = choo::initialize_with_default_cli(entry, deps_dir, false).await?;
+    let result = choo::run_build(&mut nockapp).await;
     assert!(result.is_ok());
     // Cleanup
     let _ = tokio::fs::remove_file("out.jam").await;

@@ -43,6 +43,17 @@ pub struct Cli {
     pub state_jam: Option<String>,
 }
 
+pub fn default_boot_cli() -> Cli {
+    Cli {
+        save_interval: 1000,
+        new: false,
+        trace: false,
+        log_level: "trace".to_string(),
+        color: ColorChoice::Auto,
+        state_jam: None,
+    }
+}
+
 pub fn init_default_tracing(cli: &Cli) {
     tracing_subscriber::registry()
         .with(
