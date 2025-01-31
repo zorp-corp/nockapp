@@ -203,7 +203,6 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                     }
                 },
                 effect_res = handle.next_effect() => {
-                    debug!("effect_res: {:?}", effect_res);
                     let mut slab = effect_res?; // Closed error should error driver
                     let Ok(effect_cell) = unsafe { slab.root() }.as_cell() else {
                         continue;

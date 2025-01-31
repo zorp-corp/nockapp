@@ -14,7 +14,7 @@ pub enum OnePunchWire {
 
 impl Wire for OnePunchWire {
     const VERSION: u64 = 1;
-    const SOURCE: &'static str = "one_punch";
+    const SOURCE: &'static str = "one-punch";
 
     fn to_noun_slab(&self) -> NounSlab {
         let mut slab = NounSlab::new();
