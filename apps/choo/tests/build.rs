@@ -24,7 +24,7 @@ async fn test_compile_test_app() -> Result<(), Box<dyn std::error::Error>> {
     info!("Dependencies directory: {:?}", deps_dir);
     info!("Entry file: {:?}", entry);
 
-    let mut nockapp = choo::initialize_with_default_cli(entry, deps_dir, false).await?;
+    let mut nockapp = choo::initialize_with_default_cli(entry, deps_dir, false, true).await?;
     let result = choo::run_build(&mut nockapp).await;
     assert!(result.is_ok());
     // Cleanup
