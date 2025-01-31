@@ -11,6 +11,7 @@
 //! - `utils`: Errors, misc functions and extensions.
 //!
 #![feature(trait_alias)]
+pub mod actor;
 mod drivers;
 pub mod kernel;
 pub mod nockapp;
