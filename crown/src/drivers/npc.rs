@@ -466,7 +466,7 @@ mod tests {
     #[tokio::test]
     #[traced_test]
     #[cfg_attr(miri, ignore)]
-    async fn test_npc_driver() {
+    async fn test_npc_driver_poke() {
         // Setup
         let dir = tempdir().unwrap();
         let socket_path = dir.path().join("test.sock");
@@ -578,5 +578,145 @@ mod tests {
 
         // Cleanup
         drop(client);
+    }
+
+    #[tokio::test]
+    #[traced_test]
+    #[cfg_attr(miri, ignore)]
+    async fn test_npc_driver_peek() {
+        // Setup socket and channels
+        let dir = tempdir().unwrap();
+        let socket_path = dir.path().join("test.sock");
+        let listener = UnixListener::bind(&socket_path).unwrap();
+
+        let (tx_io, mut rx_io) = mpsc::channel(32);
+        let (tx_effect, rx_effect) = broadcast::channel(32);
+        let (tx_exit, _) = mpsc::channel(1);
+
+        let handle = NockAppHandle {
+            io_sender: tx_io,
+            effect_sender: tx_effect.clone(),
+            effect_receiver: Mutex::new(rx_effect),
+            exit: tx_exit,
+        };
+
+        // Spawn the listener driver
+        let _driver_task = tokio::spawn(npc_listener(listener)(handle));
+
+        // Test both with and without peek_response_tag
+        for test_case in [None, Some(tas!(b"foo"))] {
+            // Connect client
+            let mut client = StdUnixStream::connect(&socket_path).unwrap();
+
+            // Create peek request noun
+            let mut test_slab = NounSlab::new();
+            let peek_path = T(&mut test_slab, &[D(123), D(456)]); // Example path
+            let msg_noun = T(&mut test_slab, &[D(tas!(b"peek")), peek_path]);
+            let test_noun = T(&mut test_slab, &[D(1), msg_noun]);
+            test_slab.set_root(test_noun);
+
+            // Send peek request
+            let msg_bytes = test_slab.jam();
+            let msg_len = msg_bytes.len();
+            client.write_all(&(msg_len as u64).to_le_bytes()).unwrap();
+            client.write_all(&msg_bytes).unwrap();
+
+            // Verify driver received peek request
+            if let Some(IOAction::Peek { path, result_channel }) = timeout(Duration::from_secs(1), rx_io.recv())
+                .await
+                .unwrap()
+            {
+                // Verify peek path
+                let path_noun = unsafe { path.root() };
+                let path_cell = path_noun.as_cell().unwrap();
+                assert_eq!(path_cell.head().as_direct().unwrap().data(), 123);
+                assert_eq!(path_cell.tail().as_direct().unwrap().data(), 456);
+
+                // Send peek response
+                let mut response_slab = NounSlab::new();
+                let response_data = T(&mut response_slab, &[D(789), D(101)]); // Example response
+                response_slab.set_root(response_data);
+                result_channel.send(Some(response_slab)).unwrap();
+
+                // Add a small delay to allow the driver to process and send the response
+                tokio::time::sleep(Duration::from_millis(100)).await;
+
+                // Then continue with reading the response
+                let mut size_buf = [0u8; 8];
+                client.read_exact(&mut size_buf).unwrap();
+                let size = usize::from_le_bytes(size_buf);
+
+                let mut msg_buf = vec![0u8; size];
+                client.read_exact(&mut msg_buf).unwrap();
+
+                let mut received_slab = NounSlab::new();
+                let received_noun = received_slab.cue_into(Bytes::from(msg_buf)).unwrap();
+                received_slab.set_root(received_noun);
+
+                // Verify response format
+                let root = unsafe { received_slab.root() };
+                let cell = root.as_cell().unwrap();
+                
+                // First element should be the pid (1)
+                assert_eq!(cell.head().as_direct().unwrap().data(), 1);
+                
+                let rest = cell.tail().as_cell().unwrap();
+                // Second element should be "bind" tag
+                assert_eq!(rest.head().as_direct().unwrap().data(), tas!(b"bind"));
+                
+                // Third element should be the response data
+                let data = rest.tail().as_cell().unwrap();
+                assert_eq!(data.head().as_direct().unwrap().data(), 789);
+                assert_eq!(data.tail().as_direct().unwrap().data(), 101);
+
+                // Verify client processes bind and sends transformed message
+                if let Some(IOAction::Poke { wire: wire_slab, poke: noun_slab, .. }) = 
+                    timeout(Duration::from_secs(1), rx_io.recv()).await.unwrap() 
+                {
+                    // Verify wire format
+                    let wire = unsafe { wire_slab.root() };
+                    let wire_cell = wire.as_cell().unwrap();
+
+                    // Check source is "npc"
+                    assert_eq!(
+                        wire_cell.head().as_direct().unwrap().data(),
+                        make_tas(&mut wire_slab.clone(), NpcWire::SOURCE)
+                            .as_noun()
+                            .as_direct()
+                            .unwrap()
+                            .data()
+                    );
+
+                    // Check it's a bind wire
+                    let rest = wire_cell.tail().as_cell().unwrap();
+                    assert_eq!(rest.head().as_direct().unwrap().data(), 1); // version
+                    let tag_cell = rest.tail().as_cell().unwrap();
+                    assert_eq!(tag_cell.head().as_direct().unwrap().data(), tas!(b"bind"));
+
+                    // Verify poke content
+                    let poke = unsafe { noun_slab.root() };
+                    let poke_cell = poke.as_cell().unwrap();
+
+                    // Check if tag is transformed correctly based on peek_response_tag
+                    let expected_tag = match test_case {
+                        None => tas!(b"npc-bind"),
+                        Some(custom_tag) => custom_tag,
+                    };
+                    assert_eq!(poke_cell.head().as_direct().unwrap().data(), expected_tag);
+
+                    // Verify the response data is preserved
+                    let data = poke_cell.tail().as_cell().unwrap();
+                    assert_eq!(data.head().as_direct().unwrap().data(), 789);
+                    assert_eq!(data.tail().as_direct().unwrap().data(), 101);
+                } else {
+                    panic!("Did not receive transformed bind message");
+                }
+
+                // Cleanup this iteration's client
+                drop(client);
+            } else {
+                panic!("Did not receive peek message");
+            }
+        }
     }
 }
