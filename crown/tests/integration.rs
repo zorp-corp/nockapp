@@ -1,5 +1,6 @@
 use crown::kernel::checkpoint::JamPaths;
 use crown::kernel::form::Kernel;
+use crown::nockapp::wire::{SystemWire, Wire};
 use crown::noun::slab::NounSlab;
 use crown::NockApp;
 use sword::noun::Slots;
@@ -32,7 +33,8 @@ async fn test_sync_peek_and_poke() {
     let (_temp, mut nockapp) = setup_nockapp("test-ker.jam");
     for i in 1..4 {
         let poke = D(tas!(b"inc")).into();
-        let _ = nockapp.poke_sync(poke).unwrap();
+        let wire = SystemWire.to_noun_slab();
+        let _ = nockapp.poke_sync(wire, poke).unwrap();
         let peek: NounSlab = [D(tas!(b"state")), D(0)].into();
         // res should be [~ ~ %0 val]
         let res = nockapp.peek_sync(peek);
