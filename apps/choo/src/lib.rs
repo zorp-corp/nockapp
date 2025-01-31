@@ -49,8 +49,9 @@ pub async fn initialize_with_default_cli(
     entry: std::path::PathBuf,
     deps_dir: std::path::PathBuf,
     arbitrary: bool,
+    new: bool,
 ) -> Result<crown::nockapp::NockApp, Error> {
-    let cli = default_boot_cli();
+    let cli = default_boot_cli(new);
     initialize_(entry, deps_dir, arbitrary, cli).await
 }
 

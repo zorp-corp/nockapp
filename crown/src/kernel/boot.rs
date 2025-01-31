@@ -43,10 +43,10 @@ pub struct Cli {
     pub state_jam: Option<String>,
 }
 
-pub fn default_boot_cli() -> Cli {
+pub fn default_boot_cli(new: bool) -> Cli {
     Cli {
         save_interval: 1000,
-        new: false,
+        new,
         trace: false,
         log_level: "trace".to_string(),
         color: ColorChoice::Auto,
