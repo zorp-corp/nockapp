@@ -52,8 +52,11 @@
   |_  outer=outer-state
   +*  inner-fort  ~(. inner internal.outer)
   ++  load
-    |=  arg=outer-state
-    =/  new-internal  (load:inner-fort internal.arg)
+    |=  arg=*
+    =/  shell=(unit outer-state)  ((soft outer-state) arg)
+    ?~  shell
+      ~&("+load: could not mold outer state {<arg>}" ~^..load)
+    =/  new-internal  (load:inner-fort internal.u.shell)
     ..load(internal.outer new-internal)
   ::
   ++  peek
@@ -70,19 +73,19 @@
     |=  [num=@ ovum=*]
     ^-  [(list *) _..poke]
     =/  effects=(list *)  ?:(crash ~[exit/0] ~)
-    ?+   ovum  ~&("invalid arg: {<ovum>}" effects^..poke)
+    ?+   ovum  ~&("+poke: invalid ovum: {<ovum>}" effects^..poke)
         [[%$ %arvo ~] *]
       =/  g  ((soft crud) +.ovum)
-      ?~  g  ~&(%invalid-goof effects^..poke)
+      ?~  g  ~&("+poke: invalid-goof" effects^..poke)
       =-  [effects ..poke]
       (slog tang.goof.u.g)
     ::
         [[%poke *] *]
       =/  ovum  ((soft ^ovum) ovum)
-      ?~  ovum  ~&("invalid arg: {<ovum>}" ~^..poke)
+      ?~  ovum  ~&("+poke: invalid ovum: {<ovum>}" ~^..poke)
       =/  o  ((soft input) input.u.ovum)
       ?~  o
-        ~&  "could not mold poke type: {<ovum>}"
+        ~&  "+poke: could not mold poke type: {<o>}"
         =+  (road |.(;;(^^ovum ovum)))
         ~^..poke
       =^  effects  internal.outer

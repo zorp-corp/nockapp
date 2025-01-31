@@ -68,6 +68,7 @@ impl Kernel {
         hot_state: &[HotEntry],
         trace: bool,
     ) -> Self {
+        info!("Loading kernel with hot state");
         std::fs::create_dir_all(jam_paths.0.parent().unwrap()).unwrap();
 
         let mut stack = NockStack::new(NOCK_STACK_SIZE, 0);

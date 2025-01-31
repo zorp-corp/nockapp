@@ -61,8 +61,8 @@ pub async fn initialize_(
     arbitrary: bool,
     boot_cli: BootCli,
 ) -> Result<crown::nockapp::NockApp, Error> {
-    let mut nockapp = boot::setup(KERNEL_JAM, Some(boot_cli.clone()), &[], "choo")?;
     boot::init_default_tracing(&boot_cli.clone());
+    let mut nockapp = boot::setup(KERNEL_JAM, Some(boot_cli.clone()), &[], "choo")?;
     let mut slab = NounSlab::new();
     let hoon_cord = Atom::from_value(&mut slab, HOON_TXT).unwrap().as_noun();
     let bootstrap_poke = T(&mut slab, &[D(tas!(b"boot")), hoon_cord]);
