@@ -188,11 +188,14 @@ impl NockApp {
     }
 
     /// Poke at a noun in the kernel, blocking operation
-    pub fn poke_sync(&mut self, poke: NounSlab) -> Result<Vec<NounSlab>, NockAppError> {
+    pub fn poke_sync(
+        &mut self,
+        wire: NounSlab,
+        poke: NounSlab,
+    ) -> Result<Vec<NounSlab>, NockAppError> {
+        let wire_noun = wire.copy_to_stack(self.kernel.serf.stack());
         let poke_noun = poke.copy_to_stack(self.kernel.serf.stack());
-        let slab = NounSlab::new();
-        let root = unsafe { slab.root() };
-        let effects = self.kernel.poke(root, poke_noun)?;
+        let effects = self.kernel.poke(wire_noun, poke_noun)?;
         let mut effect_slabs = Vec::new();
         for effect in effects.list_iter() {
             let mut effect_slab = NounSlab::new();
