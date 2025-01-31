@@ -4,8 +4,7 @@ use tokio::io::AsyncReadExt;
 use tracing::info;
 use walkdir::{DirEntry, WalkDir};
 
-use crown::kernel::boot;
-use crown::kernel::boot::Cli as BootCli;
+use crown::kernel::boot::{self, default_boot_cli, Cli as BootCli};
 use crown::nockapp::driver::Operation;
 use crown::noun::slab::NounSlab;
 use crown::AtomExt;
@@ -43,10 +42,19 @@ pub struct ChooCli {
 }
 
 pub async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Error> {
-    initialize_nockapp_(cli.entry, cli.directory, cli.arbitrary, cli.boot.clone()).await
+    initialize_(cli.entry, cli.directory, cli.arbitrary, cli.boot.clone()).await
 }
 
-pub async fn initialize_nockapp_(
+pub async fn initialize_with_default_cli(
+    entry: std::path::PathBuf,
+    deps_dir: std::path::PathBuf,
+    arbitrary: bool,
+) -> Result<crown::nockapp::NockApp, Error> {
+    let cli = default_boot_cli();
+    initialize_(entry, deps_dir, arbitrary, cli).await
+}
+
+pub async fn initialize_(
     entry: std::path::PathBuf,
     deps_dir: std::path::PathBuf,
     arbitrary: bool,
