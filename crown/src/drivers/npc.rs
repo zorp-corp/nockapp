@@ -66,7 +66,7 @@ pub fn npc_listener(listener: UnixListener) -> IODriverFn {
                         Ok((stream, _)) => {
                             let (my_handle, their_handle) = handle.dup();
                             handle = my_handle;
-                            let _ = client_join_set.spawn(npc_client(stream)(their_handle));
+                            let _ = client_join_set.spawn(npc_client(stream, None)(their_handle));
                         },
                         Err(e) => {
                             error!("Error accepting connection: {:?}", e);
@@ -90,7 +90,12 @@ pub fn npc_listener(listener: UnixListener) -> IODriverFn {
 }
 
 /// NPC Client IO driver
-pub fn npc_client(stream: UnixStream) -> IODriverFn {
+///
+/// # Arguments
+/// * `stream` - Unix domain socket stream for communicating with the client
+/// * `peek_response_tag` - Optional NounSlab containing the head of the poke for a peek response.
+///                        When provided, this tag will be used instead of "npc-bind".
+pub fn npc_client(stream: UnixStream, peek_response_tag: Option<NounSlab>) -> IODriverFn {
     make_driver(move |handle| async move {
         let (stream_read, mut stream_write) = split(stream);
         let stream_read_arc = Arc::new(Mutex::new(stream_read));
@@ -171,7 +176,15 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                         _ => unreachable!(),
                                     };
                                     let poke = if tag == tas!(b"npc-bind") {
-                                        T(&mut slab, &[D(tag), D(pid), directive_cell.tail()])
+                                        match peek_response_tag {
+                                            Some(ref peek_tag) => {
+                                                let tag = unsafe { peek_tag.root() };
+                                                T(&mut slab, &[tag, directive_cell.tail()])
+                                            },
+                                            None => {
+                                               T(&mut slab, &[D(tag), directive_cell.tail()])
+                                            }
+                                        }
                                     } else {
                                         T(&mut slab, &[D(tag), D(pid)])
                                     };
