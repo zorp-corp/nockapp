@@ -161,8 +161,6 @@ pub fn canonicalize_and_string(path: &std::path::Path) -> Result<String, Error> 
 /// Run the build and verify the output file, used to build files outside of cli.
 pub async fn run_build(nockapp: &mut crown::nockapp::NockApp) -> Result<(), Error> {
     nockapp.run().await?;
-    // TODO this doesn't work because choo exits when compilation is done.
-    // Verify output file exists and is not empty
     let metadata = fs::metadata("out.jam").await?;
     info!("Output file size: {} bytes", metadata.len());
     assert!(metadata.len() > 0, "Output file is empty");
