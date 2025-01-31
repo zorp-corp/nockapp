@@ -161,21 +161,6 @@ pub async fn run_build(nockapp: &mut crown::nockapp::NockApp) -> Result<(), Erro
     Ok(())
 }
 
-pub mod test {
-    use crown::kernel::boot::default_boot_cli;
-
-    use super::*;
-
-    pub async fn test_nockapp(
-        entry: std::path::PathBuf,
-        deps_dir: std::path::PathBuf,
-        arbitrary: bool,
-    ) -> Result<crown::nockapp::NockApp, Error> {
-        let cli = default_boot_cli();
-        initialize_nockapp_(entry, deps_dir, arbitrary, cli).await
-    }
-}
-
 #[cfg(test)]
 mod tests {
     #[test]

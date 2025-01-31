@@ -1,5 +1,5 @@
-use choo::run_build;
-use choo::test::*;
+use choo::{initialize_nockapp_, run_build};
+use crown::kernel::boot::default_boot_cli;
 use tracing::{debug, info};
 
 // TODO: Move this to an integration test.
@@ -26,7 +26,8 @@ async fn test_compile_test_app() -> Result<(), Box<dyn std::error::Error>> {
     info!("Dependencies directory: {:?}", deps_dir);
     info!("Entry file: {:?}", entry);
 
-    let mut nockapp = test_nockapp(entry, deps_dir, false).await?;
+    let cli = default_boot_cli();
+    let mut nockapp = initialize_nockapp_(entry, deps_dir, false, cli).await?;
     let result = run_build(&mut nockapp).await;
     assert!(result.is_ok());
     // Cleanup
