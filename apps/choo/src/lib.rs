@@ -1,6 +1,7 @@
 use clap::{arg, command, ColorChoice, Parser};
-use tokio::fs::File;
+use tokio::fs::{self, File};
 use tokio::io::AsyncReadExt;
+use tracing::info;
 use walkdir::{DirEntry, WalkDir};
 
 use crown::kernel::boot;
@@ -42,8 +43,17 @@ pub struct ChooCli {
 }
 
 pub async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp, Error> {
-    let mut nockapp = boot::setup(KERNEL_JAM, Some(cli.boot.clone()), &[], "choo")?;
-    boot::init_default_tracing(&cli.boot.clone());
+    initialize_nockapp_(cli.entry, cli.directory, cli.arbitrary, cli.boot.clone()).await
+}
+
+pub async fn initialize_nockapp_(
+    entry: std::path::PathBuf,
+    deps_dir: std::path::PathBuf,
+    arbitrary: bool,
+    boot_cli: BootCli,
+) -> Result<crown::nockapp::NockApp, Error> {
+    let mut nockapp = boot::setup(KERNEL_JAM, Some(boot_cli.clone()), &[], "choo")?;
+    boot::init_default_tracing(&boot_cli.clone());
     let mut slab = NounSlab::new();
     let hoon_cord = Atom::from_value(&mut slab, HOON_TXT).unwrap().as_noun();
     let bootstrap_poke = T(&mut slab, &[D(tas!(b"boot")), hoon_cord]);
@@ -56,18 +66,18 @@ pub async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp,
     let mut slab = NounSlab::new();
     let entry_contents = {
         let mut contents_vec: Vec<u8> = vec![];
-        let mut file = File::open(&cli.entry).await?;
+        let mut file = File::open(&entry).await?;
         file.read_to_end(&mut contents_vec).await?;
         Atom::from_value(&mut slab, contents_vec).unwrap().as_noun()
     };
 
-    let entry_string = canonicalize_and_string(&cli.entry)?;
+    let entry_string = canonicalize_and_string(&entry)?;
     let entry_path = Atom::from_value(&mut slab, entry_string.to_lowercase())
         .unwrap()
         .as_noun();
 
     let mut directory_noun = D(0);
-    let directory = canonicalize_and_string(&cli.directory)?;
+    let directory = canonicalize_and_string(&deps_dir)?;
 
     let walker = WalkDir::new(&directory).follow_links(true).into_iter();
     for entry_result in walker.filter_entry(|e| is_valid_file_or_dir(e)) {
@@ -96,7 +106,7 @@ pub async fn initialize_nockapp(cli: ChooCli) -> Result<crown::nockapp::NockApp,
             directory_noun = T(&mut slab, &[entry_cell, directory_noun]);
         }
     }
-    let arbitrary_noun = if cli.arbitrary { D(0) } else { D(1) };
+    let arbitrary_noun = if arbitrary { D(0) } else { D(1) };
     let poke = T(
         &mut slab,
         &[D(tas!(b"build")), entry_path, entry_contents, directory_noun, arbitrary_noun],
@@ -140,39 +150,29 @@ pub fn canonicalize_and_string(path: &std::path::Path) -> Result<String, Error> 
     Ok(path.to_string())
 }
 
+/// Run the build and verify the output file, used to build files outside of cli.
+pub async fn run_build(nockapp: &mut crown::nockapp::NockApp) -> Result<(), Error> {
+    nockapp.run().await?;
+    // TODO this doesn't work because choo exits when compilation is done.
+    // Verify output file exists and is not empty
+    let metadata = fs::metadata("out.jam").await?;
+    info!("Output file size: {} bytes", metadata.len());
+    assert!(metadata.len() > 0, "Output file is empty");
+    Ok(())
+}
+
 pub mod test {
+    use crown::kernel::boot::default_boot_cli;
+
     use super::*;
-    use tokio::fs;
-    use tracing::info;
 
     pub async fn test_nockapp(
         entry: std::path::PathBuf,
         deps_dir: std::path::PathBuf,
+        arbitrary: bool,
     ) -> Result<crown::nockapp::NockApp, Error> {
-        let cli = ChooCli {
-            boot: BootCli {
-                save_interval: 1000,
-                new: false,
-                trace: false,
-                log_level: "trace".to_string(),
-                color: ColorChoice::Auto,
-                state_jam: None,
-            },
-            entry,
-            directory: deps_dir,
-            arbitrary: false,
-        };
-        initialize_nockapp(cli).await
-    }
-
-    pub async fn test_build(nockapp: &mut crown::nockapp::NockApp) -> Result<(), Error> {
-        nockapp.run().await?;
-        // TODO this doesn't work because choo exits when compilation is done.
-        // Verify output file exists and is not empty
-        let metadata = fs::metadata("out.jam").await?;
-        info!("Output file size: {} bytes", metadata.len());
-        assert!(metadata.len() > 0, "Output file is empty");
-        Ok(())
+        let cli = default_boot_cli();
+        initialize_nockapp_(entry, deps_dir, arbitrary, cli).await
     }
 }
 

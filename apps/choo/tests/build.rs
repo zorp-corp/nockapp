@@ -1,3 +1,4 @@
+use choo::run_build;
 use choo::test::*;
 use tracing::{debug, info};
 
@@ -25,8 +26,8 @@ async fn test_compile_test_app() -> Result<(), Box<dyn std::error::Error>> {
     info!("Dependencies directory: {:?}", deps_dir);
     info!("Entry file: {:?}", entry);
 
-    let mut nockapp = test_nockapp(entry, deps_dir).await?;
-    let result = test_build(&mut nockapp).await;
+    let mut nockapp = test_nockapp(entry, deps_dir, false).await?;
+    let result = run_build(&mut nockapp).await;
     assert!(result.is_ok());
     // Cleanup
     let _ = tokio::fs::remove_file("out.jam").await;
