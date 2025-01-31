@@ -17,11 +17,15 @@ use tokio::task::JoinSet;
 use tokio::time::{sleep, Duration};
 use tracing::{debug, error};
 
+pub struct ChannelId(u64);
+
 pub enum NpcWire {
-    Poke(u64),
-    Pack(u64),
-    Nack(u64),
-    Bind(u64),
+    Poke { channel_id: ChannelId, pid: u64 },
+    Pack { channel_id: ChannelId, pid: u64 },
+    Nack { channel_id: ChannelId, pid: u64 },
+    Bind { channel_id: ChannelId, pid: u64 },
+    Connect { channel_id: ChannelId },
+    Connected { channel_id: ChannelId },
 }
 
 impl Wire for NpcWire {
@@ -32,21 +36,29 @@ impl Wire for NpcWire {
         let mut slab = NounSlab::new();
         let source = make_tas(&mut slab, NpcWire::SOURCE).as_noun();
         let wire = match self {
-            NpcWire::Poke(pid) => T(
+            NpcWire::Poke { channel_id, pid } => T(
                 &mut slab,
                 &[source, D(NpcWire::VERSION), D(tas!(b"poke")), D(*pid), D(0)],
             ),
-            NpcWire::Pack(pid) => T(
+            NpcWire::Pack { channel_id, pid } => T(
                 &mut slab,
                 &[source, D(NpcWire::VERSION), D(tas!(b"pack")), D(*pid), D(0)],
             ),
-            NpcWire::Nack(pid) => T(
+            NpcWire::Nack { channel_id, pid } => T(
                 &mut slab,
                 &[source, D(NpcWire::VERSION), D(tas!(b"nack")), D(*pid), D(0)],
             ),
-            NpcWire::Bind(pid) => T(
+            NpcWire::Bind { channel_id, pid } => T(
                 &mut slab,
                 &[source, D(NpcWire::VERSION), D(tas!(b"bind")), D(*pid), D(0)],
+            ),
+            NpcWire::Connect { channel_id } => T(
+                &mut slab,
+                &[source, D(NpcWire::VERSION), D(tas!(b"connect")), D(*channel_id), D(0)],
+            ),
+            NpcWire::Connected { channel_id } => T(
+                &mut slab,
+                &[source, D(NpcWire::VERSION), D(tas!(b"connected")), D(*channel_id), D(0)],
             ),
         };
         slab.set_root(wire);
@@ -123,7 +135,7 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                     let mut poke_slab = NounSlab::new();
                                     let poke = directive_cell.tail();
                                     poke_slab.copy_into(poke);
-                                    let wire = NpcWire::Poke(pid).to_noun_slab();
+                                    let wire = NpcWire::Poke { channel_id: ChannelId(0), pid }.to_noun_slab();
                                     let result = handle.poke(wire, poke_slab).await?;
                                     let (tag, noun) = match result {
                                         PokeResult::Ack => (tas!(b"pack"), D(0)),
@@ -165,9 +177,9 @@ pub fn npc_client(stream: UnixStream) -> IODriverFn {
                                         _ => unreachable!(),
                                     };
                                     let wire = match directive_tag {
-                                        tas!(b"pack") => NpcWire::Pack(pid),
-                                        tas!(b"nack") => NpcWire::Nack(pid),
-                                        tas!(b"bind") => NpcWire::Bind(pid),
+                                        tas!(b"pack") => NpcWire::Pack { channel_id: ChannelId(0), pid },
+                                        tas!(b"nack") => NpcWire::Nack { channel_id: ChannelId(0), pid },
+                                        tas!(b"bind") => NpcWire::Bind { channel_id: ChannelId(0), pid },
                                         _ => unreachable!(),
                                     };
                                     let poke = if tag == tas!(b"npc-bind") {
@@ -334,10 +346,10 @@ mod tests {
     #[tokio::test]
     async fn test_npc_wire_variants() {
         let test_cases = vec![
-            (NpcWire::Poke(123), tas!(b"poke")),
-            (NpcWire::Pack(456), tas!(b"pack")),
-            (NpcWire::Nack(789), tas!(b"nack")),
-            (NpcWire::Bind(101), tas!(b"bind")),
+            (NpcWire::Poke { channel_id: ChannelId(0), pid: 123 }, tas!(b"poke")),
+            (NpcWire::Pack { channel_id: ChannelId(0), pid: 456 }, tas!(b"pack")),
+            (NpcWire::Nack { channel_id: ChannelId(0), pid: 789 }, tas!(b"nack")),
+            (NpcWire::Bind { channel_id: ChannelId(0), pid: 101 }, tas!(b"bind")),
         ];
 
         for (wire, expected_tag) in test_cases {
@@ -366,7 +378,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_npc_poke_wire_format() {
-        let mut slab = NpcWire::Poke(123).to_noun_slab();
+        let mut slab = NpcWire::Poke { channel_id: ChannelId(0), pid: 123 }.to_noun_slab();
         let root = unsafe { slab.root() };
         let cell = root.as_cell().unwrap();
 
