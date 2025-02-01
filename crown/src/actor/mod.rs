@@ -51,6 +51,7 @@ pub type ActorReceiveResult<M> = Result<M, ActorReceiveError>;
 pub struct ActorHandle<M> {
     handle: tokio::task::JoinHandle<()>,
     dropbox: Dropbox<M>,
+    cancel: tokio_util::sync::CancellationToken,
 }
 
 impl<M> ActorHandle<M>
@@ -80,12 +81,18 @@ where
     pub fn dropbox(&self) -> Dropbox<M> {
         self.dropbox.clone()
     }
+
+    /// Cancel this actor
+    pub fn cancel(&self) {
+        self.cancel.cancel()
+    }
 }
 
 /// Handle to an actor's mailbox by which it can receive messages
 pub struct Mailbox<M> {
     mailbox: mpsc::Receiver<M>,
     dropbox: Dropbox<M>,
+    cancel: tokio_util::sync::CancellationToken,
 }
 
 impl<M> Mailbox<M>
@@ -111,6 +118,16 @@ where
     /// threads to allow them to send messages back.
     pub fn dropbox(&self) -> Dropbox<M> {
         self.dropbox.clone()
+    }
+
+    // Future which resolves when the actor is cancelled
+    pub fn cancelled(&self) -> tokio_util::sync::WaitForCancellationFuture {
+        self.cancel.cancelled()
+    }
+
+    // Has this actor been cancelled?
+    pub fn is_cancelled(&self) -> bool {
+        self.cancel.is_cancelled()
     }
 }
 
@@ -149,14 +166,20 @@ pub fn spawn<F, M>(task: F, size: usize) -> ActorHandle<M>
 where
     F: FnOnce(Mailbox<M>) -> Pin<Box<dyn Future<Output = ()> + Send>>,
 {
+    let cancel = tokio_util::sync::CancellationToken::new();
     let (outbox, inbox) = mpsc::channel(size);
     let dropbox = Dropbox { dropbox: outbox };
     let mailbox = Mailbox {
         mailbox: inbox,
         dropbox: dropbox.clone(),
+        cancel: cancel.clone(),
     };
     let handle = tokio::spawn(task(mailbox));
-    ActorHandle { handle, dropbox }
+    ActorHandle {
+        handle,
+        dropbox,
+        cancel,
+    }
 }
 
 /// Actors for blocking IO/computation
@@ -168,6 +191,7 @@ pub mod blocking {
     pub struct ActorHandle<M> {
         handle: std::thread::JoinHandle<()>,
         dropbox: Dropbox<M>,
+        cancel: tokio_util::sync::CancellationToken,
     }
 
     impl<M> ActorHandle<M>
@@ -206,6 +230,11 @@ pub mod blocking {
         pub fn dropbox(&self) -> Dropbox<M> {
             self.dropbox.clone()
         }
+
+        /// Cancel this actor
+        pub fn cancel(&self) {
+            self.cancel.cancel()
+        }
     }
 
     /// Spawn a blocking closure as an actor
@@ -215,19 +244,26 @@ pub mod blocking {
         M: Send + 'static,
     {
         let (outbox, inbox) = mpsc::channel(size);
+        let cancel = tokio_util::sync::CancellationToken::new();
         let dropbox = Dropbox { dropbox: outbox };
         let mailbox = Mailbox {
             mailbox: inbox,
             dropbox: dropbox.clone(),
+            cancel: cancel.clone(),
         };
         let handle = thread::spawn(move || task(mailbox));
-        ActorHandle { handle, dropbox }
+        ActorHandle {
+            handle,
+            dropbox,
+            cancel,
+        }
     }
 
     /// Mailbox for a blocking actor
     pub struct Mailbox<M> {
         mailbox: mpsc::Receiver<M>,
         dropbox: Dropbox<M>,
+        cancel: tokio_util::sync::CancellationToken,
     }
 
     impl<M> Mailbox<M>
@@ -249,6 +285,11 @@ pub mod blocking {
         /// The dropbox to send to this mailbox. Useful so the actor can allow spawned actors to send messages back
         pub fn dropbox(&self) -> Dropbox<M> {
             self.dropbox.clone()
+        }
+
+        /// Is this actor cancelled?
+        pub fn is_cancelled(&self) -> bool {
+            self.cancel.is_cancelled()
         }
     }
 }
