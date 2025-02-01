@@ -68,8 +68,12 @@ where
     }
 
     /// Send a message to this actor's mailbox
-    pub async fn send(&mut self, message: M) -> ActorSendResult<M> {
+    pub async fn send(&self, message: M) -> ActorSendResult<M> {
         self.dropbox.send(message).await
+    }
+
+    pub fn blocking_send(&self, message: M) -> ActorSendResult<M> {
+        self.dropbox.blocking_send(message)
     }
 
     /// Clone this actor's dropbox so that other actors can send it messages
@@ -120,8 +124,12 @@ pub struct Dropbox<M> {
 
 impl<M: Send> Dropbox<M> {
     /// Send a message to the actor linked to this dropbox
-    async fn send(&mut self, message: M) -> ActorSendResult<M> {
+    pub async fn send(&self, message: M) -> ActorSendResult<M> {
         Ok(self.dropbox.send(message).await?)
+    }
+
+    pub fn blocking_send(&self, message: M) -> ActorSendResult<M> {
+        Ok(self.dropbox.blocking_send(message)?)
     }
 }
 
@@ -188,6 +196,10 @@ pub mod blocking {
         /// Send a message to this actor
         pub async fn send(&mut self, message: M) -> super::ActorSendResult<M> {
             self.dropbox.send(message).await
+        }
+
+        pub fn blocking_send(&self, message: M) -> super::ActorSendResult<M> {
+            self.dropbox.blocking_send(message)
         }
 
         /// Get the dropbox for this actor.
