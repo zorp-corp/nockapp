@@ -19,7 +19,7 @@ assert_no_alloc = { git = "https://github.com/zorp-corp/sword.git", rev = "bcb2e
 # External dependencies
 anyhow = "1.0"
 async-trait = "0.1"
-axum = "0.7.5"
+axum = "0.8.1"
 bincode = "2.0.0-rc.3"
 bitvec = "1.0.1"
 blake3 = { version = "1.5.1", features = ["serde"] }
@@ -29,13 +29,33 @@ clap = "4.4.4"
 console-subscriber = "0.4.1"
 either = "1.9.0"
 futures = "0.3.31"
-getrandom = "0.2.11"
-intmap = "2.0.0"
+getrandom = "0.3.1"
+intmap = "3.1.0"
+metrics = "0.24.1"
+metrics-exporter-prometheus = "0.16.2"
+opentelemetry = { version = "0.27.1", features = [
+    "trace",
+    "logs",
+    "metrics",
+    "internal-logs",
+] }
+opentelemetry-otlp = { version = "0.27.0", features = [
+    "tonic",
+    "http-proto",
+    "reqwest-client",
+] }
+opentelemetry_sdk = { version = "0.27.1", features = ["rt-tokio"] }
 rand = "0.8.5"
-samply = "0.11.0"
 serde = "1.0.195"
 tempfile = "3.3"
 termimad = "0.31.0"
+tracing = "0.1.40"
+tracing-opentelemetry = { version = "0.28.0", features = ["metrics"] }
+tracing-subscriber = { version = "0.3.18", features = [
+    "ansi",
+    "env-filter",
+    "registry",
+] }
 tracing-test = "0.2.5"
 thiserror = "1.0"
 tokio = { version = "1.32", features = [
@@ -48,13 +68,8 @@ tokio = { version = "1.32", features = [
     "signal",
 ] }
 tokio-util = "0.7.12"
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = [
-    "ansi",
-    "env-filter",
-    "registry",
-] }
 yaque = "0.6.6"
+tonic = "0.12.3"
 
 [profile.dev.package."*"]
 opt-level = 3

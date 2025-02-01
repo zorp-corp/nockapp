@@ -1,0 +1,28 @@
+version: '3'
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      observability:
+  jaeger:
+    image: ${REGISTRY:-}jaegertracing/jaeger:${JAEGER_VERSION:-latest}
+    ports:
+      - "16686:16686"
+      - "4317:4317"
+      - "4318:4318"
+    environment:
+      - LOG_LEVEL=debug
+    networks:
+      observability:
+
+
+networks:
+  observability:

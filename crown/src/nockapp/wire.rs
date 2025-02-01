@@ -21,6 +21,7 @@ impl Wire for SystemWire {
     const VERSION: u64 = 1;
     const SOURCE: &'static str = "sys";
 
+    #[tracing::instrument(skip(self))]
     fn to_noun_slab(&self) -> NounSlab {
         let mut slab = NounSlab::new();
         let source = make_tas(&mut slab, SystemWire::SOURCE).as_noun();

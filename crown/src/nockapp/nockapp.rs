@@ -175,6 +175,7 @@ impl NockApp {
     }
 
     /// Peek at a noun in the kernel, blocking operation
+    #[tracing::instrument(skip(self, path))]
     pub fn peek_sync(&mut self, path: NounSlab) -> Result<NounSlab, NockAppError> {
         trace!("About to copy to stack");
         let path_noun = path.copy_to_stack(self.kernel.serf.stack());
@@ -188,6 +189,7 @@ impl NockApp {
     }
 
     /// Poke at a noun in the kernel, blocking operation
+    #[tracing::instrument(skip(self, wire, poke))]
     pub fn poke_sync(
         &mut self,
         wire: NounSlab,

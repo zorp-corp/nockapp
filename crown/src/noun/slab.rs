@@ -152,6 +152,7 @@ impl<const N: usize> From<[Noun; N]> for NounSlab {
 
 impl NounSlab {
     /// Make a new noun slab with D(0) as the root
+    #[tracing::instrument]
     pub fn new() -> Self {
         let slabs = Vec::new();
         let allocation_start: *mut u64 = std::ptr::null_mut();
@@ -168,7 +169,7 @@ impl NounSlab {
     /// Copy a noun into this slab, only leaving references into the PMA. Set that noun as the root
     /// noun.
     pub fn copy_into(&mut self, copy_root: Noun) {
-        let mut copied: IntMap<Noun> = IntMap::new();
+        let mut copied: IntMap<u64, Noun> = IntMap::new();
         // let mut copy_stack = vec![(copy_root, &mut self.root as *mut Noun)];
         let mut copy_stack = vec![(copy_root, std::ptr::addr_of_mut!(self.root))];
         loop {
@@ -238,6 +239,7 @@ impl NounSlab {
     ///
     /// Note that this consumes the slab, the slab will be freed after and the root noun returned
     /// referencing the stack. Nouns referencing the slab should not be used past this point.
+    #[tracing::instrument(skip(self, stack))]
     pub fn copy_to_stack(self, stack: &mut NockStack) -> Noun {
         let mut res = D(0);
         let mut copy_stack = vec![(self.root, &mut res as *mut Noun)];
@@ -570,7 +572,7 @@ fn min_idx_for_size(sz: usize) -> usize {
     }
 }
 
-struct NounMap<V>(IntMap<Vec<(Noun, V)>>);
+struct NounMap<V>(IntMap<u64, Vec<(Noun, V)>>);
 
 impl<V> NounMap<V> {
     fn new() -> Self {

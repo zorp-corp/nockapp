@@ -15,6 +15,7 @@ mod drivers;
 pub mod kernel;
 pub mod nockapp;
 pub mod noun;
+pub mod observability;
 pub mod utils;
 
 pub use bytes::*;

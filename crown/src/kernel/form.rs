@@ -17,7 +17,7 @@ use sword::mug::met3_usize;
 use sword::noun::{Atom, Cell, DirectAtom, IndirectAtom, Noun, Slots, D, T};
 use sword::trace::{path_to_cord, write_serf_trace_safe, TraceInfo};
 use sword_macros::tas;
-use tracing::info;
+use tracing::{info, span, Level};
 
 use crate::kernel::checkpoint::JamPaths;
 use crate::noun::slam;
@@ -165,6 +165,7 @@ impl Kernel {
     /// # Returns
     ///
     /// Result containing the peeked data or an error.
+    #[tracing::instrument(skip(self, ovo))]
     pub fn peek(&mut self, ovo: Noun) -> Result<Noun> {
         if self.serf.context.trace_info.is_some() {
             let trace_name = "peek";
@@ -205,6 +206,7 @@ impl Kernel {
     /// # Returns
     ///
     /// Result containing the poke response or an error.
+    #[tracing::instrument(skip(self, job))]
     pub fn do_poke(&mut self, job: Noun) -> Result<Noun> {
         match self.soft(job, Some("poke".to_string())) {
             Ok(res) => {
@@ -214,7 +216,8 @@ impl Kernel {
 
                 unsafe {
                     self.serf.event_update(eve + 1, cell.tail());
-                    self.serf.stack().preserve(&mut fec);
+                    span!(Level::DEBUG, "self.serf.stack().preserve")
+                        .in_scope(|| self.serf.stack().preserve(&mut fec));
                     self.serf.preserve_event_update_leftovers();
                 }
                 Ok(fec)
@@ -233,6 +236,7 @@ impl Kernel {
     /// # Returns
     ///
     /// Result containing the slammed result or an error.
+    #[tracing::instrument(skip(self, axis, ovo))]
     pub fn slam(&mut self, axis: u64, ovo: Noun) -> Result<Noun> {
         let arvo = self.serf.arvo;
         slam(&mut self.serf.context, arvo, axis, ovo)
@@ -248,6 +252,7 @@ impl Kernel {
     /// # Returns
     ///
     /// Result containing the computed noun or an error noun.
+    #[tracing::instrument(skip(self, ovo, trace_name))]
     fn soft(&mut self, ovo: Noun, trace_name: Option<String>) -> Result<Noun, Noun> {
         let slam_res = if self.serf.context.trace_info.is_some() {
             let start = Instant::now();
@@ -327,6 +332,7 @@ impl Kernel {
     /// # Returns
     ///
     /// Result containing the new event or an error.
+    /// #[tracing::instrument(skip(self, job, goof))]
     fn poke_swap(&mut self, job: Noun, goof: Noun) -> Result<Noun> {
         let stack = &mut self.serf.context.stack;
         self.serf.context.cache = Hamt::<Noun>::new(stack);
@@ -421,10 +427,12 @@ impl Kernel {
     /// # Returns
     ///
     /// Result containing the poke response or an error.
+    #[tracing::instrument(skip(self, wire, cause))]
     pub fn poke(&mut self, wire: Noun, cause: Noun) -> Result<Noun> {
         let stack = &mut self.serf.context.stack;
 
-        let random_bytes = rand::random::<u64>();
+        let random_bytes =
+            span!(Level::DEBUG, "generate_random_bytes").in_scope(|| rand::random::<u64>());
         let bytes = random_bytes.as_bytes()?;
         let eny: Atom = Atom::from_bytes(stack, &bytes);
         let our = <sword::noun::Atom as AtomExt>::from_value(stack, 0)?; // Using 0 as default value

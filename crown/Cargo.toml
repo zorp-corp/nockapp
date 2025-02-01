@@ -33,12 +33,20 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 tracing-test = { workspace = true }
 tracing-subscriber = { workspace = true }
-tokio = { workspace = true, features = ["time", "sync", "signal"]}
+tokio = { workspace = true, features = ["time", "sync", "signal"] }
 tokio-util = { workspace = true, features = ["rt"] }
 yaque = { workspace = true }
 
+opentelemetry.workspace = true
+opentelemetry-otlp.workspace = true
+opentelemetry_sdk.workspace = true
+metrics.workspace = true
+metrics-exporter-prometheus.workspace = true
+tonic.workspace = true
+tracing-opentelemetry.workspace = true
+
 [dev-dependencies]
-console-subscriber = { workspace = true }
+# console-subscriber = { workspace = true }
 
 [lib]
 name = "crown"
