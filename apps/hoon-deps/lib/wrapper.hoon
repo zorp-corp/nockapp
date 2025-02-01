@@ -6,10 +6,13 @@
 +$  input   [eny=@ our=@ux now=@da cause=*]
 ::
 ++  keep
-  |*  inner=mold
+  |*  [inner=mold versioned=mold]
   =>
   |%
   +$  inner-state  inner
+  +$  load-state
+    $%  [%0 desk-hash=(unit @uvI) internal=versioned]
+    ==
   +$  outer-state
     $%  [%0 desk-hash=(unit @uvI) internal=inner]
     ==
@@ -17,7 +20,7 @@
     $_  ^|
     |_  outer-state
     ++  load
-      |~  arg=*
+      |~  arg=load-state
       **
     ++  peek
       |~  arg=path
@@ -34,7 +37,7 @@
     $_  ^|
     |_  state=inner-state
     ++  load
-      |~  arg=inner-state
+      |~  arg=versioned
       *inner-state
     ++  peek
       |~  arg=path
@@ -53,10 +56,10 @@
   +*  inner-fort  ~(. inner internal.outer)
   ++  load
     |=  arg=*
-    =/  shell=(unit outer-state)  ((soft outer-state) arg)
-    ?~  shell
-      ~&("+load: could not mold outer state {<arg>}" ~^..load)
-    =/  new-internal  (load:inner-fort internal.u.shell)
+    =/  arg  ((soft load-state) arg)
+    ?~  arg
+      ~&  >>>  "+load: failed to soft state"  !!
+    =/  new-internal  (load:inner-fort internal.u.arg)
     ..load(internal.outer new-internal)
   ::
   ++  peek
@@ -86,7 +89,6 @@
       =/  o  ((soft input) input.u.ovum)
       ?~  o
         ~&  "+poke: could not mold poke type: {<o>}"
-        =+  (road |.(;;(^^ovum ovum)))
         ~^..poke
       =^  effects  internal.outer
         (poke:inner-fort u.ovum)

@@ -9,7 +9,7 @@
   ==
 +$  choo-state  state-1
 ::
-++  moat  (keep choo-state)
+++  moat  (keep choo-state versioned-state)
 +$  cause
   $%  [%build pat=cord tex=cord directory=(list [cord cord]) arbitrary=?]
       [%file %write path=@t contents=@ success=?]
@@ -65,13 +65,13 @@
 ::
 ::
 ++  load
-  |=  arg=versioned-state
+  |=  old=versioned-state
   ^-  choo-state
-  ?+    -.arg    ~&  >>  %no-upgrade  arg
+  ?+    -.old    ~&  >>  %no-upgrade  old
       %0
     ~&  >>  %upgrade-0-to-1
     :*  %1
-        cached-hoon.arg
+        cached-hoon.old
         *build-cache
         *parse-cache
     ==
