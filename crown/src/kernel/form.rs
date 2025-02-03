@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 use sword::hamt::Hamt;
-use sword::interpreter::{self, interpret, Context, Error, Mote};
+use sword::interpreter::{self, interpret, Error, Mote};
 use sword::jets::cold::Cold;
 use sword::jets::hot::{Hot, HotEntry, URBIT_HOT_STATE};
 use sword::jets::nock::util::mook;
@@ -22,7 +22,7 @@ use tracing::info;
 use crate::kernel::checkpoint::JamPaths;
 use crate::noun::slam;
 use crate::utils::slogger::CrownSlogger;
-use crate::utils::{current_da, NOCK_STACK_SIZE};
+use crate::utils::{self, current_da, NOCK_STACK_SIZE};
 use crate::{AtomExt, CrownError, NounExt, Result, ToBytesExt};
 
 use super::checkpoint::{Checkpoint, JammedCheckpoint};
@@ -136,6 +136,24 @@ impl Kernel {
         }
     }
 
+    /// Loads a kernel with state from jammed bytes
+    pub fn load_with_kernel_state(
+        pma_dir: PathBuf,
+        jam_paths: JamPaths,
+        kernel_jam: &[u8],
+        state_jam: &[u8],
+        hot_state: &[HotEntry],
+        trace: bool,
+    ) -> Result<Self> {
+        let mut kernel =
+            Self::load_with_hot_state(pma_dir, jam_paths, kernel_jam, hot_state, trace);
+        let state_noun = <Noun as NounExt>::cue_bytes_slice(&mut kernel.serf.stack(), state_jam)?;
+
+        //  We do not use the event_update pattern here, is this an issue?
+        kernel.serf.arvo = kernel.serf.load(state_noun);
+        Ok(kernel)
+    }
+
     /// Produces a checkpoint of the kernel state.
     pub fn checkpoint(&mut self) -> JammedCheckpoint {
         let serf = &self.serf;
@@ -156,310 +174,12 @@ impl Kernel {
         )
     }
 
-    /// Performs a peek operation on the Arvo state.
-    ///
-    /// # Arguments
-    ///
-    /// * `ovo` - The peek request noun.
-    ///
-    /// # Returns
-    ///
-    /// Result containing the peeked data or an error.
-    pub fn peek(&mut self, ovo: Noun) -> Result<Noun> {
-        if self.serf.context.trace_info.is_some() {
-            let trace_name = "peek";
-            let start = Instant::now();
-            let slam_res = self.slam(PEEK_AXIS, ovo);
-            write_serf_trace_safe(&mut self.serf.context, trace_name, start);
-
-            slam_res
-        } else {
-            self.slam(PEEK_AXIS, ovo)
-        }
-    }
-
-    /// Generates a goof (error) noun.
-    ///
-    /// # Arguments
-    ///
-    /// * `mote` - The error mote.
-    /// * `traces` - Trace information.
-    ///
-    /// # Returns
-    ///
-    /// A noun representing the error.
-    pub fn goof(&mut self, mote: Mote, traces: Noun) -> Noun {
-        let tone = Cell::new(&mut self.serf.context.stack, D(2), traces);
-        let tang = mook(&mut self.serf.context, tone, false)
-            .expect("serf: goof: +mook crashed on bail")
-            .tail();
-        T(&mut self.serf.context.stack, &[D(mote as u64), tang])
-    }
-
-    /// Performs a poke operation on the Arvo state.
-    ///
-    /// # Arguments
-    ///
-    /// * `job` - The poke job noun.
-    ///
-    /// # Returns
-    ///
-    /// Result containing the poke response or an error.
-    pub fn do_poke(&mut self, job: Noun) -> Result<Noun> {
-        match self.soft(job, Some("poke".to_string())) {
-            Ok(res) => {
-                let cell = res.as_cell().expect("serf: poke: +slam returned atom");
-                let mut fec = cell.head();
-                let eve = self.serf.event_num;
-
-                unsafe {
-                    self.serf.event_update(eve + 1, cell.tail());
-                    self.serf.stack().preserve(&mut fec);
-                    self.serf.preserve_event_update_leftovers();
-                }
-                Ok(fec)
-            }
-            Err(goof) => self.poke_swap(job, goof),
-        }
-    }
-
-    /// Slams (applies) a gate at a specific axis of Arvo.
-    ///
-    /// # Arguments
-    ///
-    /// * `axis` - The axis to slam.
-    /// * `ovo` - The sample noun.
-    ///
-    /// # Returns
-    ///
-    /// Result containing the slammed result or an error.
-    pub fn slam(&mut self, axis: u64, ovo: Noun) -> Result<Noun> {
-        let arvo = self.serf.arvo;
-        slam(&mut self.serf.context, arvo, axis, ovo)
-    }
-
-    /// Performs a "soft" computation, handling errors gracefully.
-    ///
-    /// # Arguments
-    ///
-    /// * `ovo` - The input noun.
-    /// * `trace_name` - Optional name for tracing.
-    ///
-    /// # Returns
-    ///
-    /// Result containing the computed noun or an error noun.
-    fn soft(&mut self, ovo: Noun, trace_name: Option<String>) -> Result<Noun, Noun> {
-        let slam_res = if self.serf.context.trace_info.is_some() {
-            let start = Instant::now();
-            let slam_res = self.slam(POKE_AXIS, ovo);
-            write_serf_trace_safe(&mut self.serf.context, trace_name.as_ref().unwrap(), start);
-
-            slam_res
-        } else {
-            self.slam(POKE_AXIS, ovo)
-        };
-
-        match slam_res {
-            Ok(res) => Ok(res),
-            Err(error) => match error {
-                CrownError::InterpreterError(e) => {
-                    let (mote, traces) = match e.0 {
-                        Error::Deterministic(mote, traces)
-                        | Error::NonDeterministic(mote, traces) => (mote, traces),
-                        Error::ScryBlocked(_) | Error::ScryCrashed(_) => {
-                            panic!("serf: soft: .^ invalid outside of virtual Nock")
-                        }
-                    };
-
-                    Err(self.goof(mote, traces))
-                }
-                _ => Err(D(0)),
-            },
-        }
-    }
-
-    /// Plays a list of events.
-    ///
-    /// # Arguments
-    ///
-    /// * `lit` - The list of events to play.
-    ///
-    /// # Returns
-    ///
-    /// Result containing the final Arvo state or an error.
-    fn play_list(&mut self, mut lit: Noun) -> Result<Noun> {
-        let mut eve = self.serf.event_num;
-        while let Ok(cell) = lit.as_cell() {
-            let ovo = cell.head();
-            lit = cell.tail();
-            let trace_name = if self.serf.context.trace_info.is_some() {
-                Some(format!("play [{}]", eve))
-            } else {
-                None
-            };
-
-            match self.soft(ovo, trace_name) {
-                Ok(res) => {
-                    let arvo = res.as_cell()?.tail();
-                    eve += 1;
-
-                    unsafe {
-                        self.serf.event_update(eve, arvo);
-                        self.serf.context.stack.preserve(&mut lit);
-                        self.serf.preserve_event_update_leftovers();
-                    }
-                }
-                Err(goof) => {
-                    return Err(CrownError::KernelError(Some(goof)));
-                }
-            }
-        }
-        Ok(self.serf.arvo)
-    }
-
-    /// Handles a poke error by swapping in a new event.
-    ///
-    /// # Arguments
-    ///
-    /// * `job` - The original poke job.
-    /// * `goof` - The error noun.
-    ///
-    /// # Returns
-    ///
-    /// Result containing the new event or an error.
-    fn poke_swap(&mut self, job: Noun, goof: Noun) -> Result<Noun> {
-        let stack = &mut self.serf.context.stack;
-        self.serf.context.cache = Hamt::<Noun>::new(stack);
-        let job_cell = job.as_cell().expect("serf: poke: job not a cell");
-        // job data is job without event_num
-        let job_data = job_cell
-            .tail()
-            .as_cell()
-            .expect("serf: poke: data not a cell");
-        //  job input is job without event_num or wire
-        let job_input = job_data.tail();
-        let wire = T(stack, &[D(0), D(tas!(b"arvo")), D(0)]);
-        let crud = DirectAtom::new_panic(tas!(b"crud"));
-        let event_num = D(self.serf.event_num + 1);
-
-        let mut ovo = T(stack, &[event_num, wire, goof, job_input]);
-        let trace_name = if self.serf.context.trace_info.is_some() {
-            Some(Self::poke_trace_name(
-                &mut self.serf.context.stack,
-                wire,
-                crud.as_atom(),
-            ))
-        } else {
-            None
-        };
-
-        match self.soft(ovo, trace_name) {
-            Ok(res) => {
-                let cell = res.as_cell().expect("serf: poke: crud +slam returned atom");
-                let mut fec = cell.head();
-                let eve = self.serf.event_num;
-
-                unsafe {
-                    self.serf.event_update(eve + 1, cell.tail());
-                    self.serf.context.stack.preserve(&mut ovo);
-                    self.serf.context.stack.preserve(&mut fec);
-                    self.serf.preserve_event_update_leftovers();
-                }
-                Ok(self.serf.poke_swap(eve, eve, ovo, fec))
-            }
-            Err(goof_crud) => {
-                let stack = &mut self.serf.context.stack;
-                let lud = T(stack, &[goof_crud, goof, D(0)]);
-                Ok(self.serf.poke_bail(lud))
-            }
-        }
-    }
-
-    /// Generates a trace name for a poke operation.
-    ///
-    /// # Arguments
-    ///
-    /// * `stack` - The Nock stack.
-    /// * `wire` - The wire noun.
-    /// * `vent` - The vent atom.
-    ///
-    /// # Returns
-    ///
-    /// A string representing the trace name.
-    fn poke_trace_name(stack: &mut NockStack, wire: Noun, vent: Atom) -> String {
-        let wpc = path_to_cord(stack, wire);
-        let wpc_len = met3_usize(wpc);
-        let wpc_bytes = &wpc.as_bytes()[0..wpc_len];
-        let wpc_str = match std::str::from_utf8(wpc_bytes) {
-            Ok(valid) => valid,
-            Err(error) => {
-                let (valid, _) = wpc_bytes.split_at(error.valid_up_to());
-                unsafe { std::str::from_utf8_unchecked(valid) }
-            }
-        };
-
-        let vc_len = met3_usize(vent);
-        let vc_bytes = &vent.as_bytes()[0..vc_len];
-        let vc_str = match std::str::from_utf8(vc_bytes) {
-            Ok(valid) => valid,
-            Err(error) => {
-                let (valid, _) = vc_bytes.split_at(error.valid_up_to());
-                unsafe { std::str::from_utf8_unchecked(valid) }
-            }
-        };
-
-        format!("poke [{} {}]", wpc_str, vc_str)
-    }
-
-    /// Performs a poke operation with a given cause.
-    ///
-    /// # Arguments
-    ///
-    /// * `wire` - The wire noun.
-    /// * `cause` - The cause noun.
-    ///
-    /// # Returns
-    ///
-    /// Result containing the poke response or an error.
     pub fn poke(&mut self, wire: Noun, cause: Noun) -> Result<Noun> {
-        let stack = &mut self.serf.context.stack;
-
-        let random_bytes = rand::random::<u64>();
-        let bytes = random_bytes.as_bytes()?;
-        let eny: Atom = Atom::from_bytes(stack, &bytes);
-        let our = <sword::noun::Atom as AtomExt>::from_value(stack, 0)?; // Using 0 as default value
-        let now: Atom = unsafe {
-            let mut t_vec: Vec<u8> = vec![];
-            t_vec.write_u128::<LittleEndian>(current_da().0)?;
-            IndirectAtom::new_raw_bytes(stack, 16, t_vec.as_slice().as_ptr()).normalize_as_atom()
-        };
-
-        let event_num = D(self.serf.event_num + 1);
-        let wire = T(stack, &[D(tas!(b"poke")), wire]);
-        let poke = T(
-            stack,
-            &[event_num, wire, eny.as_noun(), our.as_noun(), now.as_noun(), cause],
-        );
-
-        self.do_poke(poke)
+        self.serf.poke(wire, cause)
     }
 
-    /// Loads a kernel with state from jammed bytes
-    pub fn load_with_kernel_state(
-        pma_dir: PathBuf,
-        jam_paths: JamPaths,
-        kernel_jam: &[u8],
-        state_jam: &[u8],
-        hot_state: &[HotEntry],
-        trace: bool,
-    ) -> Result<Self> {
-        let mut kernel =
-            Self::load_with_hot_state(pma_dir, jam_paths, kernel_jam, hot_state, trace);
-        let state_noun = <Noun as NounExt>::cue_bytes_slice(&mut kernel.serf.stack(), state_jam)?;
-        let kernel_noun = kernel.serf.arvo;
-        let new_arvo = Serf::load(&mut kernel.serf.context, kernel_noun, state_noun)?;
-        kernel.serf.arvo = new_arvo;
-        Ok(kernel)
+    pub fn peek(&mut self, ovo: Noun) -> Result<Noun> {
+        self.serf.peek(ovo)
     }
 }
 
@@ -557,17 +277,6 @@ impl Serf {
         hasher.update(kernel_bytes);
         let ker_hash = hasher.finalize();
 
-        if let Some(checkpoint) = checkpoint {
-            if ker_hash != checkpoint.ker_hash {
-                info!(
-                    "Kernel hash mismatch, upgrading kernel: {:?} -> {:?}",
-                    checkpoint.ker_hash, ker_hash
-                );
-            }
-            arvo =
-                Serf::load(&mut context, arvo, checkpoint.ker_state).expect("Failed to load state");
-        }
-
         let mut serf = Self {
             version,
             ker_hash,
@@ -576,6 +285,16 @@ impl Serf {
             event_num,
         };
 
+        if let Some(checkpoint) = checkpoint {
+            if ker_hash != checkpoint.ker_hash {
+                info!(
+                    "Kernel hash mismatch, upgrading kernel: {:?} -> {:?}",
+                    checkpoint.ker_hash, ker_hash
+                );
+            }
+            arvo = serf.load(checkpoint.ker_state);
+        }
+
         unsafe {
             serf.event_update(event_num, arvo);
             serf.preserve_event_update_leftovers();
@@ -583,7 +302,47 @@ impl Serf {
         serf
     }
 
+    /// Performs a peek operation on the Arvo state.
+    ///
+    /// # Arguments
+    ///
+    /// * `ovo` - The peek request noun.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the peeked data or an error.
+    pub fn peek(&mut self, ovo: Noun) -> Result<Noun> {
+        if self.context.trace_info.is_some() {
+            let trace_name = "peek";
+            let start = Instant::now();
+            let slam_res = self.slam(PEEK_AXIS, ovo);
+            write_serf_trace_safe(&mut self.context, trace_name, start);
+
+            slam_res
+        } else {
+            self.slam(PEEK_AXIS, ovo)
+        }
+    }
+
+    /// Generates a goof (error) noun.
+    ///
+    /// # Arguments
+    ///
+    /// * `mote` - The error mote.
+    /// * `traces` - Trace information.
+    ///
+    /// # Returns
+    ///
+    /// A noun representing the error.
+    pub fn goof(&mut self, mote: Mote, traces: Noun) -> Noun {
+        let tone = Cell::new(&mut self.context.stack, D(2), traces);
+        let tang = mook(&mut self.context, tone, false)
+            .expect("serf: goof: +mook crashed on bail")
+            .tail();
+        T(&mut self.context.stack, &[D(mote as u64), tang])
+    }
     /// Performs a load operation, transferring the state from a snapshot kernel to a new kernel.
+
     ///
     /// # Arguments
     ///
@@ -593,17 +352,300 @@ impl Serf {
     /// # Returns
     ///
     /// Loaded kernel
-    pub fn load(context: &mut Context, new_kernel: Noun, state: Noun) -> Result<Noun> {
-        let new_arvo = if context.trace_info.is_some() {
+    pub fn load(&mut self, state: Noun) -> Noun {
+        let loaded_state = self
+            .do_load(state)
+            .expect("serf: load: failed to load state");
+
+        loaded_state
+    }
+
+    /// Performs a load operation on the Arvo state.
+    ///
+    /// # Arguments
+    ///
+    /// * `old` - The state to load.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the loaded kernel or an error.
+    pub fn do_load(&mut self, old: Noun) -> Result<Noun> {
+        match self.soft(old, LOAD_AXIS, Some("load".to_string())) {
+            Ok(res) => Ok(res),
+            Err(goof) => {
+                self.print_goof(goof)?;
+                Err(CrownError::KernelError(Some(goof)))
+            }
+        }
+    }
+
+    pub fn print_goof(&mut self, goof: Noun) -> Result<(), CrownError> {
+        let mut tang = goof.as_cell()?.tail();
+        loop {
+            if tang.is_atom() {
+                return Ok(());
+            };
+            self.context.slogger.slog(
+                &mut self.context.stack,
+                1,
+                tang.as_cell()
+                    .map_err(|e| CrownError::Noun(utils::error::NounError(e)))?
+                    .head(),
+            );
+            tang = tang
+                .as_cell()
+                .map_err(|e| CrownError::Noun(utils::error::NounError(e)))?
+                .tail();
+        }
+    }
+
+    /// Performs a poke operation on the Arvo state.
+    ///
+    /// # Arguments
+    ///
+    /// * `job` - The poke job noun.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the poke response or an error.
+    pub fn do_poke(&mut self, job: Noun) -> Result<Noun> {
+        match self.soft(job, POKE_AXIS, Some("poke".to_string())) {
+            Ok(res) => {
+                let cell = res.as_cell().expect("serf: poke: +slam returned atom");
+                let mut fec = cell.head();
+                let eve = self.event_num;
+
+                unsafe {
+                    self.event_update(eve + 1, cell.tail());
+                    self.stack().preserve(&mut fec);
+                    self.preserve_event_update_leftovers();
+                }
+                Ok(fec)
+            }
+            Err(goof) => self.poke_swap(job, goof),
+        }
+    }
+
+    /// Slams (applies) a gate at a specific axis of Arvo.
+    ///
+    /// # Arguments
+    ///
+    /// * `axis` - The axis to slam.
+    /// * `ovo` - The sample noun.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the slammed result or an error.
+    pub fn slam(&mut self, axis: u64, ovo: Noun) -> Result<Noun> {
+        let arvo = self.arvo;
+        slam(&mut self.context, arvo, axis, ovo)
+    }
+
+    /// Performs a "soft" computation, handling errors gracefully.
+    ///
+    /// # Arguments
+    ///
+    /// * `ovo` - The input noun.
+    /// * `axis` - The axis to slam.
+    /// * `trace_name` - Optional name for tracing.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the computed noun or an error noun.
+    fn soft(&mut self, ovo: Noun, axis: u64, trace_name: Option<String>) -> Result<Noun, Noun> {
+        let slam_res = if self.context.trace_info.is_some() {
             let start = Instant::now();
-            let new_arvo = slam(context, new_kernel, LOAD_AXIS, state);
-            write_serf_trace_safe(context, "load", start);
-            new_arvo
+            let slam_res = self.slam(axis, ovo);
+            write_serf_trace_safe(&mut self.context, trace_name.as_ref().unwrap(), start);
+
+            slam_res
         } else {
-            slam(context, new_kernel, LOAD_AXIS, state)
+            self.slam(axis, ovo)
         };
 
-        new_arvo
+        match slam_res {
+            Ok(res) => Ok(res),
+            Err(error) => match error {
+                CrownError::InterpreterError(e) => {
+                    let (mote, traces) = match e.0 {
+                        Error::Deterministic(mote, traces)
+                        | Error::NonDeterministic(mote, traces) => (mote, traces),
+                        Error::ScryBlocked(_) | Error::ScryCrashed(_) => {
+                            panic!("serf: soft: .^ invalid outside of virtual Nock")
+                        }
+                    };
+
+                    Err(self.goof(mote, traces))
+                }
+                _ => Err(D(0)),
+            },
+        }
+    }
+
+    /// Plays a list of events.
+    ///
+    /// # Arguments
+    ///
+    /// * `lit` - The list of events to play.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the final Arvo state or an error.
+    fn play_list(&mut self, mut lit: Noun) -> Result<Noun> {
+        let mut eve = self.event_num;
+        while let Ok(cell) = lit.as_cell() {
+            let ovo = cell.head();
+            lit = cell.tail();
+            let trace_name = if self.context.trace_info.is_some() {
+                Some(format!("play [{}]", eve))
+            } else {
+                None
+            };
+
+            match self.soft(ovo, POKE_AXIS, trace_name) {
+                Ok(res) => {
+                    let arvo = res.as_cell()?.tail();
+                    eve += 1;
+
+                    unsafe {
+                        self.event_update(eve, arvo);
+                        self.context.stack.preserve(&mut lit);
+                        self.preserve_event_update_leftovers();
+                    }
+                }
+                Err(goof) => {
+                    return Err(CrownError::KernelError(Some(goof)));
+                }
+            }
+        }
+        Ok(self.arvo)
+    }
+
+    /// Handles a poke error by swapping in a new event.
+    ///
+    /// # Arguments
+    ///
+    /// * `job` - The original poke job.
+    /// * `goof` - The error noun.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the new event or an error.
+    fn poke_swap(&mut self, job: Noun, goof: Noun) -> Result<Noun> {
+        let stack = &mut self.context.stack;
+        self.context.cache = Hamt::<Noun>::new(stack);
+        let job_cell = job.as_cell().expect("serf: poke: job not a cell");
+        // job data is job without event_num
+        let job_data = job_cell
+            .tail()
+            .as_cell()
+            .expect("serf: poke: data not a cell");
+        //  job input is job without event_num or wire
+        let job_input = job_data.tail();
+        let wire = T(stack, &[D(0), D(tas!(b"arvo")), D(0)]);
+        let crud = DirectAtom::new_panic(tas!(b"crud"));
+        let event_num = D(self.event_num + 1);
+
+        let mut ovo = T(stack, &[event_num, wire, goof, job_input]);
+        let trace_name = if self.context.trace_info.is_some() {
+            Some(Self::poke_trace_name(
+                &mut self.context.stack,
+                wire,
+                crud.as_atom(),
+            ))
+        } else {
+            None
+        };
+
+        match self.soft(ovo, POKE_AXIS, trace_name) {
+            Ok(res) => {
+                let cell = res.as_cell().expect("serf: poke: crud +slam returned atom");
+                let mut fec = cell.head();
+                let eve = self.event_num;
+
+                unsafe {
+                    self.event_update(eve + 1, cell.tail());
+                    self.context.stack.preserve(&mut ovo);
+                    self.context.stack.preserve(&mut fec);
+                    self.preserve_event_update_leftovers();
+                }
+                Ok(self.poke_swap_noun(eve, eve, ovo, fec))
+            }
+            Err(goof_crud) => {
+                let stack = &mut self.context.stack;
+                let lud = T(stack, &[goof_crud, goof, D(0)]);
+                Ok(self.poke_bail(lud))
+            }
+        }
+    }
+
+    /// Generates a trace name for a poke operation.
+    ///
+    /// # Arguments
+    ///
+    /// * `stack` - The Nock stack.
+    /// * `wire` - The wire noun.
+    /// * `vent` - The vent atom.
+    ///
+    /// # Returns
+    ///
+    /// A string representing the trace name.
+    fn poke_trace_name(stack: &mut NockStack, wire: Noun, vent: Atom) -> String {
+        let wpc = path_to_cord(stack, wire);
+        let wpc_len = met3_usize(wpc);
+        let wpc_bytes = &wpc.as_bytes()[0..wpc_len];
+        let wpc_str = match std::str::from_utf8(wpc_bytes) {
+            Ok(valid) => valid,
+            Err(error) => {
+                let (valid, _) = wpc_bytes.split_at(error.valid_up_to());
+                unsafe { std::str::from_utf8_unchecked(valid) }
+            }
+        };
+
+        let vc_len = met3_usize(vent);
+        let vc_bytes = &vent.as_bytes()[0..vc_len];
+        let vc_str = match std::str::from_utf8(vc_bytes) {
+            Ok(valid) => valid,
+            Err(error) => {
+                let (valid, _) = vc_bytes.split_at(error.valid_up_to());
+                unsafe { std::str::from_utf8_unchecked(valid) }
+            }
+        };
+
+        format!("poke [{} {}]", wpc_str, vc_str)
+    }
+
+    /// Performs a poke operation with a given cause.
+    ///
+    /// # Arguments
+    ///
+    /// * `wire` - The wire noun.
+    /// * `cause` - The cause noun.
+    ///
+    /// # Returns
+    ///
+    /// Result containing the poke response or an error.
+    pub fn poke(&mut self, wire: Noun, cause: Noun) -> Result<Noun> {
+        let stack = &mut self.context.stack;
+
+        let random_bytes = rand::random::<u64>();
+        let bytes = random_bytes.as_bytes()?;
+        let eny: Atom = Atom::from_bytes(stack, &bytes);
+        let our = <sword::noun::Atom as AtomExt>::from_value(stack, 0)?; // Using 0 as default value
+        let now: Atom = unsafe {
+            let mut t_vec: Vec<u8> = vec![];
+            t_vec.write_u128::<LittleEndian>(current_da().0)?;
+            IndirectAtom::new_raw_bytes(stack, 16, t_vec.as_slice().as_ptr()).normalize_as_atom()
+        };
+
+        let event_num = D(self.event_num + 1);
+        let wire = T(stack, &[D(tas!(b"poke")), wire]);
+        let poke = T(
+            stack,
+            &[event_num, wire, eny.as_noun(), our.as_noun(), now.as_noun(), cause],
+        );
+
+        self.do_poke(poke)
     }
 
     /// Updates the Serf's state after an event.
@@ -660,7 +702,7 @@ impl Serf {
     /// # Returns
     ///
     /// A noun representing the poke swap.
-    pub fn poke_swap(&mut self, eve: u64, mug: u64, ovo: Noun, fec: Noun) -> Noun {
+    pub fn poke_swap_noun(&mut self, eve: u64, mug: u64, ovo: Noun, fec: Noun) -> Noun {
         T(
             self.stack(),
             &[D(tas!(b"poke")), D(tas!(b"swap")), D(eve), D(mug), ovo, fec],
