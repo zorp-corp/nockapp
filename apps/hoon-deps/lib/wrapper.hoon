@@ -50,6 +50,7 @@
   |=  hash=@uvI
   =<  .(desk-hash.outer `hash)
   |_  outer=outer-state
+  +*  inner-fort  ~(. inner internal.outer)
   ++  load
     |=  old=outer-state
     ?+    -.old  ~&("+load: invalid old state" !!)

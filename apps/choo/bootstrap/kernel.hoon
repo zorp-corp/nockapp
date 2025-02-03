@@ -78,7 +78,7 @@
       ::
       ::  Usage of road here will allow us to include the crash into the
       ::  stack trace.
-      =+ (road |.(;;(versioned-state old)))
+      =+  (road |.(;;(versioned-state old)))
       !!
   ?-    -.old
       %0
