@@ -74,12 +74,8 @@
   ::  artifacts being replaced with *(trap vase).
   ::
   ?~  ((soft versioned-state) old)
-    ~&  >>>  "choo: +load old state does not nest under versioned-state"
-      ::
-      ::  Usage of road here will allow us to include the crash into the
-      ::  stack trace.
-      =+  (road |.(;;(versioned-state old)))
-      !!
+    ~&  "choo: +load old state does not nest under versioned-state"
+    !!
   ?-    -.old
       %0
     ~&  >>  %upgrade-0-to-1
