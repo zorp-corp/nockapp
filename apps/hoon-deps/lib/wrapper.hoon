@@ -6,13 +6,10 @@
 +$  input   [eny=@ our=@ux now=@da cause=*]
 ::
 ++  keep
-  |*  [inner=mold versioned=mold]
+  |*  inner=mold
   =>
   |%
   +$  inner-state  inner
-  +$  load-state
-    $%  [%0 desk-hash=(unit @uvI) internal=versioned]
-    ==
   +$  outer-state
     $%  [%0 desk-hash=(unit @uvI) internal=inner]
     ==
@@ -20,7 +17,7 @@
     $_  ^|
     |_  outer-state
     ++  load
-      |~  arg=load-state
+      |~  arg=outer-state
       **
     ++  peek
       |~  arg=path
@@ -35,9 +32,9 @@
   ::
   +$  fort
     $_  ^|
-    |_  state=inner-state
+    |_  state=inner
     ++  load
-      |~  arg=versioned
+      |~  arg=inner
       *inner-state
     ++  peek
       |~  arg=path
@@ -53,14 +50,13 @@
   |=  hash=@uvI
   =<  .(desk-hash.outer `hash)
   |_  outer=outer-state
-  +*  inner-fort  ~(. inner internal.outer)
   ++  load
-    |=  arg=*
-    =/  arg  ((soft load-state) arg)
-    ?~  arg
-      ~&  >>>  "+load: failed to soft state"  !!
-    =/  new-internal  (load:inner-fort internal.u.arg)
-    ..load(internal.outer new-internal)
+    |=  old=outer-state
+    ?+    -.old  ~&("+load: invalid old state" !!)
+        %0
+      =/  new-internal  (load:inner-fort internal.old)
+      ..load(internal.outer new-internal)
+    ==
   ::
   ++  peek
     |=  arg=path

@@ -9,7 +9,7 @@
   ==
 +$  choo-state  state-1
 ::
-++  moat  (keep choo-state versioned-state)
+++  moat  (keep choo-state)
 +$  cause
   $%  [%build pat=cord tex=cord directory=(list [cord cord]) arbitrary=?]
       [%file %write path=@t contents=@ success=?]
@@ -67,7 +67,9 @@
 ++  load
   |=  old=versioned-state
   ^-  choo-state
-  ?+    -.old    ~&  >>  %no-upgrade  old
+  ?~  ((soft versioned-state) old)
+    ~&  >>  "choo: +load old state does not nest under versioned-state"  !!
+  ?-    -.old
       %0
     ~&  >>  %upgrade-0-to-1
     :*  %1
@@ -75,6 +77,10 @@
         *build-cache
         *parse-cache
     ==
+  ::
+      %1
+    ~&  >>  %no-upgrade
+    old
   ==
 ::
 ::  +peek: external inspect
