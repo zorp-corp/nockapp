@@ -32,9 +32,9 @@
   ::
   +$  fort
     $_  ^|
-    |_  state=inner
+    |_  state=inner-state
     ++  load
-      |~  arg=inner
+      |~  arg=inner-state
       *inner-state
     ++  peek
       |~  arg=path
