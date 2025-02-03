@@ -73,28 +73,23 @@
     |=  [num=@ ovum=*]
     ^-  [(list *) _..poke]
     =/  effects=(list *)  ?:(crash ~[exit/0] ~)
-    =/  ovo  ((soft ^ovum) ovum)
-    ?~  ovo
-      ~&  "+poke: invalid ovum: {<ovum>}"
-      ::
-      ::  +road allows us to thread the clam failure into the stack trace
-      =+  (road |.(;;(^ovum ovo)))
-      ~^..poke
-    ?+   u.ovo  ~&("+poke: invalid ovum: {<u.ovo>}" effects^..poke)
+    ?+   ovum  ~&("invalid arg: {<ovum>}" effects^..poke)
         [[%$ %arvo ~] *]
-      =/  g  ((soft crud) +.u.ovo)
-      ?~  g  ~&("+poke: invalid-goof" effects^..poke)
+      =/  g  ((soft crud) +.ovum)
+      ?~  g  ~&(%invalid-goof effects^..poke)
       =-  [effects ..poke]
       (slog tang.goof.u.g)
     ::
         [[%poke *] *]
-      =/  o  ((soft input) input.u.ovo)
+      =/  ovum  ((soft ^ovum) ovum)
+      ?~  ovum  ~&("invalid arg: {<ovum>}" ~^..poke)
+      =/  o  ((soft input) input.u.ovum)
       ?~  o
-        ~&  "+poke: could not mold input: {<input.u.ovo>}"
-        =+  (road |.(;;(input input.u.ovo)))
+        ~&  "could not mold poke type: {<ovum>}"
+        =+  (road |.(;;(^^ovum ovum)))
         ~^..poke
       =^  effects  internal.outer
-        (poke:inner-fort u.ovo)
+        (poke:inner-fort u.ovum)
       [effects ..poke(internal.outer internal.outer)]
     ==
   --

@@ -1,6 +1,9 @@
 /+  *wrapper
 =>
 |%
++$  versioned-state
+  $%  test-state
+  ==
 +$  test-state  [%0 val=@]
 ++  moat  (keep test-state)
 +$  cause  ?(%inc %inc-exit)
@@ -18,9 +21,16 @@
 ::  +load: upgrade from previous state
 ::
 ++  load
-  |=  arg=test-state
-  ~&  >>  "load"
-  arg
+  |=  old=test-state
+  ~&  "test-app: load"
+  ?~  ((soft versioned-state) old)
+    ~&   "test-app: +load old state does not nest under versioned-state"
+    ::
+    ::  Usage of road here will allow us to include the crash into the
+    ::  stack trace.
+    =+  (road |.(;;(versioned-state old)))
+    !!
+  old
 ::
 ::  +peek: external inspect
 ::
