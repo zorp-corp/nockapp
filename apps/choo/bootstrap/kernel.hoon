@@ -67,8 +67,19 @@
 ++  load
   |=  old=versioned-state
   ^-  choo-state
+  ::
+  ::  We do not use the result of the soft because
+  ::  clamming (trap vase) overwrites the contents
+  ::  with the bunt resulting in the honc and the build
+  ::  artifacts being replaced with *(trap vase).
+  ::
   ?~  ((soft versioned-state) old)
-    ~&  >>  "choo: +load old state does not nest under versioned-state"  !!
+    ~&  >>>  "choo: +load old state does not nest under versioned-state"
+      ::
+      ::  Usage of road here will allow us to include the crash into the
+      ::  stack trace.
+      =+ (road |.(;;(versioned-state old)))
+      !!
   ?-    -.old
       %0
     ~&  >>  %upgrade-0-to-1
