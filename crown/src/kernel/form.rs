@@ -538,10 +538,6 @@ impl Serf {
             .as_ref()
             .map_or_else(|| SNAPSHOT_VERSION, |snapshot| snapshot.version);
 
-        let mut hasher = Hasher::new();
-        hasher.update(kernel_bytes);
-        let mut ker_hash = hasher.finalize();
-
         let mut arvo = {
             let kernel_trap = Noun::cue_bytes_slice(&mut context.stack, kernel_bytes)
                 .expect("invalid kernel jam");
@@ -557,12 +553,19 @@ impl Serf {
             arvo
         };
 
+        let mut hasher = Hasher::new();
+        hasher.update(kernel_bytes);
+        let ker_hash = hasher.finalize();
+
         if let Some(checkpoint) = checkpoint {
             if ker_hash != checkpoint.ker_hash {
-                info!("Kernel hash mismatch, upgrading kernel");
-                ker_hash = checkpoint.ker_hash;
+                info!(
+                    "Kernel hash mismatch, upgrading kernel: {:?} -> {:?}",
+                    checkpoint.ker_hash, ker_hash
+                );
             }
-            arvo = Serf::load(&mut context, arvo, checkpoint.ker_state).unwrap();
+            arvo =
+                Serf::load(&mut context, arvo, checkpoint.ker_state).expect("Failed to load state");
         }
 
         let mut serf = Self {

@@ -65,16 +65,29 @@
 ::
 ::
 ++  load
-  |=  arg=versioned-state
+  |=  old=versioned-state
   ^-  choo-state
-  ?+    -.arg    ~&  >>  %no-upgrade  arg
+  ::
+  ::  We do not use the result of the soft because
+  ::  clamming (trap vase) overwrites the contents
+  ::  with the bunt resulting in the honc and the build
+  ::  artifacts being replaced with *(trap vase).
+  ::
+  ?~  ((soft versioned-state) old)
+    ~&  "choo: +load old state does not nest under versioned-state"
+    !!
+  ?-    -.old
       %0
     ~&  >>  %upgrade-0-to-1
     :*  %1
-        cached-hoon.arg
+        cached-hoon.old
         *build-cache
         *parse-cache
     ==
+  ::
+      %1
+    ~&  >>  %no-upgrade
+    old
   ==
 ::
 ::  +peek: external inspect
