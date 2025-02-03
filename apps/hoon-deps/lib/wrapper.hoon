@@ -53,7 +53,7 @@
   +*  inner-fort  ~(. inner internal.outer)
   ++  load
     |=  old=outer-state
-    ?+    -.old  ~&("+load: invalid old state" !!)
+    ?+    -.old  ~&("wrapper +load: invalid old state" !!)
         %0
       =/  new-internal  (load:inner-fort internal.old)
       ..load(internal.outer new-internal)
@@ -73,7 +73,7 @@
     |=  [num=@ ovum=*]
     ^-  [(list *) _..poke]
     =/  effects=(list *)  ?:(crash ~[exit/0] ~)
-    ?+   ovum  ~&("invalid arg: {<ovum>}" effects^..poke)
+    ?+   ovum  ~&("wrapper +poke invalid arg: {<ovum>}" effects^..poke)
         [[%$ %arvo ~] *]
       =/  g  ((soft crud) +.ovum)
       ?~  g  ~&(%invalid-goof effects^..poke)
@@ -82,10 +82,10 @@
     ::
         [[%poke *] *]
       =/  ovum  ((soft ^ovum) ovum)
-      ?~  ovum  ~&("invalid arg: {<ovum>}" ~^..poke)
+      ?~  ovum  ~&("wrapper +poke invalid arg: {<ovum>}" ~^..poke)
       =/  o  ((soft input) input.u.ovum)
       ?~  o
-        ~&  "could not mold poke type: {<ovum>}"
+        ~&  "wrapper: could not mold poke type: {<ovum>}"
         =+  (road |.(;;(^^ovum ovum)))
         ~^..poke
       =^  effects  internal.outer
